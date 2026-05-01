@@ -1,0 +1,24 @@
+# Ignore Root project's CMake configure directory
+cmake-build-*
+
+# Ignore Root project's Visual Studio build result directory
+vs-build
+
+# Ignore third-party images
+images/
+
+# Ignore personal files
+*.iml
+*.ipr
+*.iws
+.idea/workspace.xml
+.idea/modules.xml
+.idea/artifacts/
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/dbnavigator.xml
+.vs
