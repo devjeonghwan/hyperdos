@@ -3215,7 +3215,7 @@ static void parse_command_line_disk_paths(const char* commandLine)
 {
     char              argument[HYPERDOS_MONITOR_PATH_CAPACITY];
     size_t            sourceOffset               = 0u;
-    static const char defaultHardDiskImagePath[] = "image\\harddisk.img";
+    static const char defaultHardDiskImagePath[] = "images\\harddisk.img";
 
     globalFloppyImagePathCount      = 0u;
     globalDiskTracePath[0]          = '\0';
