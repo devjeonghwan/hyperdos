@@ -19,11 +19,20 @@ ctest --test-dir cmake-build-debug --output-on-failure
 ```
 
 Visual Studio 사용자는 [hyperdos.vcxproj](hyperdos.vcxproj)를 열어 `Debug|x64` 구성으로 빌드할 수 있습니다.
+## 빈 하드 디스크 이미지 만들기
 
-## 실행 예시
+HyperDOS는 raw 디스크 이미지 파일을 사용합니다. Windows에서는 다음 명령어로 32 MiB 빈 하드 디스크 이미지를 만들 수 있습니다.
+
+```bat
+fsutil file createnew images\harddisk.img 33554432
+```
+
+그 다음 아래처럼 하드 디스크 부팅을 실행할 수 있습니다.
 
 ```bat
 cmake-build-debug\hyperdos_win32_pc_monitor.exe --hard-disk images\harddisk.img --boot-hard-disk
 ```
+
+이 이미지는 빈 디스크입니다. DOS에서 `FDISK`로 파티션을 만들고, 재부팅 후 `FORMAT C: /S` 같은 명령으로 포맷해야 부팅 가능한 하드 디스크가 됩니다.
 
 운영체제 및 디스크 이미지는 프로젝트에 포함되는 emulator core가 아니며, 사용 권한이 있는 이미지로 테스트해야 합니다.

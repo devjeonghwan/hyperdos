@@ -55,11 +55,22 @@ The Win32 monitor executable is produced as:
 cmake-build-debug\hyperdos_win32_pc_monitor.exe
 ```
 
-Example launch command:
+## Creating a Blank Hard Disk Image
+
+HyperDOS uses raw disk image files. On Windows, you can create a 32 MiB blank hard disk image with:
+
+```bat
+fsutil file createnew images\harddisk.img 33554432
+```
+
+Then boot with:
 
 ```bat
 cmake-build-debug\hyperdos_win32_pc_monitor.exe --hard-disk images\harddisk.img --boot-hard-disk
 ```
+
+The image is blank. You still need to partition and format it from DOS, for example with `FDISK` and
+`FORMAT C: /S`.
 
 ## Building With Visual Studio
 
