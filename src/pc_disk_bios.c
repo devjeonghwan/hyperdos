@@ -130,14 +130,33 @@ static int hyperdos_pc_disk_bios_floppy_drive_is_installed(const hyperdos_pc_dis
            driveNumber < hyperdos_pc_disk_bios_get_floppy_drive_count(diskBiosInterface);
 }
 
+static hyperdos_pc_disk_image* hyperdos_pc_disk_bios_get_disk_image(
+        const hyperdos_pc_disk_bios_interface* diskBiosInterface,
+        uint8_t                                driveNumber);
+
 static uint8_t hyperdos_pc_disk_bios_get_fixed_disk_drive_count(
         const hyperdos_pc_disk_bios_interface* diskBiosInterface)
 {
+    uint16_t fixedDiskIndex      = 0u;
+    uint8_t  fixedDiskDriveCount = 0u;
+
     if (diskBiosInterface == NULL)
     {
         return 0u;
     }
-    return diskBiosInterface->fixedDiskDriveCount;
+    for (fixedDiskIndex = 0u; fixedDiskIndex < diskBiosInterface->fixedDiskDriveCount && fixedDiskIndex < 0x80u;
+         ++fixedDiskIndex)
+    {
+        hyperdos_pc_disk_image* diskImage = hyperdos_pc_disk_bios_get_disk_image(
+                diskBiosInterface,
+                (uint8_t)(HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER + fixedDiskIndex));
+
+        if (diskImage != NULL && diskImage->isHardDisk)
+        {
+            fixedDiskDriveCount = (uint8_t)(fixedDiskIndex + 1u);
+        }
+    }
+    return fixedDiskDriveCount;
 }
 
 static hyperdos_pc_disk_image* hyperdos_pc_disk_bios_get_disk_image(

@@ -143,6 +143,11 @@ static hyperdos_pc_disk_image* test_get_disk_bios_disk_image(void* userContext, 
     return diskBiosContext->diskImage;
 }
 
+static hyperdos_pc_disk_image* test_get_storage_disk_bios_disk_image(void* userContext, uint8_t driveNumber)
+{
+    return hyperdos_pc_storage_get_disk_for_bios_drive_number((hyperdos_pc_storage_context*)userContext, driveNumber);
+}
+
 static hyperdos_x86_16_execution_result test_dos_interrupt_handler(hyperdos_x86_16_processor* processor,
                                                                    uint8_t                    interruptNumber,
                                                                    void*                      userContext)
@@ -2948,6 +2953,82 @@ static void test_pc_storage_maps_configured_bios_drive_numbers(void)
     free(machine);
 }
 
+static void test_disk_bios_reports_only_available_fixed_disks(void)
+{
+    enum
+    {
+        TEST_DISK_BIOS_DRIVE_PARAMETERS_SERVICE = 0x08u,
+        TEST_DISK_BIOS_STATUS_INVALID_FUNCTION  = 0x01u,
+        TEST_FIXED_DISK_BYTES_PER_SECTOR        = 512u,
+        TEST_FIXED_DISK_SECTORS_PER_TRACK       = 17u,
+        TEST_FIXED_DISK_HEAD_COUNT              = 4u,
+        TEST_FIXED_DISK_CYLINDER_COUNT          = 615u,
+        TEST_FIXED_DISK_SECTOR_COUNT            = TEST_FIXED_DISK_SECTORS_PER_TRACK * TEST_FIXED_DISK_HEAD_COUNT *
+                                       TEST_FIXED_DISK_CYLINDER_COUNT
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_pc_storage_floppy_drive       floppyDrives[1];
+    hyperdos_pc_storage_fixed_disk_drive   fixedDiskDrives[2];
+    hyperdos_pc_storage_context            storageContext;
+    hyperdos_x86_16_processor*             processor = NULL;
+    hyperdos_x86_16_execution_result       result    = HYPERDOS_X86_16_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    memset(floppyDrives, 0, sizeof(floppyDrives));
+    memset(fixedDiskDrives, 0, sizeof(fixedDiskDrives));
+    memset(&storageContext, 0, sizeof(storageContext));
+    configuration.userContext         = &storageContext;
+    configuration.floppyDriveCount    = 1u;
+    configuration.fixedDiskDriveCount = 2u;
+    configuration.getDiskImage        = test_get_storage_disk_bios_disk_image;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+
+    hyperdos_pc_storage_context_initialize(&storageContext,
+                                           &machine->pc,
+                                           &machine->floppyController,
+                                           floppyDrives,
+                                           1u,
+                                           fixedDiskDrives,
+                                           2u,
+                                           NULL,
+                                           NULL);
+    fixedDiskDrives[0].diskImage.inserted        = 1u;
+    fixedDiskDrives[0].diskImage.isHardDisk      = 1u;
+    fixedDiskDrives[0].diskImage.driveNumber     = HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER;
+    fixedDiskDrives[0].diskImage.bytesPerSector  = TEST_FIXED_DISK_BYTES_PER_SECTOR;
+    fixedDiskDrives[0].diskImage.sectorsPerTrack = TEST_FIXED_DISK_SECTORS_PER_TRACK;
+    fixedDiskDrives[0].diskImage.headCount       = TEST_FIXED_DISK_HEAD_COUNT;
+    fixedDiskDrives[0].diskImage.cylinderCount   = TEST_FIXED_DISK_CYLINDER_COUNT;
+    fixedDiskDrives[0].diskImage.sectorCount     = TEST_FIXED_DISK_SECTOR_COUNT;
+    hyperdos_pc_storage_install_fixed_disk_drive(&storageContext, 0u);
+
+    processor                                                                 = &machine->pc.processor;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = TEST_DISK_BIOS_DRIVE_PARAMETERS_SERVICE
+                                                                                << TEST_DOS_SERVICE_REGISTER_SHIFT;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA] = HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER;
+    processor->flags = HYPERDOS_X86_16_FLAG_RESERVED | HYPERDOS_X86_16_FLAG_CARRY;
+    result           = hyperdos_pc_disk_bios_handle_interrupt(processor, &machine->diskBiosInterface);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+    assert((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA] & TEST_BYTE_MASK) == 1u);
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = TEST_DISK_BIOS_DRIVE_PARAMETERS_SERVICE
+                                                                                << TEST_DOS_SERVICE_REGISTER_SHIFT;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA] = HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER +
+                                                                         1u;
+    processor->flags = HYPERDOS_X86_16_FLAG_RESERVED;
+    result           = hyperdos_pc_disk_bios_handle_interrupt(processor, &machine->diskBiosInterface);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) != 0u);
+    assert((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] >>
+            TEST_DOS_SERVICE_REGISTER_SHIFT) == TEST_DISK_BIOS_STATUS_INVALID_FUNCTION);
+
+    free(machine);
+}
+
 static void test_pc_storage_updates_at_cmos_drive_configuration(void)
 {
     enum
@@ -3380,6 +3461,7 @@ int main(void)
     test_pc_system_bios_identity_can_disable_at_services();
     test_pc_system_bios_configuration_table_survives_interrupt_vector_stubs();
     test_pc_storage_maps_configured_bios_drive_numbers();
+    test_disk_bios_reports_only_available_fixed_disks();
     test_pc_storage_updates_at_cmos_drive_configuration();
     test_disk_bios_reset_preserves_floppy_media_change_until_read();
     test_disk_bios_xt_reports_floppy_change_line_for_disk_swaps();
