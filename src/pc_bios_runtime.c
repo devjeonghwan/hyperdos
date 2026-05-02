@@ -512,11 +512,18 @@ int hyperdos_pc_bios_runtime_prepare_boot_from_disk_image(hyperdos_pc_bios_runti
                                                           const hyperdos_pc_disk_image* activeFloppyDisk,
                                                           uint8_t                       fixedDiskCount)
 {
+    uint8_t bootSectorBytes[HYPERDOS_PC_DISK_IMAGE_BOOT_SECTOR_SIZE];
+
     if (biosRuntime == NULL || biosRuntime->pc == NULL || bootDisk == NULL)
     {
         return 0;
     }
-    if (!hyperdos_pc_load_boot_sector(biosRuntime->pc, bootDisk->bytes, bootDisk->byteCount))
+    if (bootDisk->bytesPerSector != HYPERDOS_PC_DISK_IMAGE_BOOT_SECTOR_SIZE ||
+        hyperdos_pc_disk_image_read_sectors(bootDisk, 0u, 1u, bootSectorBytes) != HYPERDOS_PC_DISK_TRANSFER_OK)
+    {
+        return 0;
+    }
+    if (!hyperdos_pc_load_boot_sector(biosRuntime->pc, bootSectorBytes, sizeof(bootSectorBytes)))
     {
         return 0;
     }

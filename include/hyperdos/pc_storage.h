@@ -61,6 +61,8 @@ uint8_t hyperdos_pc_storage_count_installed_floppy_drives(const hyperdos_pc_stor
 
 uint8_t hyperdos_pc_storage_count_inserted_fixed_disks(const hyperdos_pc_storage_context* storageContext);
 
+uint8_t hyperdos_pc_storage_get_fixed_disk_bios_drive_count(const hyperdos_pc_storage_context* storageContext);
+
 hyperdos_pc_disk_image* hyperdos_pc_storage_get_floppy_disk_for_drive_number(
         const hyperdos_pc_storage_context* storageContext,
         uint8_t                            driveNumber);
@@ -87,5 +89,8 @@ hyperdos_pc_storage_result hyperdos_pc_storage_eject_floppy_disk(hyperdos_pc_sto
 hyperdos_pc_storage_result hyperdos_pc_storage_attach_fixed_disk_image(hyperdos_pc_storage_context* storageContext,
                                                                        uint8_t                      fixedDiskIndex,
                                                                        hyperdos_pc_disk_image*      replacementDisk);
+
+hyperdos_pc_storage_result hyperdos_pc_storage_detach_fixed_disk_image(hyperdos_pc_storage_context* storageContext,
+                                                                       uint8_t                      fixedDiskIndex);
 
 #endif

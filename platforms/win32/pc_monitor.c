@@ -4,6 +4,12 @@
 
 #include <commdlg.h>
 
+#include <shlobj.h>
+
+#ifdef interface
+#undef interface
+#endif
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -23,6 +29,8 @@
 #include "hyperdos/pc_storage.h"
 #include "hyperdos/pc_text.h"
 #include "hyperdos/pc_video_services.h"
+#include "pc_directory_disk.h"
+#include "pc_file_disk.h"
 
 #ifndef VK_HANGUL
 #define VK_HANGUL 0x15
@@ -62,16 +70,19 @@ enum
     HYPERDOS_MONITOR_PATH_CAPACITY                        = 1024u,
     HYPERDOS_MONITOR_FLOPPY_DRIVE_COUNT                   = 1u,
     HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT           = 4u,
-    HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT               = 1u,
+    HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT               = 2u,
     HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY              = HYPERDOS_VIDEO_GRAPHICS_ARRAY_MAXIMUM_DISPLAY_WIDTH *
                                                HYPERDOS_VIDEO_GRAPHICS_ARRAY_MAXIMUM_DISPLAY_HEIGHT,
     HYPERDOS_MONITOR_KOREAN_WINDOWS_CODE_PAGE                        = 949u,
     HYPERDOS_MONITOR_USER_RENDER_MESSAGE                             = WM_APP + 1u,
     HYPERDOS_MONITOR_USER_RESET_MESSAGE                              = WM_APP + 2u,
-    HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY                           = 1001u,
-    HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY                            = 1002u,
-    HYPERDOS_MONITOR_COMMAND_ATTACH_HARD_DISK                        = 1003u,
     HYPERDOS_MONITOR_COMMAND_FLUSH_DISKS                             = 1004u,
+    HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE                = 1100u,
+    HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE             = 1110u,
+    HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE                       = 1120u,
+    HYPERDOS_MONITOR_COMMAND_ATTACH_FIXED_DISK_IMAGE_BASE            = 1200u,
+    HYPERDOS_MONITOR_COMMAND_MOUNT_FIXED_DISK_DIRECTORY_BASE         = 1210u,
+    HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE                  = 1220u,
     HYPERDOS_MONITOR_COMMAND_RESET_PC                                = 2001u,
     HYPERDOS_MONITOR_COMMAND_START_CPU_TRACE                         = 2002u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086                    = 2101u,
@@ -188,15 +199,17 @@ typedef struct hyperdos_win32_boot_state
 } hyperdos_win32_boot_state;
 
 static hyperdos_win32_boot_state globalBootState;
-static char   globalFloppyImagePaths[HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT][HYPERDOS_MONITOR_PATH_CAPACITY];
-static size_t globalFloppyImagePathCount;
-static char   globalHardDiskImagePath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static char   globalDiskTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static char   globalCpuTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static char   globalMemoryTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static char   globalGuestMemoryDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static char   globalTextScreenDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static char   globalVideoStateDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
+static char    globalFloppyDrivePaths[HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT][HYPERDOS_MONITOR_PATH_CAPACITY];
+static uint8_t globalFloppyDrivePathIsDirectory[HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT];
+static size_t  globalFloppyDrivePathCount;
+static char    globalFixedDiskDrivePaths[HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT][HYPERDOS_MONITOR_PATH_CAPACITY];
+static uint8_t globalFixedDiskDrivePathIsDirectory[HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT];
+static char    globalDiskTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
+static char    globalCpuTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
+static char    globalMemoryTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
+static char    globalGuestMemoryDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
+static char    globalTextScreenDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
+static char    globalVideoStateDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static hyperdos_monitor_memory_watch   globalMemoryWatches[HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY];
 static size_t                          globalMemoryWatchCount;
 static uint32_t                        globalMemoryStopPhysicalAddress;
@@ -228,6 +241,8 @@ static void maybe_write_text_screen_dump_file(hyperdos_win32_boot_state* bootSta
 static void write_video_state_dump_file(hyperdos_win32_boot_state* bootState);
 
 static void maybe_write_video_state_dump_file(hyperdos_win32_boot_state* bootState);
+
+static void handle_reset_pc_command(HWND windowHandle, hyperdos_win32_boot_state* bootState);
 
 static void set_status_text(hyperdos_win32_boot_state* bootState, const char* format, ...)
 {
@@ -435,6 +450,126 @@ static const char* find_file_name_from_path(const char* path)
         ++character;
     }
     return fileName;
+}
+
+static uint8_t get_fixed_disk_bios_drive_number(uint8_t fixedDiskIndex)
+{
+    return (uint8_t)(HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER + fixedDiskIndex);
+}
+
+static void format_floppy_drive_identifier(char* destination, size_t destinationSize, uint8_t driveNumber)
+{
+    snprintf(destination, destinationSize, "floppy drive %u (BIOS %02Xh)", driveNumber, driveNumber);
+}
+
+static void format_fixed_disk_drive_identifier(char* destination, size_t destinationSize, uint8_t fixedDiskIndex)
+{
+    snprintf(destination,
+             destinationSize,
+             "fixed disk %u (BIOS %02Xh)",
+             fixedDiskIndex,
+             get_fixed_disk_bios_drive_number(fixedDiskIndex));
+}
+
+static void format_disk_image_drive_identifier(char*                         destination,
+                                               size_t                        destinationSize,
+                                               const hyperdos_pc_disk_image* diskImage)
+{
+    if (diskImage == NULL)
+    {
+        copy_string_to_buffer(destination, destinationSize, "no disk");
+        return;
+    }
+    if (diskImage->isHardDisk)
+    {
+        uint8_t fixedDiskIndex = diskImage->driveNumber >= HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER
+                                         ? (uint8_t)(diskImage->driveNumber -
+                                                     HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER)
+                                         : 0u;
+        format_fixed_disk_drive_identifier(destination, destinationSize, fixedDiskIndex);
+        return;
+    }
+    format_floppy_drive_identifier(destination, destinationSize, diskImage->driveNumber);
+}
+
+static void update_floppy_drive_path_count(void)
+{
+    size_t driveIndex = HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT;
+
+    globalFloppyDrivePathCount = 0u;
+    while (driveIndex != 0u)
+    {
+        --driveIndex;
+        if (globalFloppyDrivePaths[driveIndex][0] != '\0')
+        {
+            globalFloppyDrivePathCount = driveIndex + 1u;
+            return;
+        }
+    }
+}
+
+static void set_floppy_drive_path(uint8_t driveNumber, const char* path, uint8_t pathIsDirectory)
+{
+    if (driveNumber >= HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
+    {
+        return;
+    }
+    copy_string_to_buffer(globalFloppyDrivePaths[driveNumber],
+                          sizeof(globalFloppyDrivePaths[driveNumber]),
+                          path != NULL ? path : "");
+    globalFloppyDrivePathIsDirectory[driveNumber] = pathIsDirectory;
+    update_floppy_drive_path_count();
+}
+
+static void clear_floppy_drive_path(uint8_t driveNumber)
+{
+    if (driveNumber >= HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
+    {
+        return;
+    }
+    globalFloppyDrivePaths[driveNumber][0]        = '\0';
+    globalFloppyDrivePathIsDirectory[driveNumber] = 0u;
+    update_floppy_drive_path_count();
+}
+
+static void set_fixed_disk_drive_path(uint8_t fixedDiskIndex, const char* path, uint8_t pathIsDirectory)
+{
+    if (fixedDiskIndex >= HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+    {
+        return;
+    }
+    copy_string_to_buffer(globalFixedDiskDrivePaths[fixedDiskIndex],
+                          sizeof(globalFixedDiskDrivePaths[fixedDiskIndex]),
+                          path != NULL ? path : "");
+    globalFixedDiskDrivePathIsDirectory[fixedDiskIndex] = pathIsDirectory;
+}
+
+static void clear_fixed_disk_drive_path(uint8_t fixedDiskIndex)
+{
+    if (fixedDiskIndex >= HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+    {
+        return;
+    }
+    globalFixedDiskDrivePaths[fixedDiskIndex][0]        = '\0';
+    globalFixedDiskDrivePathIsDirectory[fixedDiskIndex] = 0u;
+}
+
+static int load_floppy_drive_path(hyperdos_pc_disk_image* diskImage, const char* path, uint8_t pathIsDirectory)
+{
+    if (pathIsDirectory)
+    {
+        return hyperdos_win32_load_floppy_directory_disk_image(diskImage, path);
+    }
+    return hyperdos_win32_load_floppy_file_disk_image(diskImage, path);
+}
+
+static int load_fixed_disk_drive_path(hyperdos_pc_disk_image* diskImage, const char* path, uint8_t pathIsDirectory)
+{
+    if (pathIsDirectory)
+    {
+        return hyperdos_win32_load_fixed_directory_disk_image(diskImage, path);
+    }
+    return hyperdos_win32_load_fixed_file_disk_image(diskImage, path);
 }
 
 static uint8_t read_floppy_controller_input_output_byte(void* device, uint16_t port)
@@ -1430,6 +1565,7 @@ static void free_loaded_disk_images(hyperdos_win32_boot_state* bootState)
 static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState)
 {
     size_t                                 floppyDriveIndex            = 0;
+    size_t                                 fixedDiskIndex              = 0;
     hyperdos_pc_disk_image*                bootDisk                    = NULL;
     const hyperdos_pc_disk_image*          activeFloppyDiskForDataArea = NULL;
     const char*                            floppyStatusText            = "not inserted";
@@ -1452,8 +1588,8 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     free_loaded_disk_images(bootState);
     memset(bootState->floppyDrives, 0, sizeof(bootState->floppyDrives));
     memset(bootState->fixedDiskDrives, 0, sizeof(bootState->fixedDiskDrives));
-    bootState->floppyDriveCount = globalFloppyImagePathCount > HYPERDOS_MONITOR_FLOPPY_DRIVE_COUNT
-                                          ? globalFloppyImagePathCount
+    bootState->floppyDriveCount = globalFloppyDrivePathCount > HYPERDOS_MONITOR_FLOPPY_DRIVE_COUNT
+                                          ? globalFloppyDrivePathCount
                                           : HYPERDOS_MONITOR_FLOPPY_DRIVE_COUNT;
     if (bootState->floppyDriveCount > HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
     {
@@ -1511,32 +1647,57 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
         hyperdos_pc_storage_install_floppy_drive(&storageContext, (uint8_t)floppyDriveIndex);
     }
     for (floppyDriveIndex = 0;
-         floppyDriveIndex < globalFloppyImagePathCount && floppyDriveIndex < bootState->floppyDriveCount;
+         floppyDriveIndex < globalFloppyDrivePathCount && floppyDriveIndex < bootState->floppyDriveCount;
          ++floppyDriveIndex)
     {
         hyperdos_pc_disk_image* diskImage = &bootState->floppyDrives[floppyDriveIndex].diskImage;
 
-        if (!hyperdos_pc_disk_image_load_floppy(diskImage, globalFloppyImagePaths[floppyDriveIndex]))
+        if (globalFloppyDrivePaths[floppyDriveIndex][0] == '\0')
         {
-            set_status_text(bootState, "failed to read floppy image: %s", globalFloppyImagePaths[floppyDriveIndex]);
+            continue;
+        }
+        if (!load_floppy_drive_path(diskImage,
+                                    globalFloppyDrivePaths[floppyDriveIndex],
+                                    globalFloppyDrivePathIsDirectory[floppyDriveIndex]))
+        {
+            char driveIdentifier[64];
+
+            format_floppy_drive_identifier(driveIdentifier, sizeof(driveIdentifier), (uint8_t)floppyDriveIndex);
+            set_status_text(bootState,
+                            "failed to read %s: %s",
+                            driveIdentifier,
+                            globalFloppyDrivePaths[floppyDriveIndex]);
             free_loaded_disk_images(bootState);
             return 0;
         }
         diskImage->driveNumber = (uint8_t)floppyDriveIndex;
     }
 
-    if (globalHardDiskImagePath[0] != '\0' &&
-        !hyperdos_pc_disk_image_load_hard_disk(&bootState->fixedDiskDrives[0].diskImage, globalHardDiskImagePath))
+    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
     {
-        set_status_text(bootState, "failed to attach hard disk image: %s", globalHardDiskImagePath);
-        free_loaded_disk_images(bootState);
-        return 0;
+        if (globalFixedDiskDrivePaths[fixedDiskIndex][0] == '\0')
+        {
+            continue;
+        }
+        if (!load_fixed_disk_drive_path(&bootState->fixedDiskDrives[fixedDiskIndex].diskImage,
+                                        globalFixedDiskDrivePaths[fixedDiskIndex],
+                                        globalFixedDiskDrivePathIsDirectory[fixedDiskIndex]))
+        {
+            char driveIdentifier[64];
+
+            format_fixed_disk_drive_identifier(driveIdentifier, sizeof(driveIdentifier), (uint8_t)fixedDiskIndex);
+            set_status_text(bootState,
+                            "failed to attach %s: %s",
+                            driveIdentifier,
+                            globalFixedDiskDrivePaths[fixedDiskIndex]);
+            free_loaded_disk_images(bootState);
+            return 0;
+        }
+        bootState->fixedDiskDrives[fixedDiskIndex].diskImage.driveNumber =
+                (uint8_t)(HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER + fixedDiskIndex);
+        hyperdos_pc_storage_install_fixed_disk_drive(&storageContext, (uint8_t)fixedDiskIndex);
     }
-    if (bootState->fixedDiskDrives[0].diskImage.inserted)
-    {
-        hyperdos_pc_storage_install_fixed_disk_drive(&storageContext, 0u);
-    }
-    fixedDiskCount = hyperdos_pc_storage_count_inserted_fixed_disks(&storageContext);
+    fixedDiskCount = hyperdos_pc_storage_get_fixed_disk_bios_drive_count(&storageContext);
 
     if (globalBootHardDiskWithoutFloppy && bootState->fixedDiskDrives[0].diskImage.inserted)
     {
@@ -1585,11 +1746,16 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     {
         hardDiskStatusText = find_file_name_from_path(bootState->fixedDiskDrives[0].diskImage.path);
     }
-    set_status_text(bootState,
-                    "boot %c:, A: %s, C: %s",
-                    bootDisk->driveNumber == HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER ? 'C' : 'A',
-                    floppyStatusText,
-                    hardDiskStatusText);
+    {
+        char bootDiskIdentifier[64];
+
+        format_disk_image_drive_identifier(bootDiskIdentifier, sizeof(bootDiskIdentifier), bootDisk);
+        set_status_text(bootState,
+                        "boot %s, floppy drive 0: %s, fixed disk 0: %s",
+                        bootDiskIdentifier,
+                        floppyStatusText,
+                        hardDiskStatusText);
+    }
     return 1;
 }
 
@@ -3676,6 +3842,30 @@ static int select_disk_image_file_path(HWND        windowHandle,
     return GetOpenFileNameA(&openFileName) != 0;
 }
 
+static int select_directory_path(HWND windowHandle, const char* title, char* selectedPath, size_t selectedPathSize)
+{
+    BROWSEINFOA      browseInfo;
+    PIDLIST_ABSOLUTE selectedIdentifierList = NULL;
+    int              selected               = 0;
+
+    if (selectedPathSize == 0u)
+    {
+        return 0;
+    }
+    selectedPath[0] = '\0';
+    memset(&browseInfo, 0, sizeof(browseInfo));
+    browseInfo.hwndOwner   = windowHandle;
+    browseInfo.lpszTitle   = title;
+    browseInfo.ulFlags     = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+    selectedIdentifierList = SHBrowseForFolderA(&browseInfo);
+    if (selectedIdentifierList != NULL)
+    {
+        selected = SHGetPathFromIDListA(selectedIdentifierList, selectedPath) != FALSE;
+        CoTaskMemFree(selectedIdentifierList);
+    }
+    return selected && selectedPath[0] != '\0';
+}
+
 static void restore_monitor_window_keyboard_focus(HWND windowHandle)
 {
     SetForegroundWindow(windowHandle);
@@ -3700,143 +3890,285 @@ static void boot_from_selected_disk_images(HWND windowHandle, hyperdos_win32_boo
     update_window_title(windowHandle, bootState);
 }
 
-static void handle_insert_floppy_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+static void handle_insert_floppy_image_command(HWND                       windowHandle,
+                                               hyperdos_win32_boot_state* bootState,
+                                               uint8_t                    driveNumber)
 {
     char                        selectedPath[HYPERDOS_MONITOR_PATH_CAPACITY];
     hyperdos_pc_disk_image      replacementDisk;
     hyperdos_pc_storage_context storageContext;
     hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
+    char                        driveIdentifier[64];
 
-    if (!select_disk_image_file_path(windowHandle,
-                                     "Insert floppy image for drive A:",
-                                     selectedPath,
-                                     sizeof(selectedPath)))
+    format_floppy_drive_identifier(driveIdentifier, sizeof(driveIdentifier), driveNumber);
+    if (!select_disk_image_file_path(windowHandle, "Insert floppy image", selectedPath, sizeof(selectedPath)))
     {
         restore_monitor_window_keyboard_focus(windowHandle);
         return;
     }
     restore_monitor_window_keyboard_focus(windowHandle);
 
-    copy_string_to_buffer(globalFloppyImagePaths[0], sizeof(globalFloppyImagePaths[0]), selectedPath);
-    globalFloppyImagePathCount = 1u;
+    set_floppy_drive_path(driveNumber, selectedPath, 0u);
 
+    if (InterlockedCompareExchange(&bootState->isRunning, 0, 0) == 0 || driveNumber >= bootState->floppyDriveCount)
+    {
+        if (InterlockedCompareExchange(&bootState->isRunning, 0, 0) != 0)
+        {
+            handle_reset_pc_command(windowHandle, bootState);
+        }
+        else
+        {
+            boot_from_selected_disk_images(windowHandle, bootState);
+        }
+        return;
+    }
+
+    if (!load_floppy_drive_path(&replacementDisk, selectedPath, 0u))
+    {
+        set_status_text(bootState, "failed to read %s image: %s", driveIdentifier, selectedPath);
+        update_window_title(windowHandle, bootState);
+        restore_monitor_window_keyboard_focus(windowHandle);
+        return;
+    }
+    initialize_storage_context_for_boot_state(bootState, &storageContext);
+    EnterCriticalSection(&bootState->diskCriticalSection);
+    storageResult = hyperdos_pc_storage_insert_floppy_disk_image(&storageContext, driveNumber, &replacementDisk);
+    LeaveCriticalSection(&bootState->diskCriticalSection);
+    if (storageResult != HYPERDOS_PC_STORAGE_OK)
+    {
+        hyperdos_pc_disk_image_free(&replacementDisk);
+        if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
+        {
+            set_status_text(bootState, "failed to flush previous %s image", driveIdentifier);
+        }
+        else
+        {
+            set_status_text(bootState, "failed to insert %s image", driveIdentifier);
+        }
+        update_window_title(windowHandle, bootState);
+        restore_monitor_window_keyboard_focus(windowHandle);
+        return;
+    }
+
+    set_status_text(bootState, "%s: %s inserted", driveIdentifier, find_file_name_from_path(selectedPath));
+    InvalidateRect(windowHandle, NULL, FALSE);
+    update_window_title(windowHandle, bootState);
+    restore_monitor_window_keyboard_focus(windowHandle);
+}
+
+static void handle_mount_floppy_directory_command(HWND                       windowHandle,
+                                                  hyperdos_win32_boot_state* bootState,
+                                                  uint8_t                    driveNumber)
+{
+    char                        selectedPath[HYPERDOS_MONITOR_PATH_CAPACITY];
+    hyperdos_pc_disk_image      replacementDisk;
+    hyperdos_pc_storage_context storageContext;
+    hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
+    char                        driveIdentifier[64];
+
+    format_floppy_drive_identifier(driveIdentifier, sizeof(driveIdentifier), driveNumber);
+    if (!select_directory_path(windowHandle, "Mount directory as floppy drive", selectedPath, sizeof(selectedPath)))
+    {
+        restore_monitor_window_keyboard_focus(windowHandle);
+        return;
+    }
+    restore_monitor_window_keyboard_focus(windowHandle);
+
+    set_floppy_drive_path(driveNumber, selectedPath, 1u);
+    if (InterlockedCompareExchange(&bootState->isRunning, 0, 0) == 0 || driveNumber >= bootState->floppyDriveCount)
+    {
+        if (InterlockedCompareExchange(&bootState->isRunning, 0, 0) != 0)
+        {
+            handle_reset_pc_command(windowHandle, bootState);
+        }
+        else
+        {
+            boot_from_selected_disk_images(windowHandle, bootState);
+        }
+        return;
+    }
+    if (!hyperdos_win32_load_floppy_directory_disk_image(&replacementDisk, selectedPath))
+    {
+        set_status_text(bootState, "failed to mount %s directory: %s", driveIdentifier, selectedPath);
+        update_window_title(windowHandle, bootState);
+        return;
+    }
+    initialize_storage_context_for_boot_state(bootState, &storageContext);
+    EnterCriticalSection(&bootState->diskCriticalSection);
+    storageResult = hyperdos_pc_storage_insert_floppy_disk_image(&storageContext, driveNumber, &replacementDisk);
+    LeaveCriticalSection(&bootState->diskCriticalSection);
+    if (storageResult != HYPERDOS_PC_STORAGE_OK)
+    {
+        hyperdos_pc_disk_image_free(&replacementDisk);
+        set_status_text(bootState, "failed to mount %s directory", driveIdentifier);
+        update_window_title(windowHandle, bootState);
+        return;
+    }
+    set_status_text(bootState, "%s: %s mounted read-only", driveIdentifier, find_file_name_from_path(selectedPath));
+    InvalidateRect(windowHandle, NULL, FALSE);
+    update_window_title(windowHandle, bootState);
+}
+
+static void handle_eject_floppy_command(HWND windowHandle, hyperdos_win32_boot_state* bootState, uint8_t driveNumber)
+{
+    hyperdos_pc_storage_context storageContext;
+    hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
+    char                        driveIdentifier[64];
+
+    format_floppy_drive_identifier(driveIdentifier, sizeof(driveIdentifier), driveNumber);
+    initialize_storage_context_for_boot_state(bootState, &storageContext);
+    EnterCriticalSection(&bootState->diskCriticalSection);
+    storageResult = hyperdos_pc_storage_eject_floppy_disk(&storageContext, driveNumber);
+    LeaveCriticalSection(&bootState->diskCriticalSection);
+
+    if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
+    {
+        set_status_text(bootState, "failed to flush %s before eject", driveIdentifier);
+    }
+    else if (storageResult == HYPERDOS_PC_STORAGE_OK)
+    {
+        clear_floppy_drive_path(driveNumber);
+        set_status_text(bootState, "%s: ejected", driveIdentifier);
+    }
+    else
+    {
+        set_status_text(bootState, "%s: no floppy inserted", driveIdentifier);
+    }
+    InvalidateRect(windowHandle, NULL, FALSE);
+    update_window_title(windowHandle, bootState);
+    SetFocus(windowHandle);
+}
+
+static void handle_attach_fixed_disk_image_command(HWND                       windowHandle,
+                                                   hyperdos_win32_boot_state* bootState,
+                                                   uint8_t                    fixedDiskIndex)
+{
+    char                        selectedPath[HYPERDOS_MONITOR_PATH_CAPACITY];
+    hyperdos_pc_disk_image      replacementDisk;
+    hyperdos_pc_storage_context storageContext;
+    hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
+    char                        driveIdentifier[64];
+
+    format_fixed_disk_drive_identifier(driveIdentifier, sizeof(driveIdentifier), fixedDiskIndex);
+    if (!select_disk_image_file_path(windowHandle, "Attach fixed disk image", selectedPath, sizeof(selectedPath)))
+    {
+        SetFocus(windowHandle);
+        return;
+    }
+    SetFocus(windowHandle);
+    set_fixed_disk_drive_path(fixedDiskIndex, selectedPath, 0u);
     if (InterlockedCompareExchange(&bootState->isRunning, 0, 0) == 0)
     {
         boot_from_selected_disk_images(windowHandle, bootState);
         return;
     }
-
-    if (!hyperdos_pc_disk_image_load_floppy(&replacementDisk, selectedPath))
+    if (!load_fixed_disk_drive_path(&replacementDisk, selectedPath, 0u))
     {
-        set_status_text(bootState, "failed to read floppy image: %s", selectedPath);
+        set_status_text(bootState, "failed to attach %s image: %s", driveIdentifier, selectedPath);
         update_window_title(windowHandle, bootState);
-        restore_monitor_window_keyboard_focus(windowHandle);
+        SetFocus(windowHandle);
         return;
     }
+
     initialize_storage_context_for_boot_state(bootState, &storageContext);
     EnterCriticalSection(&bootState->diskCriticalSection);
-    storageResult = hyperdos_pc_storage_insert_floppy_disk_image(&storageContext, 0u, &replacementDisk);
+    storageResult = hyperdos_pc_storage_attach_fixed_disk_image(&storageContext, fixedDiskIndex, &replacementDisk);
     LeaveCriticalSection(&bootState->diskCriticalSection);
     if (storageResult != HYPERDOS_PC_STORAGE_OK)
     {
         hyperdos_pc_disk_image_free(&replacementDisk);
         if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
         {
-            set_status_text(bootState, "failed to flush previous floppy image");
+            set_status_text(bootState, "failed to flush previous %s image", driveIdentifier);
         }
         else
         {
-            set_status_text(bootState, "failed to insert floppy image");
+            set_status_text(bootState, "failed to attach %s image", driveIdentifier);
         }
         update_window_title(windowHandle, bootState);
-        restore_monitor_window_keyboard_focus(windowHandle);
+        SetFocus(windowHandle);
         return;
     }
 
-    set_status_text(bootState, "A: %s inserted", find_file_name_from_path(selectedPath));
-    InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
-    restore_monitor_window_keyboard_focus(windowHandle);
-}
-
-static void handle_eject_floppy_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
-{
-    hyperdos_pc_storage_context storageContext;
-    hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
-
-    initialize_storage_context_for_boot_state(bootState, &storageContext);
-    EnterCriticalSection(&bootState->diskCriticalSection);
-    storageResult = hyperdos_pc_storage_eject_floppy_disk(&storageContext, 0u);
-    LeaveCriticalSection(&bootState->diskCriticalSection);
-
-    if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
-    {
-        set_status_text(bootState, "failed to flush floppy image before eject");
-    }
-    else if (storageResult == HYPERDOS_PC_STORAGE_OK)
-    {
-        globalFloppyImagePathCount   = 0u;
-        globalFloppyImagePaths[0][0] = '\0';
-        set_status_text(bootState, "A: ejected");
-    }
-    else
-    {
-        set_status_text(bootState, "A: no floppy inserted");
-    }
+    set_status_text(bootState, "%s: %s attached", driveIdentifier, find_file_name_from_path(selectedPath));
     InvalidateRect(windowHandle, NULL, FALSE);
     update_window_title(windowHandle, bootState);
     SetFocus(windowHandle);
 }
 
-static void handle_attach_hard_disk_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+static void handle_mount_fixed_disk_directory_command(HWND                       windowHandle,
+                                                      hyperdos_win32_boot_state* bootState,
+                                                      uint8_t                    fixedDiskIndex)
 {
     char                        selectedPath[HYPERDOS_MONITOR_PATH_CAPACITY];
     hyperdos_pc_disk_image      replacementDisk;
     hyperdos_pc_storage_context storageContext;
     hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
+    char                        driveIdentifier[64];
 
-    if (!select_disk_image_file_path(windowHandle,
-                                     "Attach hard disk image for drive C:",
-                                     selectedPath,
-                                     sizeof(selectedPath)))
+    format_fixed_disk_drive_identifier(driveIdentifier, sizeof(driveIdentifier), fixedDiskIndex);
+    if (!select_directory_path(windowHandle, "Mount directory as fixed disk", selectedPath, sizeof(selectedPath)))
     {
         SetFocus(windowHandle);
         return;
     }
     SetFocus(windowHandle);
-    if (!hyperdos_pc_disk_image_load_hard_disk(&replacementDisk, selectedPath))
+    set_fixed_disk_drive_path(fixedDiskIndex, selectedPath, 1u);
+    if (InterlockedCompareExchange(&bootState->isRunning, 0, 0) == 0)
     {
-        set_status_text(bootState, "failed to attach hard disk image: %s", selectedPath);
-        update_window_title(windowHandle, bootState);
-        SetFocus(windowHandle);
+        boot_from_selected_disk_images(windowHandle, bootState);
         return;
     }
-
+    if (!hyperdos_win32_load_fixed_directory_disk_image(&replacementDisk, selectedPath))
+    {
+        set_status_text(bootState, "failed to mount %s directory: %s", driveIdentifier, selectedPath);
+        update_window_title(windowHandle, bootState);
+        return;
+    }
     initialize_storage_context_for_boot_state(bootState, &storageContext);
     EnterCriticalSection(&bootState->diskCriticalSection);
-    storageResult = hyperdos_pc_storage_attach_fixed_disk_image(&storageContext, 0u, &replacementDisk);
+    storageResult = hyperdos_pc_storage_attach_fixed_disk_image(&storageContext, fixedDiskIndex, &replacementDisk);
     LeaveCriticalSection(&bootState->diskCriticalSection);
     if (storageResult != HYPERDOS_PC_STORAGE_OK)
     {
         hyperdos_pc_disk_image_free(&replacementDisk);
-        if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
-        {
-            set_status_text(bootState, "failed to flush previous hard disk image");
-        }
-        else
-        {
-            set_status_text(bootState, "failed to attach hard disk image");
-        }
+        set_status_text(bootState, "failed to mount %s directory", driveIdentifier);
         update_window_title(windowHandle, bootState);
-        SetFocus(windowHandle);
         return;
     }
-
-    copy_string_to_buffer(globalHardDiskImagePath, sizeof(globalHardDiskImagePath), selectedPath);
-    set_status_text(bootState, "C: %s attached", find_file_name_from_path(selectedPath));
+    set_status_text(bootState, "%s: %s mounted read-only", driveIdentifier, find_file_name_from_path(selectedPath));
     InvalidateRect(windowHandle, NULL, FALSE);
     update_window_title(windowHandle, bootState);
-    SetFocus(windowHandle);
+}
+
+static void handle_detach_fixed_disk_command(HWND                       windowHandle,
+                                             hyperdos_win32_boot_state* bootState,
+                                             uint8_t                    fixedDiskIndex)
+{
+    hyperdos_pc_storage_context storageContext;
+    hyperdos_pc_storage_result  storageResult = HYPERDOS_PC_STORAGE_OK;
+    char                        driveIdentifier[64];
+
+    format_fixed_disk_drive_identifier(driveIdentifier, sizeof(driveIdentifier), fixedDiskIndex);
+    initialize_storage_context_for_boot_state(bootState, &storageContext);
+    EnterCriticalSection(&bootState->diskCriticalSection);
+    storageResult = hyperdos_pc_storage_detach_fixed_disk_image(&storageContext, fixedDiskIndex);
+    LeaveCriticalSection(&bootState->diskCriticalSection);
+    if (storageResult == HYPERDOS_PC_STORAGE_OK)
+    {
+        clear_fixed_disk_drive_path(fixedDiskIndex);
+        set_status_text(bootState, "%s: detached", driveIdentifier);
+    }
+    else if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
+    {
+        set_status_text(bootState, "failed to flush %s before detach", driveIdentifier);
+    }
+    else
+    {
+        set_status_text(bootState, "%s: no fixed disk attached", driveIdentifier);
+    }
+    InvalidateRect(windowHandle, NULL, FALSE);
+    update_window_title(windowHandle, bootState);
 }
 
 static void handle_flush_disks_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
@@ -3988,14 +4320,16 @@ static void set_display_resize_mode(HWND                                 windowH
 
 static HMENU create_monitor_menu(void)
 {
-    HMENU menuHandle                  = CreateMenu();
-    HMENU machineMenuHandle           = CreatePopupMenu();
-    HMENU processorModelMenuHandle    = CreatePopupMenu();
-    HMENU pcModelMenuHandle           = CreatePopupMenu();
-    HMENU diskMenuHandle              = CreatePopupMenu();
-    HMENU viewMenuHandle              = CreatePopupMenu();
-    HMENU textCharacterSetMenuHandle  = CreatePopupMenu();
-    HMENU displayResizeModeMenuHandle = CreatePopupMenu();
+    HMENU  menuHandle                  = CreateMenu();
+    HMENU  machineMenuHandle           = CreatePopupMenu();
+    HMENU  processorModelMenuHandle    = CreatePopupMenu();
+    HMENU  pcModelMenuHandle           = CreatePopupMenu();
+    HMENU  diskMenuHandle              = CreatePopupMenu();
+    HMENU  viewMenuHandle              = CreatePopupMenu();
+    HMENU  textCharacterSetMenuHandle  = CreatePopupMenu();
+    HMENU  displayResizeModeMenuHandle = CreatePopupMenu();
+    size_t floppyDriveIndex            = 0u;
+    size_t fixedDiskIndex              = 0u;
 
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086, "8086 / 8088");
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186, "80186 / 80188");
@@ -4008,10 +4342,50 @@ static HMENU create_monitor_menu(void)
     AppendMenuA(machineMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_START_CPU_TRACE, "Start CPU Trace");
     AppendMenuA(menuHandle, MF_POPUP, (UINT_PTR)machineMenuHandle, "Machine");
 
-    AppendMenuA(diskMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY, "Insert Floppy A...");
-    AppendMenuA(diskMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY, "Eject Floppy A");
+    for (floppyDriveIndex = 0u; floppyDriveIndex < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++floppyDriveIndex)
+    {
+        HMENU floppyDriveMenuHandle = CreatePopupMenu();
+        char  menuText[32];
+
+        snprintf(menuText, sizeof(menuText), "Floppy Drive %zu (BIOS %02zXh)", floppyDriveIndex, floppyDriveIndex);
+        AppendMenuA(floppyDriveMenuHandle,
+                    MF_STRING,
+                    HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE + floppyDriveIndex,
+                    "Insert Image...");
+        AppendMenuA(floppyDriveMenuHandle,
+                    MF_STRING,
+                    HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE + floppyDriveIndex,
+                    "Mount Directory...");
+        AppendMenuA(floppyDriveMenuHandle, MF_SEPARATOR, 0u, NULL);
+        AppendMenuA(floppyDriveMenuHandle,
+                    MF_STRING,
+                    HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE + floppyDriveIndex,
+                    "Eject");
+        AppendMenuA(diskMenuHandle, MF_POPUP, (UINT_PTR)floppyDriveMenuHandle, menuText);
+    }
     AppendMenuA(diskMenuHandle, MF_SEPARATOR, 0u, NULL);
-    AppendMenuA(diskMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_ATTACH_HARD_DISK, "Attach Hard Disk C...");
+    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
+    {
+        HMENU   fixedDiskMenuHandle = CreatePopupMenu();
+        char    menuText[32];
+        uint8_t biosDriveNumber = get_fixed_disk_bios_drive_number((uint8_t)fixedDiskIndex);
+
+        snprintf(menuText, sizeof(menuText), "Fixed Disk %zu (BIOS %02Xh)", fixedDiskIndex, biosDriveNumber);
+        AppendMenuA(fixedDiskMenuHandle,
+                    MF_STRING,
+                    HYPERDOS_MONITOR_COMMAND_ATTACH_FIXED_DISK_IMAGE_BASE + fixedDiskIndex,
+                    "Attach Image...");
+        AppendMenuA(fixedDiskMenuHandle,
+                    MF_STRING,
+                    HYPERDOS_MONITOR_COMMAND_MOUNT_FIXED_DISK_DIRECTORY_BASE + fixedDiskIndex,
+                    "Mount Directory...");
+        AppendMenuA(fixedDiskMenuHandle, MF_SEPARATOR, 0u, NULL);
+        AppendMenuA(fixedDiskMenuHandle,
+                    MF_STRING,
+                    HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE + fixedDiskIndex,
+                    "Detach");
+        AppendMenuA(diskMenuHandle, MF_POPUP, (UINT_PTR)fixedDiskMenuHandle, menuText);
+    }
     AppendMenuA(diskMenuHandle, MF_SEPARATOR, 0u, NULL);
     AppendMenuA(diskMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_FLUSH_DISKS, "Flush Disk Images");
     AppendMenuA(menuHandle, MF_POPUP, (UINT_PTR)diskMenuHandle, "Disk");
@@ -4105,7 +4479,7 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             }
         }
 
-        if (globalFloppyImagePathCount == 0u && !globalBootHardDiskWithoutFloppy)
+        if (globalFloppyDrivePathCount == 0u && !globalBootHardDiskWithoutFloppy)
         {
             char selectedPath[HYPERDOS_MONITOR_PATH_CAPACITY];
             if (select_disk_image_file_path(windowHandle,
@@ -4113,14 +4487,13 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
                                             selectedPath,
                                             sizeof(selectedPath)))
             {
-                copy_string_to_buffer(globalFloppyImagePaths[0], sizeof(globalFloppyImagePaths[0]), selectedPath);
-                globalFloppyImagePathCount = 1u;
+                set_floppy_drive_path(0u, selectedPath, 0u);
             }
         }
 
-        if (globalFloppyImagePathCount == 0u && !globalBootHardDiskWithoutFloppy)
+        if (globalFloppyDrivePathCount == 0u && !globalBootHardDiskWithoutFloppy)
         {
-            render_monitor_message(&globalBootState, "Use Disk > Insert Floppy A... to boot.");
+            render_monitor_message(&globalBootState, "Use Disk > Floppy Drive 0 (BIOS 00h) > Insert Image... to boot.");
         }
         else if (initialize_boot_from_disk_images(&globalBootState))
         {
@@ -4194,19 +4567,70 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             toggle_host_mouse_cursor_hiding(windowHandle, &globalBootState);
             SetFocus(windowHandle);
             return 0;
-        case HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY:
-            handle_insert_floppy_command(windowHandle, &globalBootState);
-            return 0;
-        case HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY:
-            handle_eject_floppy_command(windowHandle, &globalBootState);
-            return 0;
-        case HYPERDOS_MONITOR_COMMAND_ATTACH_HARD_DISK:
-            handle_attach_hard_disk_command(windowHandle, &globalBootState);
-            return 0;
         case HYPERDOS_MONITOR_COMMAND_FLUSH_DISKS:
             handle_flush_disks_command(windowHandle, &globalBootState);
             return 0;
         default:
+            if (LOWORD(wordParameter) >= HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE &&
+                LOWORD(wordParameter) <
+                        HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE + HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
+            {
+                handle_insert_floppy_image_command(windowHandle,
+                                                   &globalBootState,
+                                                   (uint8_t)(LOWORD(wordParameter) -
+                                                             HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE));
+                return 0;
+            }
+            if (LOWORD(wordParameter) >= HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE &&
+                LOWORD(wordParameter) < HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE +
+                                                HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
+            {
+                handle_mount_floppy_directory_command(windowHandle,
+                                                      &globalBootState,
+                                                      (uint8_t)(LOWORD(wordParameter) -
+                                                                HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE));
+                return 0;
+            }
+            if (LOWORD(wordParameter) >= HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE &&
+                LOWORD(wordParameter) <
+                        HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE + HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
+            {
+                handle_eject_floppy_command(windowHandle,
+                                            &globalBootState,
+                                            (uint8_t)(LOWORD(wordParameter) -
+                                                      HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE));
+                return 0;
+            }
+            if (LOWORD(wordParameter) >= HYPERDOS_MONITOR_COMMAND_ATTACH_FIXED_DISK_IMAGE_BASE &&
+                LOWORD(wordParameter) <
+                        HYPERDOS_MONITOR_COMMAND_ATTACH_FIXED_DISK_IMAGE_BASE + HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+            {
+                handle_attach_fixed_disk_image_command(
+                        windowHandle,
+                        &globalBootState,
+                        (uint8_t)(LOWORD(wordParameter) - HYPERDOS_MONITOR_COMMAND_ATTACH_FIXED_DISK_IMAGE_BASE));
+                return 0;
+            }
+            if (LOWORD(wordParameter) >= HYPERDOS_MONITOR_COMMAND_MOUNT_FIXED_DISK_DIRECTORY_BASE &&
+                LOWORD(wordParameter) < HYPERDOS_MONITOR_COMMAND_MOUNT_FIXED_DISK_DIRECTORY_BASE +
+                                                HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+            {
+                handle_mount_fixed_disk_directory_command(
+                        windowHandle,
+                        &globalBootState,
+                        (uint8_t)(LOWORD(wordParameter) - HYPERDOS_MONITOR_COMMAND_MOUNT_FIXED_DISK_DIRECTORY_BASE));
+                return 0;
+            }
+            if (LOWORD(wordParameter) >= HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE &&
+                LOWORD(wordParameter) <
+                        HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE + HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+            {
+                handle_detach_fixed_disk_command(windowHandle,
+                                                 &globalBootState,
+                                                 (uint8_t)(LOWORD(wordParameter) -
+                                                           HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE));
+                return 0;
+            }
             break;
         }
         break;
@@ -4499,56 +4923,228 @@ static int copy_next_command_line_argument(const char* commandLine,
     return destinationIndex != 0u;
 }
 
+static int parse_drive_path_argument(const char* argument, unsigned long* driveIdentifier, const char** path)
+{
+    const char*   equalSign = NULL;
+    char          driveIdentifierText[16];
+    size_t        driveIdentifierLength = 0u;
+    int           numberBase            = 10;
+    char*         endPointer            = NULL;
+    unsigned long parsedDriveIdentifier = 0u;
+
+    if (argument == NULL || driveIdentifier == NULL || path == NULL)
+    {
+        return 0;
+    }
+    equalSign = strchr(argument, '=');
+    if (equalSign == NULL || equalSign == argument || equalSign[1] == '\0')
+    {
+        return 0;
+    }
+    driveIdentifierLength = (size_t)(equalSign - argument);
+    if (driveIdentifierLength >= sizeof(driveIdentifierText))
+    {
+        return 0;
+    }
+    memcpy(driveIdentifierText, argument, driveIdentifierLength);
+    driveIdentifierText[driveIdentifierLength] = '\0';
+    if (driveIdentifierLength > 1u && (driveIdentifierText[driveIdentifierLength - 1u] == 'h' ||
+                                       driveIdentifierText[driveIdentifierLength - 1u] == 'H'))
+    {
+        numberBase                                      = 16;
+        driveIdentifierText[driveIdentifierLength - 1u] = '\0';
+    }
+    else if (driveIdentifierLength > 2u && driveIdentifierText[0] == '0' &&
+             (driveIdentifierText[1] == 'x' || driveIdentifierText[1] == 'X'))
+    {
+        numberBase = 16;
+    }
+
+    parsedDriveIdentifier = strtoul(driveIdentifierText, &endPointer, numberBase);
+    if (endPointer == driveIdentifierText || *endPointer != '\0' || parsedDriveIdentifier > 0xFFu)
+    {
+        return 0;
+    }
+    *driveIdentifier = parsedDriveIdentifier;
+    *path            = equalSign + 1u;
+    return 1;
+}
+
+static int set_floppy_drive_path_from_argument(const char* argument)
+{
+    unsigned long driveIdentifier = 0u;
+    const char*   path            = NULL;
+
+    if (!parse_drive_path_argument(argument, &driveIdentifier, &path))
+    {
+        return 0;
+    }
+    if (driveIdentifier >= HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
+    {
+        return 0;
+    }
+    set_floppy_drive_path((uint8_t)driveIdentifier, path, (uint8_t)hyperdos_win32_path_is_directory(path));
+    return 1;
+}
+
+static int set_fixed_disk_drive_path_from_argument(const char* argument)
+{
+    unsigned long driveIdentifier = 0u;
+    const char*   path            = NULL;
+    uint8_t       fixedDiskIndex  = 0u;
+
+    if (!parse_drive_path_argument(argument, &driveIdentifier, &path))
+    {
+        return 0;
+    }
+    if (driveIdentifier < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+    {
+        fixedDiskIndex = (uint8_t)driveIdentifier;
+    }
+    else if (driveIdentifier >= 80u && driveIdentifier < 80u + HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+    {
+        fixedDiskIndex = (uint8_t)(driveIdentifier - 80u);
+    }
+    else if (driveIdentifier >= HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER &&
+             driveIdentifier < HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER + HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
+    {
+        fixedDiskIndex = (uint8_t)(driveIdentifier - HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER);
+    }
+    else
+    {
+        return 0;
+    }
+    set_fixed_disk_drive_path(fixedDiskIndex, path, (uint8_t)hyperdos_win32_path_is_directory(path));
+    return 1;
+}
+
+static int set_next_available_floppy_drive_path(const char* path)
+{
+    size_t driveIndex = 0u;
+
+    if (path == NULL || path[0] == '\0')
+    {
+        return 0;
+    }
+    for (driveIndex = 0u; driveIndex < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++driveIndex)
+    {
+        if (globalFloppyDrivePaths[driveIndex][0] == '\0')
+        {
+            set_floppy_drive_path((uint8_t)driveIndex, path, (uint8_t)hyperdos_win32_path_is_directory(path));
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void clear_all_fixed_disk_drive_paths(void)
+{
+    size_t fixedDiskIndex = 0u;
+
+    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
+    {
+        clear_fixed_disk_drive_path((uint8_t)fixedDiskIndex);
+    }
+}
+
 static void parse_command_line_disk_paths(const char* commandLine)
 {
     char              argument[HYPERDOS_MONITOR_PATH_CAPACITY];
     size_t            sourceOffset               = 0u;
     static const char defaultHardDiskImagePath[] = "images\\harddisk.img";
 
-    globalFloppyImagePathCount      = 0u;
-    globalDiskTracePath[0]          = '\0';
-    globalCpuTracePath[0]           = '\0';
-    globalMemoryTracePath[0]        = '\0';
-    globalGuestMemoryDumpPath[0]    = '\0';
-    globalTextScreenDumpPath[0]     = '\0';
-    globalVideoStateDumpPath[0]     = '\0';
-    globalMemoryWatchCount          = 0u;
-    globalMemoryStopPhysicalAddress = 0u;
-    globalMemoryStopByteValue       = 0u;
-    globalMemoryStopByteEnabled     = 0;
-    globalBootHardDiskWithoutFloppy = 0;
-    globalCoprocessorEnabled        = 0;
-    globalProcessorModel            = HYPERDOS_X86_16_PROCESSOR_MODEL_80186;
-    globalPcModel                   = HYPERDOS_PC_MODEL_AT;
-    globalCpuTraceStartsEnabled     = 0;
-    copy_string_to_buffer(globalHardDiskImagePath, sizeof(globalHardDiskImagePath), defaultHardDiskImagePath);
+    memset(globalFloppyDrivePaths, 0, sizeof(globalFloppyDrivePaths));
+    memset(globalFloppyDrivePathIsDirectory, 0, sizeof(globalFloppyDrivePathIsDirectory));
+    memset(globalFixedDiskDrivePaths, 0, sizeof(globalFixedDiskDrivePaths));
+    memset(globalFixedDiskDrivePathIsDirectory, 0, sizeof(globalFixedDiskDrivePathIsDirectory));
+    globalFloppyDrivePathCount                    = 0u;
+    globalDiskTracePath[0]                        = '\0';
+    globalCpuTracePath[0]                         = '\0';
+    globalMemoryTracePath[0]                      = '\0';
+    globalGuestMemoryDumpPath[0]                  = '\0';
+    globalTextScreenDumpPath[0]                   = '\0';
+    globalVideoStateDumpPath[0]                   = '\0';
+    globalMemoryWatchCount                        = 0u;
+    globalMemoryStopPhysicalAddress               = 0u;
+    globalMemoryStopByteValue                     = 0u;
+    globalMemoryStopByteEnabled                   = 0;
+    globalBootHardDiskWithoutFloppy               = 0;
+    globalCoprocessorEnabled                      = 0;
+    globalProcessorModel                          = HYPERDOS_X86_16_PROCESSOR_MODEL_80186;
+    globalPcModel                                 = HYPERDOS_PC_MODEL_AT;
+    globalCpuTraceStartsEnabled                   = 0;
+    globalDivideErrorReturnsToFaultingInstruction = 0;
+    set_fixed_disk_drive_path(0u,
+                              defaultHardDiskImagePath,
+                              (uint8_t)hyperdos_win32_path_is_directory(defaultHardDiskImagePath));
 
     while (copy_next_command_line_argument(commandLine, sourceOffset, argument, sizeof(argument), &sourceOffset))
     {
         if (strcmp(argument, "--hard-disk") == 0)
         {
+            char hardDiskPath[HYPERDOS_MONITOR_PATH_CAPACITY];
+
             if (copy_next_command_line_argument(commandLine,
                                                 sourceOffset,
-                                                globalHardDiskImagePath,
-                                                sizeof(globalHardDiskImagePath),
+                                                hardDiskPath,
+                                                sizeof(hardDiskPath),
                                                 &sourceOffset))
             {
+                set_fixed_disk_drive_path(0u, hardDiskPath, (uint8_t)hyperdos_win32_path_is_directory(hardDiskPath));
                 globalBootHardDiskWithoutFloppy = 1;
                 continue;
             }
-            globalHardDiskImagePath[0] = '\0';
+            clear_fixed_disk_drive_path(0u);
             continue;
         }
         if (strncmp(argument, "--hard-disk=", 12u) == 0)
         {
-            copy_string_to_buffer(globalHardDiskImagePath, sizeof(globalHardDiskImagePath), argument + 12u);
+            set_fixed_disk_drive_path(0u, argument + 12u, (uint8_t)hyperdos_win32_path_is_directory(argument + 12u));
             globalBootHardDiskWithoutFloppy = 1;
             continue;
         }
         if (strcmp(argument, "--no-hard-disk") == 0)
         {
-            globalHardDiskImagePath[0]      = '\0';
+            clear_all_fixed_disk_drive_paths();
             globalBootHardDiskWithoutFloppy = 0;
+            continue;
+        }
+        if (strcmp(argument, "--floppy-drive") == 0)
+        {
+            char drivePathArgument[HYPERDOS_MONITOR_PATH_CAPACITY];
+
+            if (copy_next_command_line_argument(commandLine,
+                                                sourceOffset,
+                                                drivePathArgument,
+                                                sizeof(drivePathArgument),
+                                                &sourceOffset))
+            {
+                (void)set_floppy_drive_path_from_argument(drivePathArgument);
+            }
+            continue;
+        }
+        if (strncmp(argument, "--floppy-drive=", 15u) == 0)
+        {
+            (void)set_floppy_drive_path_from_argument(argument + 15u);
+            continue;
+        }
+        if (strcmp(argument, "--fixed-drive") == 0)
+        {
+            char drivePathArgument[HYPERDOS_MONITOR_PATH_CAPACITY];
+
+            if (copy_next_command_line_argument(commandLine,
+                                                sourceOffset,
+                                                drivePathArgument,
+                                                sizeof(drivePathArgument),
+                                                &sourceOffset))
+            {
+                (void)set_fixed_disk_drive_path_from_argument(drivePathArgument);
+            }
+            continue;
+        }
+        if (strncmp(argument, "--fixed-drive=", 14u) == 0)
+        {
+            (void)set_fixed_disk_drive_path_from_argument(argument + 14u);
             continue;
         }
         if (strcmp(argument, "--disk-trace") == 0)
@@ -4701,13 +5297,7 @@ static void parse_command_line_disk_paths(const char* commandLine)
             globalDivideErrorReturnsToFaultingInstruction = 0;
             continue;
         }
-        if (globalFloppyImagePathCount < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT)
-        {
-            copy_string_to_buffer(globalFloppyImagePaths[globalFloppyImagePathCount],
-                                  sizeof(globalFloppyImagePaths[globalFloppyImagePathCount]),
-                                  argument);
-            ++globalFloppyImagePathCount;
-        }
+        (void)set_next_available_floppy_drive_path(argument);
     }
 }
 
@@ -4768,11 +5358,13 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
     MSG       message;
     DWORD     windowStyle = WS_OVERLAPPEDWINDOW;
     RECT      requestedClientRectangle;
-    int       windowWidth  = 0;
-    int       windowHeight = 0;
+    int       windowWidth    = 0;
+    int       windowHeight   = 0;
+    int       comInitialized = 0;
 
     (void)previousInstanceHandle;
     configure_process_display_scale_awareness();
+    comInitialized = SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
     parse_command_line_disk_paths(commandLine);
     InitializeCriticalSection(&globalDiskTraceCriticalSection);
     globalDiskTraceCriticalSectionInitialized = 1;
@@ -4812,6 +5404,10 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
 
     if (!RegisterClassA(&windowClass))
     {
+        if (comInitialized)
+        {
+            CoUninitialize();
+        }
         return 1;
     }
 
@@ -4830,6 +5426,10 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
                                    NULL);
     if (windowHandle == NULL)
     {
+        if (comInitialized)
+        {
+            CoUninitialize();
+        }
         return 1;
     }
 
@@ -4856,6 +5456,10 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
     {
         DeleteCriticalSection(&globalDiskTraceCriticalSection);
         globalDiskTraceCriticalSectionInitialized = 0;
+    }
+    if (comInitialized)
+    {
+        CoUninitialize();
     }
     return (int)message.wParam;
 }

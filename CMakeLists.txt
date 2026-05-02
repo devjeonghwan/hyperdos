@@ -38,8 +38,10 @@ endif ()
 
 if (WIN32)
     add_executable(hyperdos_win32_pc_monitor WIN32
+            platforms/win32/pc_directory_disk.c
+            platforms/win32/pc_file_disk.c
             platforms/win32/pc_monitor.c)
-    target_link_libraries(hyperdos_win32_pc_monitor PRIVATE hyperdos user32 gdi32 comdlg32)
+    target_link_libraries(hyperdos_win32_pc_monitor PRIVATE hyperdos user32 gdi32 comdlg32 shell32 ole32)
 endif ()
 
 add_executable(hyperdos_tests tests/emulator_tests.c)

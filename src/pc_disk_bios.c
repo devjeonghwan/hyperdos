@@ -2,6 +2,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "hyperdos/pc_bios_data_area.h"
 
@@ -19,6 +20,7 @@ enum
     HYPERDOS_PC_DISK_BIOS_EXTENSION_INSTALLATION_CHECK_SERVICE           = 0x41u,
     HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS                                 = 0x00u,
     HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION                        = 0x01u,
+    HYPERDOS_PC_DISK_BIOS_STATUS_WRITE_PROTECTED                         = 0x03u,
     HYPERDOS_PC_DISK_BIOS_STATUS_SECTOR_NOT_FOUND                        = 0x04u,
     HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED                                 = 0x06u,
     HYPERDOS_PC_DISK_BIOS_TYPE_FLOPPY_WITHOUT_CHANGE_LINE                = 0x01u,
@@ -439,6 +441,15 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_fail_transfer(hype
     return HYPERDOS_X86_16_EXECUTION_OK;
 }
 
+static uint8_t hyperdos_pc_disk_bios_get_transfer_status(hyperdos_pc_disk_transfer_result transferResult)
+{
+    if (transferResult == HYPERDOS_PC_DISK_TRANSFER_WRITE_PROTECTED)
+    {
+        return HYPERDOS_PC_DISK_BIOS_STATUS_WRITE_PROTECTED;
+    }
+    return HYPERDOS_PC_DISK_BIOS_STATUS_SECTOR_NOT_FOUND;
+}
+
 static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
         hyperdos_x86_16_processor*             processor,
         const hyperdos_pc_disk_bios_interface* diskBiosInterface,
@@ -458,11 +469,12 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
     uint32_t transferAddress = (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA] << 4u) +
                                 transferOffset) &
                                HYPERDOS_X86_16_ADDRESS_MASK;
-    hyperdos_pc_disk_image* diskImage           = NULL;
-    uint32_t                logicalBlockAddress = 0u;
-    size_t                  imageByteOffset     = 0u;
-    size_t                  transferByteCount   = 0u;
-    size_t                  byteIndex           = 0;
+    hyperdos_pc_disk_image*          diskImage           = NULL;
+    uint64_t                         logicalBlockAddress = 0u;
+    size_t                           transferByteCount   = 0u;
+    size_t                           byteIndex           = 0;
+    uint8_t*                         transferBytes       = NULL;
+    hyperdos_pc_disk_transfer_result transferResult      = HYPERDOS_PC_DISK_TRANSFER_OK;
 
     hyperdos_pc_disk_bios_lock_disk_images(diskBiosInterface);
     diskImage = hyperdos_pc_disk_bios_get_disk_image(diskBiosInterface, driveNumber);
@@ -537,47 +549,103 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
                                                    HYPERDOS_PC_DISK_BIOS_STATUS_SECTOR_NOT_FOUND);
     }
 
-    logicalBlockAddress = ((uint32_t)cylinder * diskImage->headCount + head) * diskImage->sectorsPerTrack +
+    logicalBlockAddress = ((uint64_t)cylinder * diskImage->headCount + head) * diskImage->sectorsPerTrack +
                           (sector - 1u);
-    imageByteOffset   = (size_t)logicalBlockAddress * diskImage->bytesPerSector;
     transferByteCount = (size_t)sectorCount * diskImage->bytesPerSector;
-    if (imageByteOffset + transferByteCount > diskImage->byteCount)
+    if ((uint64_t)sectorCount > diskImage->sectorCount || logicalBlockAddress > diskImage->sectorCount - sectorCount)
     {
         hyperdos_pc_disk_bios_trace(diskBiosInterface,
-                                    "int13 transfer out-of-range write=%d drive=%02X lba=%lu bytes=%zu "
-                                    "image-bytes=%zu",
+                                    "int13 transfer out-of-range write=%d drive=%02X lba=%llu sectors=%u "
+                                    "image-sectors=%llu",
                                     isWrite,
                                     driveNumber,
-                                    (unsigned long)logicalBlockAddress,
-                                    transferByteCount,
-                                    diskImage->byteCount);
+                                    (unsigned long long)logicalBlockAddress,
+                                    sectorCount,
+                                    (unsigned long long)diskImage->sectorCount);
         hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
         return hyperdos_pc_disk_bios_fail_transfer(processor,
                                                    pc,
                                                    driveNumber,
                                                    HYPERDOS_PC_DISK_BIOS_STATUS_SECTOR_NOT_FOUND);
     }
-    for (byteIndex = 0; byteIndex < transferByteCount; ++byteIndex)
+    if (isWrite && diskImage->readOnly)
     {
-        if (isWrite)
-        {
-            diskImage->bytes
-                    [imageByteOffset +
-                     byteIndex] = hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus,
-                                                                            (transferAddress + (uint32_t)byteIndex) &
-                                                                                    HYPERDOS_X86_16_ADDRESS_MASK);
-        }
-        else
-        {
-            hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
-                                                     (transferAddress + (uint32_t)byteIndex) &
-                                                             HYPERDOS_X86_16_ADDRESS_MASK,
-                                                     diskImage->bytes[imageByteOffset + byteIndex]);
-        }
+        hyperdos_pc_disk_bios_trace(diskBiosInterface,
+                                    "int13 transfer write-protected drive=%02X cylinder=%u head=%u sector=%u count=%u "
+                                    "path=\"%s\"",
+                                    driveNumber,
+                                    cylinder,
+                                    head,
+                                    sector,
+                                    sectorCount,
+                                    diskImage->path);
+        hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
+        return hyperdos_pc_disk_bios_fail_transfer(processor,
+                                                   pc,
+                                                   driveNumber,
+                                                   HYPERDOS_PC_DISK_BIOS_STATUS_WRITE_PROTECTED);
+    }
+    transferBytes = (uint8_t*)malloc(transferByteCount);
+    if (transferBytes == NULL)
+    {
+        hyperdos_pc_disk_bios_trace(diskBiosInterface,
+                                    "int13 transfer allocation-failed write=%d drive=%02X bytes=%zu",
+                                    isWrite,
+                                    driveNumber,
+                                    transferByteCount);
+        hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
+        return hyperdos_pc_disk_bios_fail_transfer(processor,
+                                                   pc,
+                                                   driveNumber,
+                                                   HYPERDOS_PC_DISK_BIOS_STATUS_SECTOR_NOT_FOUND);
     }
     if (isWrite)
     {
-        diskImage->dirty = 1u;
+        for (byteIndex = 0; byteIndex < transferByteCount; ++byteIndex)
+        {
+            transferBytes[byteIndex] = hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus,
+                                                                                 (transferAddress +
+                                                                                  (uint32_t)byteIndex) &
+                                                                                         HYPERDOS_X86_16_ADDRESS_MASK);
+        }
+        transferResult = hyperdos_pc_disk_image_write_sectors(diskImage,
+                                                              logicalBlockAddress,
+                                                              sectorCount,
+                                                              transferBytes);
+    }
+    else
+    {
+        transferResult = hyperdos_pc_disk_image_read_sectors(diskImage,
+                                                             logicalBlockAddress,
+                                                             sectorCount,
+                                                             transferBytes);
+        if (transferResult == HYPERDOS_PC_DISK_TRANSFER_OK)
+        {
+            for (byteIndex = 0; byteIndex < transferByteCount; ++byteIndex)
+            {
+                hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
+                                                         (transferAddress + (uint32_t)byteIndex) &
+                                                                 HYPERDOS_X86_16_ADDRESS_MASK,
+                                                         transferBytes[byteIndex]);
+            }
+        }
+    }
+    free(transferBytes);
+    if (transferResult != HYPERDOS_PC_DISK_TRANSFER_OK)
+    {
+        uint8_t status = hyperdos_pc_disk_bios_get_transfer_status(transferResult);
+
+        hyperdos_pc_disk_bios_trace(diskBiosInterface,
+                                    "int13 transfer failed write=%d drive=%02X lba=%llu count=%u status=%02X "
+                                    "path=\"%s\"",
+                                    isWrite,
+                                    driveNumber,
+                                    (unsigned long long)logicalBlockAddress,
+                                    sectorCount,
+                                    status,
+                                    diskImage->path);
+        hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
+        return hyperdos_pc_disk_bios_fail_transfer(processor, pc, driveNumber, status);
     }
     if (driveNumber < HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER && !diskImage->isHardDisk)
     {
@@ -586,14 +654,14 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
         hyperdos_pc_disk_bios_trace(
                 diskBiosInterface,
                 "int13 transfer success write=%d drive=%02X cylinder=%u head=%u sector=%u "
-                "count=%u lba=%lu path=\"%s\" media-changed=%u reported=%u controller-changed=%u",
+                "count=%u lba=%llu path=\"%s\" media-changed=%u reported=%u controller-changed=%u",
                 isWrite,
                 driveNumber,
                 cylinder,
                 head,
                 sector,
                 sectorCount,
-                (unsigned long)logicalBlockAddress,
+                (unsigned long long)logicalBlockAddress,
                 diskImage->path,
                 diskImage->mediaChanged,
                 diskImage->mediaChangeReported,
@@ -607,14 +675,14 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
         hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
         hyperdos_pc_disk_bios_trace(diskBiosInterface,
                                     "int13 transfer success write=%d drive=%02X cylinder=%u head=%u sector=%u "
-                                    "count=%u lba=%lu path=\"%s\"",
+                                    "count=%u lba=%llu path=\"%s\"",
                                     isWrite,
                                     driveNumber,
                                     cylinder,
                                     head,
                                     sector,
                                     sectorCount,
-                                    (unsigned long)logicalBlockAddress,
+                                    (unsigned long long)logicalBlockAddress,
                                     diskImage->path);
     }
     hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
@@ -770,7 +838,8 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
         }
         if (diskImage->isHardDisk)
         {
-            uint32_t totalSectorCount = (uint32_t)(diskImage->byteCount / diskImage->bytesPerSector);
+            uint32_t totalSectorCount = diskImage->sectorCount > 0xFFFFFFFFu ? 0xFFFFFFFFu
+                                                                             : (uint32_t)diskImage->sectorCount;
             processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
                     (uint16_t)((HYPERDOS_PC_DISK_BIOS_TYPE_FIXED << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
                                (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));

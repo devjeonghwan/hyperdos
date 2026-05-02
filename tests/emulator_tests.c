@@ -1,3 +1,7 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -3026,26 +3030,27 @@ static void test_disk_bios_reset_preserves_floppy_media_change_until_read(void)
     test_disk_bios_context                 diskBiosContext;
     hyperdos_x86_16_processor*             processor          = NULL;
     size_t                                 diskImageByteCount = 0u;
+    uint8_t*                               diskImageBytes     = NULL;
     hyperdos_x86_16_execution_result       result             = HYPERDOS_X86_16_EXECUTION_OK;
 
     memset(&diskImage, 0, sizeof(diskImage));
     memset(&diskBiosContext, 0, sizeof(diskBiosContext));
     diskImageByteCount = TEST_DISK_IMAGE_BYTES_PER_SECTOR * TEST_DISK_IMAGE_SECTORS_PER_TRACK *
                          TEST_DISK_IMAGE_HEAD_COUNT * TEST_DISK_IMAGE_CYLINDER_COUNT;
-    diskImage.bytes = (uint8_t*)calloc(diskImageByteCount, 1u);
-    assert(diskImage.bytes != NULL);
-    diskImage.bytes[0]            = TEST_DISK_SAMPLE_BYTE;
-    diskImage.byteCount           = diskImageByteCount;
-    diskImage.bytesPerSector      = TEST_DISK_IMAGE_BYTES_PER_SECTOR;
+    diskImageBytes = (uint8_t*)calloc(diskImageByteCount, 1u);
+    assert(diskImageBytes != NULL);
+    diskImageBytes[0] = TEST_DISK_SAMPLE_BYTE;
+    assert(hyperdos_pc_disk_image_initialize_memory_floppy(&diskImage,
+                                                           "test-floppy.img",
+                                                           diskImageBytes,
+                                                           diskImageByteCount,
+                                                           0u));
     diskImage.sectorsPerTrack     = TEST_DISK_IMAGE_SECTORS_PER_TRACK;
     diskImage.headCount           = TEST_DISK_IMAGE_HEAD_COUNT;
     diskImage.cylinderCount       = TEST_DISK_IMAGE_CYLINDER_COUNT;
-    diskImage.driveNumber         = HYPERDOS_PC_DISK_BIOS_FLOPPY_DRIVE_NUMBER;
-    diskImage.inserted            = 1u;
     diskImage.mediaChanged        = 1u;
     diskImage.mediaChangeReported = 0u;
-    (void)strcpy(diskImage.path, "test-floppy.img");
-    diskBiosContext.diskImage = &diskImage;
+    diskBiosContext.diskImage     = &diskImage;
 
     machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
     assert(machine != NULL);
@@ -3098,7 +3103,7 @@ static void test_disk_bios_reset_preserves_floppy_media_change_until_read(void)
     assert(machine->pc.processorMemory[TEST_DISK_TRANSFER_OFFSET] == TEST_DISK_SAMPLE_BYTE);
 
     free(machine);
-    free(diskImage.bytes);
+    hyperdos_pc_disk_image_free(&diskImage);
 }
 
 static void test_disk_bios_xt_reports_floppy_change_line_for_disk_swaps(void)
@@ -3124,26 +3129,27 @@ static void test_disk_bios_xt_reports_floppy_change_line_for_disk_swaps(void)
     test_disk_bios_context                 diskBiosContext;
     hyperdos_x86_16_processor*             processor          = NULL;
     size_t                                 diskImageByteCount = 0u;
+    uint8_t*                               diskImageBytes     = NULL;
     hyperdos_x86_16_execution_result       result             = HYPERDOS_X86_16_EXECUTION_OK;
 
     memset(&diskImage, 0, sizeof(diskImage));
     memset(&diskBiosContext, 0, sizeof(diskBiosContext));
     diskImageByteCount = TEST_DISK_IMAGE_BYTES_PER_SECTOR * TEST_DISK_IMAGE_SECTORS_PER_TRACK *
                          TEST_DISK_IMAGE_HEAD_COUNT * TEST_DISK_IMAGE_CYLINDER_COUNT;
-    diskImage.bytes = (uint8_t*)calloc(diskImageByteCount, 1u);
-    assert(diskImage.bytes != NULL);
-    diskImage.bytes[0]            = TEST_DISK_SAMPLE_BYTE;
-    diskImage.byteCount           = diskImageByteCount;
-    diskImage.bytesPerSector      = TEST_DISK_IMAGE_BYTES_PER_SECTOR;
+    diskImageBytes = (uint8_t*)calloc(diskImageByteCount, 1u);
+    assert(diskImageBytes != NULL);
+    diskImageBytes[0] = TEST_DISK_SAMPLE_BYTE;
+    assert(hyperdos_pc_disk_image_initialize_memory_floppy(&diskImage,
+                                                           "test-floppy.img",
+                                                           diskImageBytes,
+                                                           diskImageByteCount,
+                                                           0u));
     diskImage.sectorsPerTrack     = TEST_DISK_IMAGE_SECTORS_PER_TRACK;
     diskImage.headCount           = TEST_DISK_IMAGE_HEAD_COUNT;
     diskImage.cylinderCount       = TEST_DISK_IMAGE_CYLINDER_COUNT;
-    diskImage.driveNumber         = HYPERDOS_PC_DISK_BIOS_FLOPPY_DRIVE_NUMBER;
-    diskImage.inserted            = 1u;
     diskImage.mediaChanged        = 1u;
     diskImage.mediaChangeReported = 0u;
-    (void)strcpy(diskImage.path, "test-floppy.img");
-    diskBiosContext.diskImage = &diskImage;
+    diskBiosContext.diskImage     = &diskImage;
 
     machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
     assert(machine != NULL);
@@ -3197,7 +3203,7 @@ static void test_disk_bios_xt_reports_floppy_change_line_for_disk_swaps(void)
     assert(machine->pc.processorMemory[TEST_DISK_TRANSFER_OFFSET] == TEST_DISK_SAMPLE_BYTE);
 
     free(machine);
-    free(diskImage.bytes);
+    hyperdos_pc_disk_image_free(&diskImage);
 }
 
 static void test_video_bios_palette_services_update_video_graphics_array_state(void)

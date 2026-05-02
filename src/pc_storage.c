@@ -59,7 +59,7 @@ static void hyperdos_pc_storage_update_fixed_disk_count(hyperdos_pc_storage_cont
         return;
     }
     hyperdos_pc_disk_bios_set_fixed_disk_count(storageContext->pc,
-                                               hyperdos_pc_storage_count_inserted_fixed_disks(storageContext));
+                                               hyperdos_pc_storage_get_fixed_disk_bios_drive_count(storageContext));
 }
 
 static uint8_t hyperdos_pc_storage_get_floppy_cmos_drive_type(const hyperdos_pc_storage_floppy_drive* floppyDrive)
@@ -239,6 +239,26 @@ uint8_t hyperdos_pc_storage_count_inserted_fixed_disks(const hyperdos_pc_storage
         }
     }
     return insertedDiskCount;
+}
+
+uint8_t hyperdos_pc_storage_get_fixed_disk_bios_drive_count(const hyperdos_pc_storage_context* storageContext)
+{
+    size_t  driveIndex          = 0u;
+    uint8_t fixedDiskDriveCount = 0u;
+
+    if (!hyperdos_pc_storage_context_is_valid(storageContext))
+    {
+        return 0u;
+    }
+    for (driveIndex = 0u; driveIndex < storageContext->fixedDiskDriveCount && driveIndex < 0xFFu; ++driveIndex)
+    {
+        if (storageContext->fixedDiskDrives[driveIndex].installed &&
+            storageContext->fixedDiskDrives[driveIndex].diskImage.inserted)
+        {
+            fixedDiskDriveCount = (uint8_t)(driveIndex + 1u);
+        }
+    }
+    return fixedDiskDriveCount;
 }
 
 hyperdos_pc_disk_image* hyperdos_pc_storage_get_floppy_disk_for_drive_number(
@@ -426,6 +446,31 @@ hyperdos_pc_storage_result hyperdos_pc_storage_attach_fixed_disk_image(hyperdos_
     hyperdos_pc_disk_image_free(&fixedDiskDrive->diskImage);
     hyperdos_pc_storage_move_disk_image(&fixedDiskDrive->diskImage, replacementDisk);
     fixedDiskDrive->installed = 1u;
+    hyperdos_pc_storage_update_fixed_disk_count(storageContext);
+    hyperdos_pc_storage_update_cmos_fixed_disk_geometries(storageContext);
+    return HYPERDOS_PC_STORAGE_OK;
+}
+
+hyperdos_pc_storage_result hyperdos_pc_storage_detach_fixed_disk_image(hyperdos_pc_storage_context* storageContext,
+                                                                       uint8_t                      fixedDiskIndex)
+{
+    hyperdos_pc_storage_fixed_disk_drive* fixedDiskDrive = NULL;
+
+    if (!hyperdos_pc_storage_fixed_disk_drive_is_valid(storageContext, fixedDiskIndex))
+    {
+        return HYPERDOS_PC_STORAGE_INVALID_ARGUMENT;
+    }
+    fixedDiskDrive = &storageContext->fixedDiskDrives[fixedDiskIndex];
+    if (!fixedDiskDrive->installed || !fixedDiskDrive->diskImage.inserted)
+    {
+        return HYPERDOS_PC_STORAGE_NO_MEDIA;
+    }
+    if (!hyperdos_pc_disk_image_flush(&fixedDiskDrive->diskImage))
+    {
+        return HYPERDOS_PC_STORAGE_FLUSH_FAILED;
+    }
+    hyperdos_pc_disk_image_free(&fixedDiskDrive->diskImage);
+    fixedDiskDrive->installed = 0u;
     hyperdos_pc_storage_update_fixed_disk_count(storageContext);
     hyperdos_pc_storage_update_cmos_fixed_disk_geometries(storageContext);
     return HYPERDOS_PC_STORAGE_OK;
