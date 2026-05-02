@@ -2772,12 +2772,12 @@ static void render_display(HDC deviceContext, const hyperdos_win32_boot_state* b
 
 static COLORREF get_display_padding_color(void)
 {
-    return RGB(24, 28, 34);
+    return RGB(40, 40, 40);
 }
 
 static COLORREF get_display_border_color(void)
 {
-    return RGB(91, 111, 134);
+    return RGB(80, 80, 80);
 }
 
 static void fill_display_padding(HDC deviceContext, const RECT* clientRectangle)
