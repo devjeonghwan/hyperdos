@@ -714,6 +714,68 @@ static void test_segment_boundary_word_write_policy(void)
     test_segment_boundary_word_write(HYPERDOS_X86_PROCESSOR_MODEL_80188, 0);
 }
 
+static void test_push_stack_pointer_program(hyperdos_x86_processor_model processorModel,
+                                            const uint8_t*               program,
+                                            size_t                       programSize,
+                                            uint16_t                     expectedAccumulator)
+{
+    uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor        processor;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, processorModel);
+    assert(hyperdos_x86_load_dos_program(&processor, program, programSize, HYPERDOS_X86_DEFAULT_DOS_SEGMENT, "", 0u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           expectedAccumulator);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) == 0x0200u);
+    free(memory);
+}
+
+static void test_push_stack_pointer_for_model(hyperdos_x86_processor_model processorModel, uint16_t expectedAccumulator)
+{
+    static const uint8_t shortPushStackPointerProgram[] = {
+        0xBCu,
+        0x00u,
+        0x02u,
+        0x54u,
+        0x58u,
+        0xF4u,
+    };
+    static const uint8_t groupFivePushStackPointerProgram[] = {
+        0xBCu,
+        0x00u,
+        0x02u,
+        0xFFu,
+        0xF4u,
+        0x58u,
+        0xF4u,
+    };
+
+    test_push_stack_pointer_program(processorModel,
+                                    shortPushStackPointerProgram,
+                                    sizeof(shortPushStackPointerProgram),
+                                    expectedAccumulator);
+    test_push_stack_pointer_program(processorModel,
+                                    groupFivePushStackPointerProgram,
+                                    sizeof(groupFivePushStackPointerProgram),
+                                    expectedAccumulator);
+}
+
+static void test_push_stack_pointer_model_policy(void)
+{
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_8086, 0x01FEu);
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_8088, 0x01FEu);
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186, 0x0200u);
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188, 0x0200u);
+}
+
 static void test_80186_basic_stack_instructions_for_model(hyperdos_x86_processor_model processorModel)
 {
     static const uint8_t program[] = {
@@ -4639,6 +4701,7 @@ int main(void)
     test_80186_shift_rotate_immediate_count();
     test_80186_shift_rotate_immediate_matrix();
     test_segment_boundary_word_write_policy();
+    test_push_stack_pointer_model_policy();
     test_80186_basic_stack_instructions();
     test_80186_immediate_signed_multiply();
     test_80186_bound_instruction();
