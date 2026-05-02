@@ -66,7 +66,7 @@ fsutil file createnew images\harddisk.img 33554432
 Then boot with:
 
 ```bat
-cmake-build-debug\hyperdos_win32_pc_monitor.exe --hard-disk images\harddisk.img --boot-hard-disk
+cmake-build-debug\hyperdos_win32_pc_monitor.exe --fixed-drive=0=images\harddisk.img
 ```
 
 The image is blank. You still need to partition and format it from DOS, for example with `FDISK` and

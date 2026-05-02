@@ -4,6 +4,7 @@
 
 #include <commdlg.h>
 
+#include <commctrl.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 
@@ -34,6 +35,9 @@
 #include "hyperdos/pc_video_services.h"
 #include "pc_directory_disk.h"
 #include "pc_file_disk.h"
+#include "pc_monitor.h"
+#include "pc_monitor_runtime.h"
+#include "pc_monitor_window.h"
 
 #ifndef VK_HANGUL
 #define VK_HANGUL 0x15
@@ -57,29 +61,27 @@ enum
     HYPERDOS_MONITOR_VIDEO_PREVIEW_WIDTH                  = 80u,
     HYPERDOS_MONITOR_VIDEO_PREVIEW_HEIGHT                 = 50u,
     HYPERDOS_MONITOR_INSTRUCTIONS_PER_SLICE               = 32768u,
-    HYPERDOS_MONITOR_HOST_SCAN_CODE_QUEUE_CAPACITY        = 512u,
-    HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY      = 512u,
     HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MINIMUM   = -127,
     HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MAXIMUM   = 127,
-    HYPERDOS_MONITOR_HOST_KEY_STATE_CAPACITY              = 512u,
+    HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY             = 320u,
     HYPERDOS_MONITOR_KEYBOARD_SCAN_CODE_SEQUENCE_CAPACITY = 8u,
-    HYPERDOS_MONITOR_CPU_TRACE_ENTRY_COUNT                = 262144u,
-    HYPERDOS_MONITOR_CPU_TRACE_BYTE_COUNT                 = 6u,
-    HYPERDOS_MONITOR_CPU_TRACE_STACK_WORD_COUNT           = 8u,
     HYPERDOS_MONITOR_UTF8_MAXIMUM_BYTE_COUNT              = 4u,
     HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY                = 32u,
     HYPERDOS_MONITOR_MEMORY_WATCH_TEXT_CAPACITY           = 64u,
-    HYPERDOS_MONITOR_STATUS_TEXT_CAPACITY                 = 256u,
     HYPERDOS_MONITOR_PATH_CAPACITY                        = 1024u,
     HYPERDOS_MONITOR_FLOPPY_DRIVE_COUNT                   = 1u,
-    HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT           = 4u,
-    HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT               = 2u,
     HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY              = HYPERDOS_VIDEO_GRAPHICS_ARRAY_MAXIMUM_DISPLAY_WIDTH *
                                                HYPERDOS_VIDEO_GRAPHICS_ARRAY_MAXIMUM_DISPLAY_HEIGHT,
     HYPERDOS_MONITOR_KOREAN_WINDOWS_CODE_PAGE                        = 949u,
     HYPERDOS_MONITOR_USER_RENDER_MESSAGE                             = WM_APP + 1u,
     HYPERDOS_MONITOR_USER_RESET_MESSAGE                              = WM_APP + 2u,
     HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE                  = WM_APP + 3u,
+    HYPERDOS_MONITOR_STATUS_BAR_CONTROL_IDENTIFIER                   = 100u,
+    HYPERDOS_MONITOR_STATUS_BAR_MACHINE_PART_INDEX                   = 0u,
+    HYPERDOS_MONITOR_STATUS_BAR_CLOCK_PART_INDEX                     = 1u,
+    HYPERDOS_MONITOR_STATUS_BAR_DISK_PART_INDEX                      = 2u,
+    HYPERDOS_MONITOR_STATUS_BAR_NOTIFICATION_PART_INDEX              = 3u,
+    HYPERDOS_MONITOR_STATUS_BAR_PART_COUNT                           = 4u,
     HYPERDOS_MONITOR_COMMAND_FLUSH_DISKS                             = 1004u,
     HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE                = 1100u,
     HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE             = 1110u,
@@ -91,6 +93,8 @@ enum
     HYPERDOS_MONITOR_COMMAND_START_CPU_TRACE                         = 2002u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086                    = 2101u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186                   = 2102u,
+    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE                        = 2103u,
+    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087                        = 2104u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT                             = 2201u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT                             = 2202u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ                = 2301u,
@@ -117,27 +121,6 @@ enum
     HYPERDOS_MONITOR_MOUSE_MIDDLE_BUTTON                             = 0x04u
 };
 
-typedef struct hyperdos_monitor_cpu_trace_entry
-{
-    uint64_t instructionCount;
-    uint16_t codeSegment;
-    uint16_t instructionPointer;
-    uint16_t stackSegment;
-    uint16_t stackPointer;
-    uint16_t dataSegment;
-    uint16_t extraSegment;
-    uint16_t accumulator;
-    uint16_t base;
-    uint16_t counter;
-    uint16_t data;
-    uint16_t basePointer;
-    uint16_t sourceIndex;
-    uint16_t destinationIndex;
-    uint16_t flags;
-    uint8_t  instructionBytes[HYPERDOS_MONITOR_CPU_TRACE_BYTE_COUNT];
-    uint16_t stackWords[HYPERDOS_MONITOR_CPU_TRACE_STACK_WORD_COUNT];
-} hyperdos_monitor_cpu_trace_entry;
-
 typedef enum hyperdos_monitor_text_character_set
 {
     HYPERDOS_MONITOR_TEXT_CHARACTER_SET_CODE_PAGE_437 = 0,
@@ -150,6 +133,12 @@ typedef enum hyperdos_monitor_display_resize_mode
     HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE,
     HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW
 } hyperdos_monitor_display_resize_mode;
+
+typedef enum hyperdos_monitor_coprocessor_model
+{
+    HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE = 0,
+    HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087
+} hyperdos_monitor_coprocessor_model;
 
 typedef struct hyperdos_monitor_processor_clock_option
 {
@@ -165,56 +154,6 @@ typedef struct hyperdos_monitor_memory_watch
     char     text[HYPERDOS_MONITOR_MEMORY_WATCH_TEXT_CAPACITY];
 } hyperdos_monitor_memory_watch;
 
-typedef struct hyperdos_monitor_mouse_event
-{
-    int16_t horizontalMovement;
-    int16_t verticalMovement;
-    uint8_t buttonMask;
-} hyperdos_monitor_mouse_event;
-
-typedef struct hyperdos_win32_boot_state
-{
-    hyperdos_pc_machine                  machine;
-    hyperdos_pc_storage_floppy_drive     floppyDrives[HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT];
-    size_t                               floppyDriveCount;
-    hyperdos_pc_storage_fixed_disk_drive fixedDiskDrives[HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT];
-    uint8_t                              hostScanCodeQueue[HYPERDOS_MONITOR_HOST_SCAN_CODE_QUEUE_CAPACITY];
-    size_t                               hostScanCodeQueueReadIndex;
-    size_t                               hostScanCodeQueueWriteIndex;
-    hyperdos_monitor_mouse_event         hostMouseEventQueue[HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY];
-    size_t                               hostMouseEventQueueReadIndex;
-    size_t                               hostMouseEventQueueWriteIndex;
-    size_t                               hostMouseEventQueueCount;
-    uint8_t                              hostScanCodePressed[HYPERDOS_MONITOR_HOST_KEY_STATE_CAPACITY];
-    uint64_t                             keyboardDataAreaBufferWriteSequence;
-    uint64_t                             keyboardDataAreaShiftWriteSequence;
-    uint8_t                              hostKeyboardShiftFlags;
-    CRITICAL_SECTION                     keyboardCriticalSection;
-    CRITICAL_SECTION                     diskCriticalSection;
-    HANDLE                               keyboardEventHandle;
-    HANDLE                               emulationThreadHandle;
-    HWND                                 windowHandle;
-    volatile LONG                        stopRequested;
-    volatile LONG                        isRunning;
-    volatile LONG                        isWaitingForKeyboard;
-    volatile LONG                        cpuTraceEnabled;
-    ULONGLONG                            lastTextScreenDumpTick;
-    ULONGLONG                            lastVideoStateDumpTick;
-    hyperdos_monitor_cpu_trace_entry     cpuTraceEntries[HYPERDOS_MONITOR_CPU_TRACE_ENTRY_COUNT];
-    hyperdos_x86_16_execution_result     executionResult;
-    char                                 statusText[HYPERDOS_MONITOR_STATUS_TEXT_CAPACITY];
-    int                                  mouseCaptureLastClientHorizontalPosition;
-    int                                  mouseCaptureLastClientVerticalPosition;
-    uint8_t                              mouseButtonMask;
-    uint8_t                              hostMouseCaptureActive;
-    uint8_t                              hostMouseRawInputRegistered;
-    uint8_t                              hostMouseRawMovementObserved;
-    uint8_t                              hostMouseCursorConfinementEnabled;
-    uint8_t                              hostMouseCursorHidingEnabled;
-    uint8_t                              mouseCaptureLastClientPositionValid;
-    uint8_t                              hostMouseCaptureToggleKeyDown;
-} hyperdos_win32_boot_state;
-
 static hyperdos_win32_boot_state globalBootState;
 static char    globalFloppyDrivePaths[HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT][HYPERDOS_MONITOR_PATH_CAPACITY];
 static uint8_t globalFloppyDrivePathIsDirectory[HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT];
@@ -227,31 +166,31 @@ static char    globalMemoryTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static char    globalGuestMemoryDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static char    globalTextScreenDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static char    globalVideoStateDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static hyperdos_monitor_memory_watch   globalMemoryWatches[HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY];
-static size_t                          globalMemoryWatchCount;
-static uint32_t                        globalMemoryStopPhysicalAddress;
-static uint8_t                         globalMemoryStopByteValue;
-static int                             globalMemoryStopByteEnabled;
-static int                             globalBootHardDiskWithoutFloppy;
-static int                             globalCoprocessorEnabled;
-static uint32_t                        globalProcessorFrequencyHertz;
-static int                             globalGuestClockThrottleEnabled;
-static hyperdos_x86_16_processor_model globalProcessorModel;
-static hyperdos_pc_model               globalPcModel;
-static int                             globalDivideErrorReturnsToFaultingInstruction;
-static int                             globalCpuTraceStartsEnabled;
-static FILE*                           globalDiskTraceFile;
-static FILE*                           globalMemoryTraceFile;
-static CRITICAL_SECTION                globalDiskTraceCriticalSection;
-static int                             globalDiskTraceCriticalSectionInitialized;
-static HFONT                           globalTextFontHandle;
-static HFONT                           globalCodePage437TextFontHandle;
+static hyperdos_monitor_memory_watch      globalMemoryWatches[HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY];
+static size_t                             globalMemoryWatchCount;
+static uint32_t                           globalMemoryStopPhysicalAddress;
+static uint8_t                            globalMemoryStopByteValue;
+static int                                globalMemoryStopByteEnabled;
+static hyperdos_monitor_coprocessor_model globalCoprocessorModel;
+static uint32_t                           globalProcessorFrequencyHertz;
+static int                                globalGuestClockThrottleEnabled;
+static hyperdos_x86_16_processor_model    globalProcessorModel;
+static hyperdos_pc_model                  globalPcModel;
+static int                                globalDivideErrorReturnsToFaultingInstruction;
+static int                                globalCpuTraceStartsEnabled;
+static FILE*                              globalDiskTraceFile;
+static FILE*                              globalMemoryTraceFile;
+static CRITICAL_SECTION                   globalDiskTraceCriticalSection;
+static int                                globalDiskTraceCriticalSectionInitialized;
+static HFONT                              globalTextFontHandle;
+static HFONT                              globalCodePage437TextFontHandle;
 static uint16_t globalCodePage437GlyphRows[HYPERDOS_MONITOR_CHARACTER_COUNT][HYPERDOS_MONITOR_CHARACTER_HEIGHT];
 static int      globalCodePage437GlyphRowsInitialized;
 static hyperdos_monitor_text_character_set globalTextCharacterSet = HYPERDOS_MONITOR_TEXT_CHARACTER_SET_CODE_PAGE_437;
 static hyperdos_monitor_display_resize_mode
                 globalDisplayResizeMode = HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE;
 static uint32_t globalGraphicsPixels[HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY];
+static HWND     globalStatusBarWindowHandle;
 
 static const hyperdos_monitor_processor_clock_option globalProcessorClockOptions[] = {
     {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ, HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ, "4.77 MHz"},
@@ -260,6 +199,372 @@ static const hyperdos_monitor_processor_clock_option globalProcessorClockOptions
     {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ,   12000000u,                                     "12 MHz"  },
     {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ,   16000000u,                                     "16 MHz"  }
 };
+
+static int floppy_drive_contains_media(const hyperdos_win32_boot_state* bootState, uint8_t driveNumber);
+
+static int fixed_disk_drive_contains_media(const hyperdos_win32_boot_state* bootState, uint8_t fixedDiskIndex);
+
+static uint8_t get_fixed_disk_bios_drive_number(uint8_t fixedDiskIndex);
+
+static void update_monitor_window_title(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
+{
+    const char* windowTitle = "HyperDOS PC Monitor";
+
+    if (bootState != NULL && bootState->hostMouseCaptureActive != 0u)
+    {
+        windowTitle = "HyperDOS PC Monitor  [Press Ctrl+F10 to release mouse]";
+    }
+    SetWindowTextA(windowHandle, windowTitle);
+}
+
+static int get_monitor_status_bar_height(void)
+{
+    RECT statusBarRectangle;
+
+    if (globalStatusBarWindowHandle == NULL || !GetWindowRect(globalStatusBarWindowHandle, &statusBarRectangle) ||
+        statusBarRectangle.bottom <= statusBarRectangle.top)
+    {
+        return 0;
+    }
+    return statusBarRectangle.bottom - statusBarRectangle.top;
+}
+
+static void get_monitor_display_client_rectangle(HWND windowHandle, RECT* displayClientRectangle)
+{
+    int statusBarHeight = 0;
+
+    if (displayClientRectangle == NULL)
+    {
+        return;
+    }
+    GetClientRect(windowHandle, displayClientRectangle);
+    statusBarHeight = get_monitor_status_bar_height();
+    if (statusBarHeight > 0)
+    {
+        displayClientRectangle->bottom -= statusBarHeight;
+        if (displayClientRectangle->bottom < displayClientRectangle->top)
+        {
+            displayClientRectangle->bottom = displayClientRectangle->top;
+        }
+    }
+}
+
+static const char* get_processor_status_bar_text(void)
+{
+    if (globalProcessorModel == HYPERDOS_X86_16_PROCESSOR_MODEL_8086)
+    {
+        return "8086/8088";
+    }
+    return "80186/80188";
+}
+
+static const char* get_machine_status_bar_text(void)
+{
+    if (globalPcModel == HYPERDOS_PC_MODEL_XT)
+    {
+        return "XT";
+    }
+    return "AT";
+}
+
+static int coprocessor_model_is_present(hyperdos_monitor_coprocessor_model coprocessorModel)
+{
+    return coprocessorModel != HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
+}
+
+static const char* get_coprocessor_status_bar_text(void)
+{
+    if (globalCoprocessorModel == HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087)
+    {
+        return "8087";
+    }
+    return "";
+}
+
+static void format_processor_frequency_status_bar_text(char* destination, size_t destinationSize)
+{
+    uint32_t processorFrequencyHertz               = globalProcessorFrequencyHertz;
+    uint32_t processorFrequencyWholeMegahertz      = processorFrequencyHertz / 1000000u;
+    uint32_t processorFrequencyFractionalMegahertz = (processorFrequencyHertz % 1000000u) / 10000u;
+
+    if (destinationSize == 0u)
+    {
+        return;
+    }
+    if (processorFrequencyHertz != 0u && processorFrequencyHertz % 1000000u == 0u)
+    {
+        snprintf(destination, destinationSize, "%lu MHz", (unsigned long)processorFrequencyWholeMegahertz);
+        return;
+    }
+    snprintf(destination,
+             destinationSize,
+             "%lu.%02lu MHz",
+             (unsigned long)processorFrequencyWholeMegahertz,
+             (unsigned long)processorFrequencyFractionalMegahertz);
+}
+
+static void format_boot_device_status_bar_text(char*                            destination,
+                                               size_t                           destinationSize,
+                                               const hyperdos_win32_boot_state* bootState)
+{
+    if (destinationSize == 0u)
+    {
+        return;
+    }
+    if (bootState == NULL || bootState->bootDeviceKind == HYPERDOS_MONITOR_BOOT_DEVICE_KIND_NONE)
+    {
+        snprintf(destination, destinationSize, "None");
+        return;
+    }
+    if (bootState->bootDeviceKind == HYPERDOS_MONITOR_BOOT_DEVICE_KIND_FLOPPY)
+    {
+        snprintf(destination, destinationSize, "F%u", (unsigned int)bootState->bootDeviceIndex);
+        return;
+    }
+    if (bootState->bootDeviceKind == HYPERDOS_MONITOR_BOOT_DEVICE_KIND_FIXED_DISK)
+    {
+        uint8_t biosDriveNumber = get_fixed_disk_bios_drive_number(bootState->bootDeviceIndex);
+
+        snprintf(destination,
+                 destinationSize,
+                 "H%u (%02Xh)",
+                 (unsigned int)bootState->bootDeviceIndex,
+                 (unsigned int)biosDriveNumber);
+        return;
+    }
+    snprintf(destination, destinationSize, "Unknown");
+}
+
+static const char* get_floppy_drive_status_bar_text(const hyperdos_win32_boot_state* bootState, uint8_t driveNumber)
+{
+    if (!floppy_drive_contains_media(bootState, driveNumber))
+    {
+        return "-";
+    }
+    if (driveNumber < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT &&
+        globalFloppyDrivePathIsDirectory[driveNumber] != 0u)
+    {
+        return "DIR";
+    }
+    return "IMG";
+}
+
+static const char* get_fixed_disk_status_bar_text(const hyperdos_win32_boot_state* bootState, uint8_t fixedDiskIndex)
+{
+    if (!fixed_disk_drive_contains_media(bootState, fixedDiskIndex))
+    {
+        return "-";
+    }
+    if (fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT &&
+        globalFixedDiskDrivePathIsDirectory[fixedDiskIndex] != 0u)
+    {
+        return "DIR";
+    }
+    return "IMG";
+}
+
+static void format_disk_status_bar_text(char*                            destination,
+                                        size_t                           destinationSize,
+                                        const hyperdos_win32_boot_state* bootState)
+{
+    size_t  destinationLength = 0u;
+    char    bootDeviceText[32];
+    uint8_t driveNumber    = 0u;
+    uint8_t fixedDiskIndex = 0u;
+
+    if (destinationSize == 0u)
+    {
+        return;
+    }
+    format_boot_device_status_bar_text(bootDeviceText, sizeof(bootDeviceText), bootState);
+    destinationLength = (size_t)snprintf(destination, destinationSize, "Boot: %s |", bootDeviceText);
+    if (destinationLength >= destinationSize)
+    {
+        return;
+    }
+    for (driveNumber = 0u; driveNumber < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++driveNumber)
+    {
+        destinationLength += (size_t)snprintf(destination + destinationLength,
+                                              destinationSize - destinationLength,
+                                              " F%u [%s] ",
+                                              (unsigned int)driveNumber,
+                                              get_floppy_drive_status_bar_text(bootState, driveNumber));
+        if (destinationLength >= destinationSize)
+        {
+            return;
+        }
+    }
+    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
+    {
+        destinationLength += (size_t)snprintf(destination + destinationLength,
+                                              destinationSize - destinationLength,
+                                              " H%u [%s] ",
+                                              (unsigned int)fixedDiskIndex,
+                                              get_fixed_disk_status_bar_text(bootState, fixedDiskIndex));
+        if (destinationLength >= destinationSize)
+        {
+            return;
+        }
+    }
+}
+
+static void update_monitor_status_bar_parts(void)
+{
+    HWND windowHandle = NULL;
+    RECT clientRectangle;
+    int  clientWidth      = 0;
+    int  machinePartWidth = 160;
+    int  clockPartWidth   = 190;
+    int  diskPartWidth    = 360;
+    int  statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_PART_COUNT];
+
+    if (globalStatusBarWindowHandle == NULL)
+    {
+        return;
+    }
+    windowHandle = GetParent(globalStatusBarWindowHandle);
+    if (windowHandle == NULL || !GetClientRect(windowHandle, &clientRectangle))
+    {
+        return;
+    }
+    clientWidth = clientRectangle.right - clientRectangle.left;
+    if (clientWidth <= 0)
+    {
+        return;
+    }
+    if (clientWidth < machinePartWidth + clockPartWidth + diskPartWidth + 160)
+    {
+        machinePartWidth = clientWidth * 22 / 100;
+        clockPartWidth   = clientWidth * 23 / 100;
+        diskPartWidth    = clientWidth * 34 / 100;
+    }
+    statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_MACHINE_PART_INDEX] = machinePartWidth;
+    statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_CLOCK_PART_INDEX] =
+            statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_MACHINE_PART_INDEX] + clockPartWidth;
+    statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_DISK_PART_INDEX] =
+            statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_CLOCK_PART_INDEX] + diskPartWidth;
+    statusBarPartRightEdges[HYPERDOS_MONITOR_STATUS_BAR_NOTIFICATION_PART_INDEX] = -1;
+    SendMessageA(globalStatusBarWindowHandle,
+                 SB_SETPARTS,
+                 HYPERDOS_MONITOR_STATUS_BAR_PART_COUNT,
+                 (LPARAM)statusBarPartRightEdges);
+}
+
+static void set_monitor_status_bar_part_text(UINT partIndex, const char* text)
+{
+    if (globalStatusBarWindowHandle == NULL)
+    {
+        return;
+    }
+    SendMessageA(globalStatusBarWindowHandle, SB_SETTEXTA, partIndex, (LPARAM)(text != NULL ? text : ""));
+}
+
+static void update_monitor_status_bar(const hyperdos_win32_boot_state* bootState)
+{
+    const char* severityPrefix = "";
+    char        machineStatusBarText[HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY];
+    char        clockStatusBarText[HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY];
+    char        diskStatusBarText[HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY];
+    char        notificationStatusBarText[HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY];
+    char        processorFrequencyText[64];
+
+    update_monitor_status_bar_parts();
+
+    if (coprocessor_model_is_present(globalCoprocessorModel))
+    {
+        snprintf(machineStatusBarText,
+                 sizeof(machineStatusBarText),
+                 "%s-%s-%s",
+                 get_processor_status_bar_text(),
+                 get_machine_status_bar_text(),
+                 get_coprocessor_status_bar_text());
+    }
+    else
+    {
+        snprintf(machineStatusBarText,
+                 sizeof(machineStatusBarText),
+                 "%s-%s",
+                 get_processor_status_bar_text(),
+                 get_machine_status_bar_text());
+    }
+    format_processor_frequency_status_bar_text(processorFrequencyText, sizeof(processorFrequencyText));
+    snprintf(clockStatusBarText,
+             sizeof(clockStatusBarText),
+             "%s [Turbo: %s]",
+             processorFrequencyText,
+             globalGuestClockThrottleEnabled ? "Off" : "On");
+    format_disk_status_bar_text(diskStatusBarText, sizeof(diskStatusBarText), bootState);
+
+    if (bootState == NULL || bootState->hostNotification.text[0] == '\0')
+    {
+        snprintf(notificationStatusBarText, sizeof(notificationStatusBarText), "Ready");
+    }
+    else
+    {
+        if (bootState->hostNotification.severity == HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR)
+        {
+            severityPrefix = "Error: ";
+        }
+        else if (bootState->hostNotification.severity == HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_WARNING)
+        {
+            severityPrefix = "Warning: ";
+        }
+        snprintf(notificationStatusBarText,
+                 sizeof(notificationStatusBarText),
+                 "%s%s",
+                 severityPrefix,
+                 bootState->hostNotification.text);
+    }
+    set_monitor_status_bar_part_text(HYPERDOS_MONITOR_STATUS_BAR_MACHINE_PART_INDEX, machineStatusBarText);
+    set_monitor_status_bar_part_text(HYPERDOS_MONITOR_STATUS_BAR_CLOCK_PART_INDEX, clockStatusBarText);
+    set_monitor_status_bar_part_text(HYPERDOS_MONITOR_STATUS_BAR_DISK_PART_INDEX, diskStatusBarText);
+    set_monitor_status_bar_part_text(HYPERDOS_MONITOR_STATUS_BAR_NOTIFICATION_PART_INDEX, notificationStatusBarText);
+}
+
+static void resize_monitor_status_bar(void)
+{
+    if (globalStatusBarWindowHandle == NULL)
+    {
+        return;
+    }
+    SendMessageA(globalStatusBarWindowHandle, WM_SIZE, 0u, 0u);
+    update_monitor_status_bar_parts();
+}
+
+static int create_monitor_status_bar(HWND windowHandle)
+{
+    globalStatusBarWindowHandle = CreateWindowExA(0,
+                                                  STATUSCLASSNAMEA,
+                                                  "Ready",
+                                                  WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  0,
+                                                  windowHandle,
+                                                  (HMENU)(UINT_PTR)HYPERDOS_MONITOR_STATUS_BAR_CONTROL_IDENTIFIER,
+                                                  GetModuleHandleA(NULL),
+                                                  NULL);
+    return globalStatusBarWindowHandle != NULL;
+}
+
+static void request_monitor_window_render(void* callbackContext)
+{
+    PostMessageA((HWND)callbackContext, HYPERDOS_MONITOR_USER_RENDER_MESSAGE, 0, 0);
+}
+
+static void request_monitor_window_reset(void* callbackContext)
+{
+    PostMessageA((HWND)callbackContext, HYPERDOS_MONITOR_USER_RESET_MESSAGE, 0, 0);
+}
+
+static void notify_monitor_window_execution_stopped(void* callbackContext)
+{
+    PostMessageA((HWND)callbackContext, HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE, 0, 0);
+}
+
+static const hyperdos_win32_pc_monitor_runtime_callbacks globalRuntimeCallbacks =
+        {request_monitor_window_render, request_monitor_window_reset, notify_monitor_window_execution_stopped};
 
 static void write_text_screen_dump_file(const hyperdos_win32_boot_state* bootState);
 
@@ -271,13 +576,27 @@ static void maybe_write_video_state_dump_file(hyperdos_win32_boot_state* bootSta
 
 static void handle_reset_pc_command(HWND windowHandle, hyperdos_win32_boot_state* bootState);
 
-static void set_status_text(hyperdos_win32_boot_state* bootState, const char* format, ...)
+static void show_host_error_notification(HWND                                        windowHandle,
+                                         hyperdos_win32_boot_state*                  bootState,
+                                         hyperdos_monitor_host_notification_category category,
+                                         const char*                                 format,
+                                         ...)
 {
     va_list arguments;
 
     va_start(arguments, format);
-    vsnprintf(bootState->statusText, sizeof(bootState->statusText), format, arguments);
+    hyperdos_win32_pc_monitor_runtime_set_host_notification_from_arguments(
+            bootState,
+            HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+            category,
+            format,
+            arguments);
     va_end(arguments);
+    if (bootState != NULL)
+    {
+        update_monitor_status_bar(bootState);
+        MessageBoxA(windowHandle, bootState->hostNotification.text, "HyperDOS PC Monitor", MB_OK | MB_ICONERROR);
+    }
 }
 
 static void trace_disk_event(hyperdos_win32_boot_state* bootState, const char* format, ...)
@@ -581,6 +900,20 @@ static void clear_fixed_disk_drive_path(uint8_t fixedDiskIndex)
     globalFixedDiskDrivePathIsDirectory[fixedDiskIndex] = 0u;
 }
 
+static int fixed_disk_drive_path_is_configured(void)
+{
+    size_t fixedDiskIndex = 0u;
+
+    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
+    {
+        if (globalFixedDiskDrivePaths[fixedDiskIndex][0] != '\0')
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int load_floppy_drive_path(hyperdos_pc_disk_image* diskImage, const char* path, uint8_t pathIsDirectory)
 {
     if (pathIsDirectory)
@@ -683,6 +1016,59 @@ static void unlock_disk_images_for_bios(void* userContext)
 static hyperdos_pc_disk_image* get_disk_image_for_bios(void* userContext, uint8_t driveNumber)
 {
     return get_disk_for_drive_number_locked((hyperdos_win32_boot_state*)userContext, driveNumber);
+}
+
+static hyperdos_pc_disk_image* select_boot_disk_image(hyperdos_win32_boot_state* bootState)
+{
+    uint8_t                 driveNumber    = 0u;
+    uint8_t                 fixedDiskIndex = 0u;
+    hyperdos_pc_disk_image* bootDisk       = NULL;
+
+    if (bootState == NULL)
+    {
+        return NULL;
+    }
+
+    bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_NONE;
+    bootState->bootDeviceIndex = 0u;
+
+    bootDisk = get_floppy_disk_locked(bootState, 0u);
+    if (bootDisk != NULL)
+    {
+        bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_FLOPPY;
+        bootState->bootDeviceIndex = 0u;
+        return bootDisk;
+    }
+
+    if (fixed_disk_drive_contains_media(bootState, 0u))
+    {
+        bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_FIXED_DISK;
+        bootState->bootDeviceIndex = 0u;
+        return &bootState->fixedDiskDrives[0].diskImage;
+    }
+
+    for (driveNumber = 1u; driveNumber < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++driveNumber)
+    {
+        bootDisk = get_floppy_disk_locked(bootState, driveNumber);
+        if (bootDisk != NULL)
+        {
+            bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_FLOPPY;
+            bootState->bootDeviceIndex = driveNumber;
+            return bootDisk;
+        }
+    }
+
+    for (fixedDiskIndex = 1u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
+    {
+        if (fixed_disk_drive_contains_media(bootState, fixedDiskIndex))
+        {
+            bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_FIXED_DISK;
+            bootState->bootDeviceIndex = fixedDiskIndex;
+            return &bootState->fixedDiskDrives[fixedDiskIndex].diskImage;
+        }
+    }
+
+    return NULL;
 }
 
 static int push_host_scan_code(hyperdos_win32_boot_state* bootState, uint8_t scanCode)
@@ -1425,14 +1811,17 @@ static void observe_guest_memory_write(void*    observerContext,
     if (globalMemoryStopByteEnabled && physicalAddress == globalMemoryStopPhysicalAddress &&
         newValue == globalMemoryStopByteValue)
     {
-        set_status_text(bootState,
-                        "memory stop at %04X:%04X write %05X=%02X",
-                        processor->lastInstructionSegment,
-                        processor->lastInstructionOffset,
-                        physicalAddress,
-                        newValue);
+        hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_WARNING,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_MEMORY,
+                                                                "memory stop at %04X:%04X write %05X=%02X",
+                                                                processor->lastInstructionSegment,
+                                                                processor->lastInstructionOffset,
+                                                                physicalAddress,
+                                                                newValue);
         InterlockedExchange(&bootState->stopRequested, 1);
         InterlockedExchange(&bootState->isRunning, 0);
+        hyperdos_win32_pc_monitor_runtime_notify_execution_stopped(bootState);
     }
 }
 
@@ -1595,12 +1984,13 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     size_t                                 fixedDiskIndex              = 0;
     hyperdos_pc_disk_image*                bootDisk                    = NULL;
     const hyperdos_pc_disk_image*          activeFloppyDiskForDataArea = NULL;
-    const char*                            floppyStatusText            = "not inserted";
-    const char*                            hardDiskStatusText          = "not attached";
     uint8_t                                fixedDiskCount              = 0u;
     hyperdos_pc_storage_context            storageContext;
     hyperdos_pc_machine_boot_configuration machineConfiguration;
 
+    hyperdos_win32_pc_monitor_runtime_clear_host_notification(bootState);
+    bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_NONE;
+    bootState->bootDeviceIndex = 0u;
     bootState->executionResult = HYPERDOS_X86_16_EXECUTION_OK;
     InterlockedExchange(&bootState->stopRequested, 0);
     InterlockedExchange(&bootState->isRunning, 0);
@@ -1609,7 +1999,10 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
 
     if (!flush_all_disk_images(bootState))
     {
-        set_status_text(bootState, "failed to flush disk image before reboot");
+        hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                                                "failed to flush disk image before reboot");
         return 0;
     }
     free_loaded_disk_images(bootState);
@@ -1639,13 +2032,13 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     bootState->lastVideoStateDumpTick = 0u;
 
     memset(&machineConfiguration, 0, sizeof(machineConfiguration));
-    machineConfiguration.userContext                             = bootState;
-    machineConfiguration.processorModel                          = globalProcessorModel;
-    machineConfiguration.pcModel                                 = globalPcModel;
-    machineConfiguration.processorFrequencyHertz                 = globalProcessorFrequencyHertz;
-    machineConfiguration.floppyDriveCount                        = (uint8_t)bootState->floppyDriveCount;
-    machineConfiguration.fixedDiskDriveCount                     = HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT;
-    machineConfiguration.coprocessorEnabled                      = (uint8_t)globalCoprocessorEnabled;
+    machineConfiguration.userContext             = bootState;
+    machineConfiguration.processorModel          = globalProcessorModel;
+    machineConfiguration.pcModel                 = globalPcModel;
+    machineConfiguration.processorFrequencyHertz = globalProcessorFrequencyHertz;
+    machineConfiguration.floppyDriveCount        = (uint8_t)bootState->floppyDriveCount;
+    machineConfiguration.fixedDiskDriveCount     = HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT;
+    machineConfiguration.coprocessorEnabled      = (uint8_t)coprocessor_model_is_present(globalCoprocessorModel);
     machineConfiguration.divideErrorReturnsToFaultingInstruction = (uint8_t)
             globalDivideErrorReturnsToFaultingInstruction;
     machineConfiguration.lockKeyboard                         = lock_keyboard_for_bios;
@@ -1665,7 +2058,10 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     machineConfiguration.traceVideoServices                   = trace_monitor_event;
     if (!hyperdos_pc_machine_initialize_for_boot(&bootState->machine, &machineConfiguration))
     {
-        set_status_text(bootState, "failed to initialize PC machine");
+        hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_BOOT,
+                                                                "failed to initialize PC machine");
         return 0;
     }
     initialize_storage_context_for_boot_state(bootState, &storageContext);
@@ -1691,10 +2087,12 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
             char driveIdentifier[64];
 
             format_floppy_drive_identifier(driveIdentifier, sizeof(driveIdentifier), (uint8_t)floppyDriveIndex);
-            set_status_text(bootState,
-                            "failed to read %s: %s",
-                            driveIdentifier,
-                            globalFloppyDrivePaths[floppyDriveIndex]);
+            hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                    HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                                                                    HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                                                    "failed to read %s: %s",
+                                                                    driveIdentifier,
+                                                                    globalFloppyDrivePaths[floppyDriveIndex]);
             free_loaded_disk_images(bootState);
             return 0;
         }
@@ -1714,10 +2112,12 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
             char driveIdentifier[64];
 
             format_fixed_disk_drive_identifier(driveIdentifier, sizeof(driveIdentifier), (uint8_t)fixedDiskIndex);
-            set_status_text(bootState,
-                            "failed to attach %s: %s",
-                            driveIdentifier,
-                            globalFixedDiskDrivePaths[fixedDiskIndex]);
+            hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                    HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                                                                    HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                                                    "failed to attach %s: %s",
+                                                                    driveIdentifier,
+                                                                    globalFixedDiskDrivePaths[fixedDiskIndex]);
             free_loaded_disk_images(bootState);
             return 0;
         }
@@ -1727,21 +2127,13 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     }
     fixedDiskCount = hyperdos_pc_storage_get_fixed_disk_bios_drive_count(&storageContext);
 
-    if (globalBootHardDiskWithoutFloppy && bootState->fixedDiskDrives[0].diskImage.inserted)
-    {
-        bootDisk = &bootState->fixedDiskDrives[0].diskImage;
-    }
-    else
-    {
-        bootDisk = get_floppy_disk_locked(bootState, 0u);
-        if (bootDisk == NULL && bootState->fixedDiskDrives[0].diskImage.inserted)
-        {
-            bootDisk = &bootState->fixedDiskDrives[0].diskImage;
-        }
-    }
+    bootDisk = select_boot_disk_image(bootState);
     if (bootDisk == NULL)
     {
-        set_status_text(bootState, "no boot disk selected");
+        hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_BOOT,
+                                                                "no boot disk selected");
         free_loaded_disk_images(bootState);
         return 0;
     }
@@ -1751,7 +2143,10 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
                                                                activeFloppyDiskForDataArea,
                                                                fixedDiskCount))
     {
-        set_status_text(bootState, "disk image is smaller than a boot sector");
+        hyperdos_win32_pc_monitor_runtime_set_host_notification(bootState,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                                                                HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_BOOT,
+                                                                "disk image is smaller than a boot sector");
         free_loaded_disk_images(bootState);
         return 0;
     }
@@ -1762,28 +2157,6 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
         InterlockedExchange(&bootState->cpuTraceEnabled, 1);
     }
     InterlockedExchange(&bootState->isRunning, 1);
-    if (bootState->floppyDriveCount != 0u)
-    {
-        hyperdos_pc_disk_image* activeFloppyDisk = get_floppy_disk_locked(bootState, 0u);
-        if (activeFloppyDisk != NULL)
-        {
-            floppyStatusText = find_file_name_from_path(activeFloppyDisk->path);
-        }
-    }
-    if (bootState->fixedDiskDrives[0].diskImage.inserted)
-    {
-        hardDiskStatusText = find_file_name_from_path(bootState->fixedDiskDrives[0].diskImage.path);
-    }
-    {
-        char bootDiskIdentifier[64];
-
-        format_disk_image_drive_identifier(bootDiskIdentifier, sizeof(bootDiskIdentifier), bootDisk);
-        set_status_text(bootState,
-                        "boot %s, floppy drive 0: %s, fixed disk 0: %s",
-                        bootDiskIdentifier,
-                        floppyStatusText,
-                        hardDiskStatusText);
-    }
     return 1;
 }
 
@@ -1857,8 +2230,12 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
             if (bootState->executionResult == HYPERDOS_X86_16_EXECUTION_UNSUPPORTED_INSTRUCTION &&
                 hyperdos_x86_16_processor_is_at_bios_reset_vector(&bootState->machine.pc.processor))
             {
-                set_status_text(bootState, "guest requested reset");
-                PostMessageA(bootState->windowHandle, HYPERDOS_MONITOR_USER_RESET_MESSAGE, 0, 0);
+                hyperdos_win32_pc_monitor_runtime_set_host_notification(
+                        bootState,
+                        HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_INFORMATION,
+                        HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_EXECUTION,
+                        "guest requested reset");
+                hyperdos_win32_pc_monitor_runtime_request_reset(bootState);
                 break;
             }
             if (bootState->executionResult != HYPERDOS_X86_16_EXECUTION_HALTED)
@@ -1875,23 +2252,26 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
                 uint8_t  fourthByte = read_guest_instruction_byte(bootState,
                                                                  instructionSegment,
                                                                  (uint16_t)(instructionOffset + 3u));
-                set_status_text(bootState,
-                                "%s at %04X:%04X opcode %02X bytes %02X %02X %02X %02X",
-                                hyperdos_x86_16_execution_result_name(bootState->executionResult),
-                                instructionSegment,
-                                instructionOffset,
-                                bootState->machine.pc.processor.lastOperationCode,
-                                firstByte,
-                                secondByte,
-                                thirdByte,
-                                fourthByte);
+                hyperdos_win32_pc_monitor_runtime_set_host_notification(
+                        bootState,
+                        HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
+                        HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_EXECUTION,
+                        "%s at %04X:%04X opcode %02X bytes %02X %02X %02X %02X",
+                        hyperdos_x86_16_execution_result_name(bootState->executionResult),
+                        instructionSegment,
+                        instructionOffset,
+                        bootState->machine.pc.processor.lastOperationCode,
+                        firstByte,
+                        secondByte,
+                        thirdByte,
+                        fourthByte);
             }
-            PostMessageA(bootState->windowHandle, HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE, 0, 0);
+            hyperdos_win32_pc_monitor_runtime_notify_execution_stopped(bootState);
             break;
         }
         if (GetTickCount64() - lastRenderTick >= HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS)
         {
-            PostMessageA(bootState->windowHandle, HYPERDOS_MONITOR_USER_RENDER_MESSAGE, 0, 0);
+            hyperdos_win32_pc_monitor_runtime_request_render(bootState);
             lastRenderTick = GetTickCount64();
         }
         if (emulationPacingEnabled)
@@ -1912,33 +2292,15 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
 
 static void stop_emulation_thread(hyperdos_win32_boot_state* bootState)
 {
-    InterlockedExchange(&bootState->stopRequested, 1);
-    InterlockedExchange(&bootState->isRunning, 0);
-    InterlockedExchange(&bootState->isWaitingForKeyboard, 0);
-    if (bootState->keyboardEventHandle != NULL)
-    {
-        SetEvent(bootState->keyboardEventHandle);
-    }
-    if (bootState->emulationThreadHandle != NULL)
-    {
-        WaitForSingleObject(bootState->emulationThreadHandle, 2000u);
-        CloseHandle(bootState->emulationThreadHandle);
-        bootState->emulationThreadHandle = NULL;
-    }
+    hyperdos_win32_pc_monitor_runtime_stop_emulation_thread(bootState);
 }
 
 static void shutdown_boot_state(hyperdos_win32_boot_state* bootState)
 {
     stop_emulation_thread(bootState);
-    if (bootState->keyboardEventHandle != NULL)
-    {
-        CloseHandle(bootState->keyboardEventHandle);
-        bootState->keyboardEventHandle = NULL;
-    }
     flush_all_disk_images(bootState);
     free_loaded_disk_images(bootState);
-    DeleteCriticalSection(&bootState->diskCriticalSection);
-    DeleteCriticalSection(&bootState->keyboardCriticalSection);
+    hyperdos_win32_pc_monitor_runtime_destroy(bootState);
 }
 
 static int try_convert_korean_code_page_character(uint8_t firstCharacterByte,
@@ -3175,7 +3537,7 @@ static int client_position_is_inside_display(const hyperdos_win32_boot_state* bo
     int  destinationWidth  = 0;
     int  destinationHeight = 0;
 
-    GetClientRect(windowHandle, &clientRectangle);
+    get_monitor_display_client_rectangle(windowHandle, &clientRectangle);
     get_display_geometry(bootState, &clientRectangle, &displayRectangle, &sourceWidth, &sourceHeight);
     destinationWidth  = displayRectangle.right - displayRectangle.left;
     destinationHeight = displayRectangle.bottom - displayRectangle.top;
@@ -3203,7 +3565,7 @@ static int get_display_clipping_rectangle(HWND                             windo
         return 0;
     }
 
-    GetClientRect(windowHandle, &clientRectangle);
+    get_monitor_display_client_rectangle(windowHandle, &clientRectangle);
     get_display_geometry(bootState, &clientRectangle, &displayRectangle, &sourceWidth, &sourceHeight);
     destinationWidth  = displayRectangle.right - displayRectangle.left;
     destinationHeight = displayRectangle.bottom - displayRectangle.top;
@@ -3253,7 +3615,7 @@ static int get_display_capture_geometry(HWND                             windowH
         return 0;
     }
 
-    GetClientRect(windowHandle, &clientRectangle);
+    get_monitor_display_client_rectangle(windowHandle, &clientRectangle);
     get_display_geometry(bootState, &clientRectangle, &displayRectangle, &currentSourceWidth, &currentSourceHeight);
     *destinationWidth  = displayRectangle.right - displayRectangle.left;
     *destinationHeight = displayRectangle.bottom - displayRectangle.top;
@@ -3424,6 +3786,7 @@ static int capture_host_mouse(HWND windowHandle, hyperdos_win32_boot_state* boot
         (void)center_host_mouse_capture_cursor(windowHandle, bootState);
     }
     update_mouse_capture_menu(windowHandle, bootState);
+    update_monitor_window_title(windowHandle, bootState);
     return 1;
 }
 
@@ -3446,6 +3809,7 @@ static void release_host_mouse_capture(HWND windowHandle, hyperdos_win32_boot_st
     }
     SetCursor(LoadCursorA(NULL, IDC_ARROW));
     update_mouse_capture_menu(windowHandle, bootState);
+    update_monitor_window_title(windowHandle, bootState);
 }
 
 static int host_mouse_capture_toggle_shortcut_is_down(WPARAM wordParameter)
@@ -3748,55 +4112,6 @@ static void release_host_mouse_buttons(HWND windowHandle, hyperdos_win32_boot_st
     }
 }
 
-static const char* get_processor_model_title_text(void)
-{
-    return globalProcessorModel == HYPERDOS_X86_16_PROCESSOR_MODEL_8086 ? "8086" : "80186";
-}
-
-static const char* get_pc_model_title_text(void)
-{
-    return globalPcModel == HYPERDOS_PC_MODEL_XT ? "XT" : "AT";
-}
-
-static void format_processor_frequency_text(char* text, size_t textSize, uint32_t processorFrequencyHertz)
-{
-    double processorFrequencyMegahertz = 0.0;
-
-    if (textSize == 0u)
-    {
-        return;
-    }
-    if (processorFrequencyHertz == 0u)
-    {
-        processorFrequencyHertz = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
-    }
-    processorFrequencyMegahertz = (double)processorFrequencyHertz / 1000000.0;
-    snprintf(text, textSize, "%.2f MHz", processorFrequencyMegahertz);
-}
-
-static void update_window_title(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
-{
-    char     title[128];
-    char     processorFrequencyText[32];
-    uint32_t processorFrequencyHertz = globalProcessorFrequencyHertz;
-
-    if (bootState != NULL && bootState->machine.pc.clockGenerator.processorFrequencyHertz != 0u)
-    {
-        processorFrequencyHertz = bootState->machine.pc.clockGenerator.processorFrequencyHertz;
-    }
-    format_processor_frequency_text(processorFrequencyText, sizeof(processorFrequencyText), processorFrequencyHertz);
-
-    snprintf(title,
-             sizeof(title),
-             "HyperDOS PC Monitor - %s %s - %s%s%s",
-             get_processor_model_title_text(),
-             get_pc_model_title_text(),
-             processorFrequencyText,
-             globalGuestClockThrottleEnabled ? "" : " unthrottled",
-             bootState != NULL && bootState->hostMouseCaptureActive != 0u ? " - mouse captured" : "");
-    SetWindowTextA(windowHandle, title);
-}
-
 static void show_unsupported_instruction_message(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
 {
     char                             message[256];
@@ -3839,10 +4154,7 @@ static void show_unsupported_instruction_message(HWND windowHandle, const hyperd
 
 static int start_emulation_thread(hyperdos_win32_boot_state* bootState)
 {
-    DWORD threadIdentifier = 0;
-
-    bootState->emulationThreadHandle = CreateThread(NULL, 0u, emulation_thread_main, bootState, 0u, &threadIdentifier);
-    return bootState->emulationThreadHandle != NULL;
+    return hyperdos_win32_pc_monitor_runtime_start_emulation_thread(bootState, emulation_thread_main);
 }
 
 static int initialize_emulation_pacing(LARGE_INTEGER*                   performanceCounterFrequency,
@@ -3910,7 +4222,7 @@ static void pace_emulation_to_guest_clock(const hyperdos_win32_boot_state* bootS
     }
 }
 
-static void render_monitor_message(hyperdos_win32_boot_state* bootState, const char* message)
+static void render_guest_display_message(hyperdos_win32_boot_state* bootState, const char* message)
 {
     hyperdos_pc_machine_boot_configuration machineConfiguration;
 
@@ -3923,7 +4235,15 @@ static void render_monitor_message(hyperdos_win32_boot_state* bootState, const c
     {
         hyperdos_pc_render_text_message(&bootState->machine.pc, message);
     }
-    set_status_text(bootState, "%s", message);
+}
+
+static void render_host_notification_to_guest_display(hyperdos_win32_boot_state* bootState)
+{
+    if (bootState == NULL)
+    {
+        return;
+    }
+    hyperdos_pc_render_text_message(&bootState->machine.pc, bootState->hostNotification.text);
 }
 
 static int select_disk_image_file_path(HWND        windowHandle,
@@ -4075,21 +4395,70 @@ static void restore_monitor_window_keyboard_focus(HWND windowHandle)
     SetFocus(windowHandle);
 }
 
+static int floppy_drive_contains_media(const hyperdos_win32_boot_state* bootState, uint8_t driveNumber)
+{
+    return bootState != NULL && driveNumber < bootState->floppyDriveCount &&
+           bootState->floppyDrives[driveNumber].diskImage.inserted != 0u;
+}
+
+static int fixed_disk_drive_contains_media(const hyperdos_win32_boot_state* bootState, uint8_t fixedDiskIndex)
+{
+    return bootState != NULL && fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT &&
+           bootState->fixedDiskDrives[fixedDiskIndex].installed != 0u &&
+           bootState->fixedDiskDrives[fixedDiskIndex].diskImage.inserted != 0u;
+}
+
+static void enable_menu_command(HWND windowHandle, UINT commandIdentifier, int enabled)
+{
+    HMENU menuHandle = GetMenu(windowHandle);
+
+    if (menuHandle == NULL)
+    {
+        return;
+    }
+    EnableMenuItem(menuHandle, commandIdentifier, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
+}
+
+static void update_disk_media_menu(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
+{
+    uint8_t driveNumber    = 0u;
+    uint8_t fixedDiskIndex = 0u;
+
+    for (driveNumber = 0u; driveNumber < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++driveNumber)
+    {
+        enable_menu_command(windowHandle,
+                            HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE + driveNumber,
+                            floppy_drive_contains_media(bootState, driveNumber));
+    }
+    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
+    {
+        enable_menu_command(windowHandle,
+                            HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE + fixedDiskIndex,
+                            fixed_disk_drive_contains_media(bootState, fixedDiskIndex));
+    }
+    update_monitor_status_bar(bootState);
+    DrawMenuBar(windowHandle);
+}
+
 static void boot_from_selected_disk_images(HWND windowHandle, hyperdos_win32_boot_state* bootState)
 {
     if (initialize_boot_from_disk_images(bootState))
     {
         if (!start_emulation_thread(bootState))
         {
-            set_status_text(bootState, "failed to start emulation thread");
+            show_host_error_notification(windowHandle,
+                                         bootState,
+                                         HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_RUNTIME,
+                                         "failed to start emulation thread");
         }
     }
     else
     {
-        hyperdos_pc_render_text_message(&bootState->machine.pc, bootState->statusText);
+        render_host_notification_to_guest_display(bootState);
     }
+    update_disk_media_menu(windowHandle, bootState);
+    update_monitor_status_bar(bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
 }
 
 static void handle_insert_floppy_image_command(HWND                       windowHandle,
@@ -4127,8 +4496,12 @@ static void handle_insert_floppy_image_command(HWND                       window
 
     if (!load_floppy_drive_path(&replacementDisk, selectedPath, 0u))
     {
-        set_status_text(bootState, "failed to read %s image: %s", driveIdentifier, selectedPath);
-        update_window_title(windowHandle, bootState);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to read %s image: %s",
+                                     driveIdentifier,
+                                     selectedPath);
         restore_monitor_window_keyboard_focus(windowHandle);
         return;
     }
@@ -4141,20 +4514,26 @@ static void handle_insert_floppy_image_command(HWND                       window
         hyperdos_pc_disk_image_free(&replacementDisk);
         if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
         {
-            set_status_text(bootState, "failed to flush previous %s image", driveIdentifier);
+            show_host_error_notification(windowHandle,
+                                         bootState,
+                                         HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                         "failed to flush previous %s image",
+                                         driveIdentifier);
         }
         else
         {
-            set_status_text(bootState, "failed to insert %s image", driveIdentifier);
+            show_host_error_notification(windowHandle,
+                                         bootState,
+                                         HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                         "failed to insert %s image",
+                                         driveIdentifier);
         }
-        update_window_title(windowHandle, bootState);
         restore_monitor_window_keyboard_focus(windowHandle);
         return;
     }
 
-    set_status_text(bootState, "%s: %s inserted", driveIdentifier, find_file_name_from_path(selectedPath));
+    update_disk_media_menu(windowHandle, bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
     restore_monitor_window_keyboard_focus(windowHandle);
 }
 
@@ -4191,8 +4570,12 @@ static void handle_mount_floppy_directory_command(HWND                       win
     }
     if (!hyperdos_win32_load_floppy_directory_disk_image(&replacementDisk, selectedPath))
     {
-        set_status_text(bootState, "failed to mount %s directory: %s", driveIdentifier, selectedPath);
-        update_window_title(windowHandle, bootState);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to mount %s directory: %s",
+                                     driveIdentifier,
+                                     selectedPath);
         return;
     }
     initialize_storage_context_for_boot_state(bootState, &storageContext);
@@ -4202,13 +4585,15 @@ static void handle_mount_floppy_directory_command(HWND                       win
     if (storageResult != HYPERDOS_PC_STORAGE_OK)
     {
         hyperdos_pc_disk_image_free(&replacementDisk);
-        set_status_text(bootState, "failed to mount %s directory", driveIdentifier);
-        update_window_title(windowHandle, bootState);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to mount %s directory",
+                                     driveIdentifier);
         return;
     }
-    set_status_text(bootState, "%s: %s mounted read-only", driveIdentifier, find_file_name_from_path(selectedPath));
+    update_disk_media_menu(windowHandle, bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
 }
 
 static void handle_eject_floppy_command(HWND windowHandle, hyperdos_win32_boot_state* bootState, uint8_t driveNumber)
@@ -4225,19 +4610,18 @@ static void handle_eject_floppy_command(HWND windowHandle, hyperdos_win32_boot_s
 
     if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
     {
-        set_status_text(bootState, "failed to flush %s before eject", driveIdentifier);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to flush %s before eject",
+                                     driveIdentifier);
     }
     else if (storageResult == HYPERDOS_PC_STORAGE_OK)
     {
         clear_floppy_drive_path(driveNumber);
-        set_status_text(bootState, "%s: ejected", driveIdentifier);
     }
-    else
-    {
-        set_status_text(bootState, "%s: no floppy inserted", driveIdentifier);
-    }
+    update_disk_media_menu(windowHandle, bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
     SetFocus(windowHandle);
 }
 
@@ -4266,8 +4650,12 @@ static void handle_attach_fixed_disk_image_command(HWND                       wi
     }
     if (!load_fixed_disk_drive_path(&replacementDisk, selectedPath, 0u))
     {
-        set_status_text(bootState, "failed to attach %s image: %s", driveIdentifier, selectedPath);
-        update_window_title(windowHandle, bootState);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to attach %s image: %s",
+                                     driveIdentifier,
+                                     selectedPath);
         SetFocus(windowHandle);
         return;
     }
@@ -4281,20 +4669,26 @@ static void handle_attach_fixed_disk_image_command(HWND                       wi
         hyperdos_pc_disk_image_free(&replacementDisk);
         if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
         {
-            set_status_text(bootState, "failed to flush previous %s image", driveIdentifier);
+            show_host_error_notification(windowHandle,
+                                         bootState,
+                                         HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                         "failed to flush previous %s image",
+                                         driveIdentifier);
         }
         else
         {
-            set_status_text(bootState, "failed to attach %s image", driveIdentifier);
+            show_host_error_notification(windowHandle,
+                                         bootState,
+                                         HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                         "failed to attach %s image",
+                                         driveIdentifier);
         }
-        update_window_title(windowHandle, bootState);
         SetFocus(windowHandle);
         return;
     }
 
-    set_status_text(bootState, "%s: %s attached", driveIdentifier, find_file_name_from_path(selectedPath));
+    update_disk_media_menu(windowHandle, bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
     SetFocus(windowHandle);
 }
 
@@ -4323,8 +4717,12 @@ static void handle_mount_fixed_disk_directory_command(HWND                      
     }
     if (!hyperdos_win32_load_fixed_directory_disk_image(&replacementDisk, selectedPath))
     {
-        set_status_text(bootState, "failed to mount %s directory: %s", driveIdentifier, selectedPath);
-        update_window_title(windowHandle, bootState);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to mount %s directory: %s",
+                                     driveIdentifier,
+                                     selectedPath);
         return;
     }
     initialize_storage_context_for_boot_state(bootState, &storageContext);
@@ -4334,13 +4732,15 @@ static void handle_mount_fixed_disk_directory_command(HWND                      
     if (storageResult != HYPERDOS_PC_STORAGE_OK)
     {
         hyperdos_pc_disk_image_free(&replacementDisk);
-        set_status_text(bootState, "failed to mount %s directory", driveIdentifier);
-        update_window_title(windowHandle, bootState);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to mount %s directory",
+                                     driveIdentifier);
         return;
     }
-    set_status_text(bootState, "%s: %s mounted read-only", driveIdentifier, find_file_name_from_path(selectedPath));
+    update_disk_media_menu(windowHandle, bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
 }
 
 static void handle_detach_fixed_disk_command(HWND                       windowHandle,
@@ -4359,31 +4759,29 @@ static void handle_detach_fixed_disk_command(HWND                       windowHa
     if (storageResult == HYPERDOS_PC_STORAGE_OK)
     {
         clear_fixed_disk_drive_path(fixedDiskIndex);
-        set_status_text(bootState, "%s: detached", driveIdentifier);
     }
     else if (storageResult == HYPERDOS_PC_STORAGE_FLUSH_FAILED)
     {
-        set_status_text(bootState, "failed to flush %s before detach", driveIdentifier);
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to flush %s before detach",
+                                     driveIdentifier);
     }
-    else
-    {
-        set_status_text(bootState, "%s: no fixed disk attached", driveIdentifier);
-    }
+    update_disk_media_menu(windowHandle, bootState);
     InvalidateRect(windowHandle, NULL, FALSE);
-    update_window_title(windowHandle, bootState);
 }
 
 static void handle_flush_disks_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
 {
-    if (flush_all_disk_images(bootState))
+    if (!flush_all_disk_images(bootState))
     {
-        set_status_text(bootState, "disk images flushed");
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_STORAGE,
+                                     "failed to flush one or more disk images");
     }
-    else
-    {
-        set_status_text(bootState, "failed to flush one or more disk images");
-    }
-    update_window_title(windowHandle, bootState);
+    SetFocus(windowHandle);
 }
 
 static void handle_reset_pc_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
@@ -4399,15 +4797,6 @@ static void handle_start_cpu_trace_command(HWND windowHandle, hyperdos_win32_boo
 {
     memset(bootState->cpuTraceEntries, 0, sizeof(bootState->cpuTraceEntries));
     InterlockedExchange(&bootState->cpuTraceEnabled, 1);
-    if (globalCpuTracePath[0] != '\0')
-    {
-        set_status_text(bootState, "CPU trace armed: %s", globalCpuTracePath);
-    }
-    else
-    {
-        set_status_text(bootState, "CPU trace path not configured");
-    }
-    update_window_title(windowHandle, bootState);
     SetFocus(windowHandle);
 }
 
@@ -4432,6 +4821,13 @@ static void update_machine_model_menu(HWND windowHandle)
                        globalPcModel == HYPERDOS_PC_MODEL_XT ? HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT
                                                              : HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT,
                        MF_BYCOMMAND);
+    CheckMenuRadioItem(menuHandle,
+                       HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE,
+                       HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087,
+                       globalCoprocessorModel == HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087
+                               ? HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087
+                               : HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE,
+                       MF_BYCOMMAND);
 }
 
 static void set_processor_model(HWND                            windowHandle,
@@ -4453,6 +4849,20 @@ static void set_pc_model(HWND windowHandle, hyperdos_win32_boot_state* bootState
     if (globalPcModel != pcModel)
     {
         globalPcModel = pcModel;
+        update_machine_model_menu(windowHandle);
+        handle_reset_pc_command(windowHandle, bootState);
+        return;
+    }
+    SetFocus(windowHandle);
+}
+
+static void set_coprocessor_model(HWND                               windowHandle,
+                                  hyperdos_win32_boot_state*         bootState,
+                                  hyperdos_monitor_coprocessor_model coprocessorModel)
+{
+    if (globalCoprocessorModel != coprocessorModel)
+    {
+        globalCoprocessorModel = coprocessorModel;
         update_machine_model_menu(windowHandle);
         handle_reset_pc_command(windowHandle, bootState);
         return;
@@ -4495,9 +4905,11 @@ static void resume_emulation_thread_after_live_configuration_change(HWND        
     if (!start_emulation_thread(bootState))
     {
         InterlockedExchange(&bootState->isRunning, 0);
-        set_status_text(bootState, "failed to restart emulation thread");
+        show_host_error_notification(windowHandle,
+                                     bootState,
+                                     HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_RUNTIME,
+                                     "failed to restart emulation thread");
     }
-    update_window_title(windowHandle, bootState);
 }
 
 static uint32_t get_processor_frequency_hertz_from_command(UINT commandIdentifier)
@@ -4548,8 +4960,7 @@ static void set_processor_frequency_hertz(HWND                       windowHandl
                                           hyperdos_win32_boot_state* bootState,
                                           uint32_t                   processorFrequencyHertz)
 {
-    int  wasRunning = 0;
-    char processorFrequencyText[32];
+    int wasRunning = 0;
 
     if (processorFrequencyHertz == 0u)
     {
@@ -4568,11 +4979,9 @@ static void set_processor_frequency_hertz(HWND                       windowHandl
     {
         hyperdos_pc_set_processor_frequency_hertz(&bootState->machine.pc, processorFrequencyHertz);
     }
-    format_processor_frequency_text(processorFrequencyText, sizeof(processorFrequencyText), processorFrequencyHertz);
-    set_status_text(bootState, "processor clock set to %s", processorFrequencyText);
     update_processor_clock_menu(windowHandle);
     resume_emulation_thread_after_live_configuration_change(windowHandle, bootState, wasRunning);
-    update_window_title(windowHandle, bootState);
+    update_monitor_status_bar(bootState);
     SetFocus(windowHandle);
 }
 
@@ -4582,12 +4991,9 @@ static void toggle_unthrottled_turbo(HWND windowHandle, hyperdos_win32_boot_stat
 
     wasRunning                      = stop_emulation_thread_for_live_configuration_change(bootState);
     globalGuestClockThrottleEnabled = globalGuestClockThrottleEnabled == 0;
-    set_status_text(bootState,
-                    "%s",
-                    globalGuestClockThrottleEnabled ? "guest clock throttle enabled" : "unthrottled turbo enabled");
     update_processor_clock_menu(windowHandle);
     resume_emulation_thread_after_live_configuration_change(windowHandle, bootState, wasRunning);
-    update_window_title(windowHandle, bootState);
+    update_monitor_status_bar(bootState);
     SetFocus(windowHandle);
 }
 
@@ -4651,12 +5057,13 @@ static void set_display_resize_mode(HWND                                 windowH
     SetFocus(windowHandle);
 }
 
-static HMENU create_monitor_menu(void)
+HMENU hyperdos_win32_pc_monitor_create_menu(void)
 {
     HMENU  menuHandle                  = CreateMenu();
     HMENU  machineMenuHandle           = CreatePopupMenu();
     HMENU  processorModelMenuHandle    = CreatePopupMenu();
     HMENU  pcModelMenuHandle           = CreatePopupMenu();
+    HMENU  coprocessorMenuHandle       = CreatePopupMenu();
     HMENU  processorClockMenuHandle    = CreatePopupMenu();
     HMENU  diskMenuHandle              = CreatePopupMenu();
     HMENU  viewMenuHandle              = CreatePopupMenu();
@@ -4672,6 +5079,9 @@ static HMENU create_monitor_menu(void)
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT, "XT");
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT, "AT");
     AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)pcModelMenuHandle, "PC Model");
+    AppendMenuA(coprocessorMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE, "None");
+    AppendMenuA(coprocessorMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087, "8087");
+    AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)coprocessorMenuHandle, "Coprocessor");
     for (processorClockOptionIndex = 0u;
          processorClockOptionIndex < sizeof(globalProcessorClockOptions) / sizeof(globalProcessorClockOptions[0]);
          ++processorClockOptionIndex)
@@ -4772,21 +5182,16 @@ static HMENU create_monitor_menu(void)
     return menuHandle;
 }
 
-static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
-                                                 UINT   message,
-                                                 WPARAM wordParameter,
-                                                 LPARAM longParameter)
+LRESULT CALLBACK hyperdos_win32_pc_monitor_window_procedure(HWND   windowHandle,
+                                                            UINT   message,
+                                                            WPARAM wordParameter,
+                                                            LPARAM longParameter)
 {
     switch (message)
     {
     case WM_CREATE:
-        memset(&globalBootState, 0, sizeof(globalBootState));
-        globalBootState.windowHandle                      = windowHandle;
-        globalBootState.hostMouseCursorConfinementEnabled = 1u;
-        globalBootState.hostMouseCursorHidingEnabled      = 1u;
-        InitializeCriticalSection(&globalBootState.keyboardCriticalSection);
-        InitializeCriticalSection(&globalBootState.diskCriticalSection);
-        globalBootState.keyboardEventHandle         = CreateEventA(NULL, FALSE, FALSE, NULL);
+        hyperdos_win32_pc_monitor_runtime_initialize(&globalBootState, &globalRuntimeCallbacks, windowHandle);
+        (void)create_monitor_status_bar(windowHandle);
         globalBootState.hostMouseRawInputRegistered = (uint8_t)register_host_mouse_raw_input(windowHandle);
         globalTextFontHandle                        = CreateFontA(HYPERDOS_MONITOR_CHARACTER_HEIGHT,
                                            HYPERDOS_MONITOR_CHARACTER_WIDTH,
@@ -4825,32 +5230,28 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             }
         }
 
-        if (globalFloppyDrivePathCount == 0u && !globalBootHardDiskWithoutFloppy)
+        if (globalFloppyDrivePathCount == 0u && !fixed_disk_drive_path_is_configured())
         {
-            char selectedPath[HYPERDOS_MONITOR_PATH_CAPACITY];
-            if (select_disk_image_file_path(windowHandle,
-                                            "Select boot floppy image",
-                                            selectedPath,
-                                            sizeof(selectedPath)))
-            {
-                set_floppy_drive_path(0u, selectedPath, 0u);
-            }
-        }
-
-        if (globalFloppyDrivePathCount == 0u && !globalBootHardDiskWithoutFloppy)
-        {
-            render_monitor_message(&globalBootState, "Use Disk > Floppy Drive 0 (BIOS 00h) > Insert Image... to boot.");
+            hyperdos_win32_pc_monitor_runtime_set_host_notification(
+                    &globalBootState,
+                    HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_INFORMATION,
+                    HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_BOOT,
+                    "No boot disk selected");
+            render_guest_display_message(&globalBootState, "No bootable media. Insert or mount a boot disk from Disk.");
         }
         else if (initialize_boot_from_disk_images(&globalBootState))
         {
             if (!start_emulation_thread(&globalBootState))
             {
-                set_status_text(&globalBootState, "failed to start emulation thread");
+                show_host_error_notification(windowHandle,
+                                             &globalBootState,
+                                             HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_RUNTIME,
+                                             "failed to start emulation thread");
             }
         }
         else
         {
-            hyperdos_pc_render_text_message(&globalBootState.machine.pc, globalBootState.statusText);
+            render_host_notification_to_guest_display(&globalBootState);
         }
         SetTimer(windowHandle,
                  HYPERDOS_MONITOR_RENDER_TIMER_IDENTIFIER,
@@ -4860,8 +5261,9 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         update_processor_clock_menu(windowHandle);
         update_display_resize_mode_menu(windowHandle);
         update_text_character_set_menu(windowHandle);
+        update_disk_media_menu(windowHandle, &globalBootState);
         update_mouse_capture_menu(windowHandle, &globalBootState);
-        update_window_title(windowHandle, &globalBootState);
+        update_monitor_status_bar(&globalBootState);
         SetFocus(windowHandle);
         return 0;
 
@@ -4879,6 +5281,12 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             return 0;
         case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186:
             set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_16_PROCESSOR_MODEL_80186);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE:
+            set_coprocessor_model(windowHandle, &globalBootState, HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087:
+            set_coprocessor_model(windowHandle, &globalBootState, HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT:
             set_pc_model(windowHandle, &globalBootState, HYPERDOS_PC_MODEL_XT);
@@ -4915,7 +5323,6 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             return 0;
         case HYPERDOS_MONITOR_COMMAND_TOGGLE_MOUSE_CAPTURE:
             toggle_host_mouse_capture(windowHandle, &globalBootState);
-            update_window_title(windowHandle, &globalBootState);
             SetFocus(windowHandle);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_CONFINEMENT:
@@ -5004,6 +5411,7 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
     case WM_MOVE:
     case WM_SIZE:
     case WM_DISPLAYCHANGE:
+        resize_monitor_status_bar();
         update_host_mouse_capture_clipping(windowHandle, &globalBootState);
         if (host_mouse_capture_uses_message_movement(&globalBootState))
         {
@@ -5033,7 +5441,6 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             {
                 release_host_mouse_capture(windowHandle, &globalBootState);
             }
-            update_window_title(windowHandle, &globalBootState);
         }
         break;
 
@@ -5044,7 +5451,6 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             release_pressed_host_keys(&globalBootState);
             release_host_mouse_buttons(windowHandle, &globalBootState);
             release_host_mouse_capture(windowHandle, &globalBootState);
-            update_window_title(windowHandle, &globalBootState);
         }
         break;
 
@@ -5053,38 +5459,30 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         release_pressed_host_keys(&globalBootState);
         release_host_mouse_buttons(windowHandle, &globalBootState);
         release_host_mouse_capture(windowHandle, &globalBootState);
-        update_window_title(windowHandle, &globalBootState);
         break;
 
     case WM_TIMER:
         if (wordParameter == HYPERDOS_MONITOR_RENDER_TIMER_IDENTIFIER)
         {
             InvalidateRect(windowHandle, NULL, FALSE);
-            update_window_title(windowHandle, &globalBootState);
             return 0;
         }
         break;
 
     case HYPERDOS_MONITOR_USER_RENDER_MESSAGE:
         InvalidateRect(windowHandle, NULL, FALSE);
-        update_window_title(windowHandle, &globalBootState);
         return 0;
 
     case HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE:
         InvalidateRect(windowHandle, NULL, FALSE);
-        update_window_title(windowHandle, &globalBootState);
+        update_monitor_status_bar(&globalBootState);
         show_unsupported_instruction_message(windowHandle, &globalBootState);
         return 0;
 
     case HYPERDOS_MONITOR_USER_RESET_MESSAGE:
         release_host_mouse_buttons(windowHandle, &globalBootState);
         release_host_mouse_capture(windowHandle, &globalBootState);
-        if (globalBootState.emulationThreadHandle != NULL)
-        {
-            WaitForSingleObject(globalBootState.emulationThreadHandle, 2000u);
-            CloseHandle(globalBootState.emulationThreadHandle);
-            globalBootState.emulationThreadHandle = NULL;
-        }
+        hyperdos_win32_pc_monitor_runtime_close_emulation_thread_handle(&globalBootState);
         boot_from_selected_disk_images(windowHandle, &globalBootState);
         return 0;
 
@@ -5107,7 +5505,6 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
                 release_pressed_host_keys(&globalBootState);
                 release_host_mouse_buttons(windowHandle, &globalBootState);
                 toggle_host_mouse_capture(windowHandle, &globalBootState);
-                update_window_title(windowHandle, &globalBootState);
             }
             return 0;
         }
@@ -5199,7 +5596,7 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         PAINTSTRUCT paintStructure;
         RECT        clientRectangle;
         HDC         deviceContext = BeginPaint(windowHandle, &paintStructure);
-        GetClientRect(windowHandle, &clientRectangle);
+        get_monitor_display_client_rectangle(windowHandle, &clientRectangle);
         render_display_to_window(deviceContext, &globalBootState, &clientRectangle);
         EndPaint(windowHandle, &paintStructure);
         return 0;
@@ -5220,6 +5617,7 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             DeleteObject(globalCodePage437TextFontHandle);
             globalCodePage437TextFontHandle = NULL;
         }
+        globalStatusBarWindowHandle = NULL;
         PostQuitMessage(0);
         return 0;
     }
@@ -5366,10 +5764,6 @@ static int set_fixed_disk_drive_path_from_argument(const char* argument)
     {
         fixedDiskIndex = (uint8_t)driveIdentifier;
     }
-    else if (driveIdentifier >= 80u && driveIdentifier < 80u + HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
-    {
-        fixedDiskIndex = (uint8_t)(driveIdentifier - 80u);
-    }
     else if (driveIdentifier >= HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER &&
              driveIdentifier < HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER + HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT)
     {
@@ -5381,35 +5775,6 @@ static int set_fixed_disk_drive_path_from_argument(const char* argument)
     }
     set_fixed_disk_drive_path(fixedDiskIndex, path, (uint8_t)hyperdos_win32_path_is_directory(path));
     return 1;
-}
-
-static int set_next_available_floppy_drive_path(const char* path)
-{
-    size_t driveIndex = 0u;
-
-    if (path == NULL || path[0] == '\0')
-    {
-        return 0;
-    }
-    for (driveIndex = 0u; driveIndex < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++driveIndex)
-    {
-        if (globalFloppyDrivePaths[driveIndex][0] == '\0')
-        {
-            set_floppy_drive_path((uint8_t)driveIndex, path, (uint8_t)hyperdos_win32_path_is_directory(path));
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static void clear_all_fixed_disk_drive_paths(void)
-{
-    size_t fixedDiskIndex = 0u;
-
-    for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
-    {
-        clear_fixed_disk_drive_path((uint8_t)fixedDiskIndex);
-    }
 }
 
 static int parse_processor_frequency_hertz(const char* text, uint32_t* processorFrequencyHertz)
@@ -5462,11 +5827,26 @@ static int parse_processor_frequency_hertz(const char* text, uint32_t* processor
     return *processorFrequencyHertz != 0u;
 }
 
-static void parse_command_line_disk_paths(const char* commandLine)
+static int set_command_line_error_text(char* errorText, size_t errorTextSize, const char* format, ...)
 {
-    char              argument[HYPERDOS_MONITOR_PATH_CAPACITY];
-    size_t            sourceOffset               = 0u;
-    static const char defaultHardDiskImagePath[] = "images\\harddisk.img";
+    va_list arguments;
+
+    if (errorTextSize == 0u)
+    {
+        return 0;
+    }
+    va_start(arguments, format);
+    vsnprintf(errorText, errorTextSize, format, arguments);
+    va_end(arguments);
+    return 0;
+}
+
+int hyperdos_win32_pc_monitor_configure_from_command_line(const char* commandLine,
+                                                          char*       errorText,
+                                                          size_t      errorTextSize)
+{
+    char   argument[HYPERDOS_MONITOR_PATH_CAPACITY];
+    size_t sourceOffset = 0u;
 
     memset(globalFloppyDrivePaths, 0, sizeof(globalFloppyDrivePaths));
     memset(globalFloppyDrivePathIsDirectory, 0, sizeof(globalFloppyDrivePathIsDirectory));
@@ -5483,108 +5863,41 @@ static void parse_command_line_disk_paths(const char* commandLine)
     globalMemoryStopPhysicalAddress               = 0u;
     globalMemoryStopByteValue                     = 0u;
     globalMemoryStopByteEnabled                   = 0;
-    globalBootHardDiskWithoutFloppy               = 0;
-    globalCoprocessorEnabled                      = 0;
+    globalCoprocessorModel                        = HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
     globalProcessorFrequencyHertz                 = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
     globalGuestClockThrottleEnabled               = 1;
     globalProcessorModel                          = HYPERDOS_X86_16_PROCESSOR_MODEL_80186;
     globalPcModel                                 = HYPERDOS_PC_MODEL_AT;
     globalCpuTraceStartsEnabled                   = 0;
     globalDivideErrorReturnsToFaultingInstruction = 0;
-    set_fixed_disk_drive_path(0u,
-                              defaultHardDiskImagePath,
-                              (uint8_t)hyperdos_win32_path_is_directory(defaultHardDiskImagePath));
 
     while (copy_next_command_line_argument(commandLine, sourceOffset, argument, sizeof(argument), &sourceOffset))
     {
-        if (strcmp(argument, "--hard-disk") == 0)
-        {
-            char hardDiskPath[HYPERDOS_MONITOR_PATH_CAPACITY];
-
-            if (copy_next_command_line_argument(commandLine,
-                                                sourceOffset,
-                                                hardDiskPath,
-                                                sizeof(hardDiskPath),
-                                                &sourceOffset))
-            {
-                set_fixed_disk_drive_path(0u, hardDiskPath, (uint8_t)hyperdos_win32_path_is_directory(hardDiskPath));
-                globalBootHardDiskWithoutFloppy = 1;
-                continue;
-            }
-            clear_fixed_disk_drive_path(0u);
-            continue;
-        }
-        if (strncmp(argument, "--hard-disk=", 12u) == 0)
-        {
-            set_fixed_disk_drive_path(0u, argument + 12u, (uint8_t)hyperdos_win32_path_is_directory(argument + 12u));
-            globalBootHardDiskWithoutFloppy = 1;
-            continue;
-        }
-        if (strcmp(argument, "--no-hard-disk") == 0)
-        {
-            clear_all_fixed_disk_drive_paths();
-            globalBootHardDiskWithoutFloppy = 0;
-            continue;
-        }
-        if (strcmp(argument, "--floppy-drive") == 0)
-        {
-            char drivePathArgument[HYPERDOS_MONITOR_PATH_CAPACITY];
-
-            if (copy_next_command_line_argument(commandLine,
-                                                sourceOffset,
-                                                drivePathArgument,
-                                                sizeof(drivePathArgument),
-                                                &sourceOffset))
-            {
-                (void)set_floppy_drive_path_from_argument(drivePathArgument);
-            }
-            continue;
-        }
         if (strncmp(argument, "--floppy-drive=", 15u) == 0)
         {
-            (void)set_floppy_drive_path_from_argument(argument + 15u);
-            continue;
-        }
-        if (strcmp(argument, "--fixed-drive") == 0)
-        {
-            char drivePathArgument[HYPERDOS_MONITOR_PATH_CAPACITY];
-
-            if (copy_next_command_line_argument(commandLine,
-                                                sourceOffset,
-                                                drivePathArgument,
-                                                sizeof(drivePathArgument),
-                                                &sourceOffset))
+            if (!set_floppy_drive_path_from_argument(argument + 15u))
             {
-                (void)set_fixed_disk_drive_path_from_argument(drivePathArgument);
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
             }
             continue;
         }
         if (strncmp(argument, "--fixed-drive=", 14u) == 0)
         {
-            (void)set_fixed_disk_drive_path_from_argument(argument + 14u);
-            continue;
-        }
-        if (strcmp(argument, "--disk-trace") == 0)
-        {
-            (void)copy_next_command_line_argument(commandLine,
-                                                  sourceOffset,
-                                                  globalDiskTracePath,
-                                                  sizeof(globalDiskTracePath),
-                                                  &sourceOffset);
+            if (!set_fixed_disk_drive_path_from_argument(argument + 14u))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
             continue;
         }
         if (strncmp(argument, "--disk-trace=", 13u) == 0)
         {
             copy_string_to_buffer(globalDiskTracePath, sizeof(globalDiskTracePath), argument + 13u);
-            continue;
-        }
-        if (strcmp(argument, "--cpu-trace") == 0)
-        {
-            (void)copy_next_command_line_argument(commandLine,
-                                                  sourceOffset,
-                                                  globalCpuTracePath,
-                                                  sizeof(globalCpuTracePath),
-                                                  &sourceOffset);
             continue;
         }
         if (strncmp(argument, "--cpu-trace=", 12u) == 0)
@@ -5597,27 +5910,9 @@ static void parse_command_line_disk_paths(const char* commandLine)
             globalCpuTraceStartsEnabled = 1;
             continue;
         }
-        if (strcmp(argument, "--memory-trace") == 0)
-        {
-            (void)copy_next_command_line_argument(commandLine,
-                                                  sourceOffset,
-                                                  globalMemoryTracePath,
-                                                  sizeof(globalMemoryTracePath),
-                                                  &sourceOffset);
-            continue;
-        }
         if (strncmp(argument, "--memory-trace=", 15u) == 0)
         {
             copy_string_to_buffer(globalMemoryTracePath, sizeof(globalMemoryTracePath), argument + 15u);
-            continue;
-        }
-        if (strcmp(argument, "--guest-memory-dump") == 0)
-        {
-            (void)copy_next_command_line_argument(commandLine,
-                                                  sourceOffset,
-                                                  globalGuestMemoryDumpPath,
-                                                  sizeof(globalGuestMemoryDumpPath),
-                                                  &sourceOffset);
             continue;
         }
         if (strncmp(argument, "--guest-memory-dump=", 20u) == 0)
@@ -5625,27 +5920,9 @@ static void parse_command_line_disk_paths(const char* commandLine)
             copy_string_to_buffer(globalGuestMemoryDumpPath, sizeof(globalGuestMemoryDumpPath), argument + 20u);
             continue;
         }
-        if (strcmp(argument, "--text-screen-dump") == 0)
-        {
-            (void)copy_next_command_line_argument(commandLine,
-                                                  sourceOffset,
-                                                  globalTextScreenDumpPath,
-                                                  sizeof(globalTextScreenDumpPath),
-                                                  &sourceOffset);
-            continue;
-        }
         if (strncmp(argument, "--text-screen-dump=", 19u) == 0)
         {
             copy_string_to_buffer(globalTextScreenDumpPath, sizeof(globalTextScreenDumpPath), argument + 19u);
-            continue;
-        }
-        if (strcmp(argument, "--video-state-dump") == 0)
-        {
-            (void)copy_next_command_line_argument(commandLine,
-                                                  sourceOffset,
-                                                  globalVideoStateDumpPath,
-                                                  sizeof(globalVideoStateDumpPath),
-                                                  &sourceOffset);
             continue;
         }
         if (strncmp(argument, "--video-state-dump=", 19u) == 0)
@@ -5653,93 +5930,50 @@ static void parse_command_line_disk_paths(const char* commandLine)
             copy_string_to_buffer(globalVideoStateDumpPath, sizeof(globalVideoStateDumpPath), argument + 19u);
             continue;
         }
-        if (strcmp(argument, "--memory-watch") == 0)
-        {
-            char memoryWatchText[HYPERDOS_MONITOR_MEMORY_WATCH_TEXT_CAPACITY];
-            if (copy_next_command_line_argument(commandLine,
-                                                sourceOffset,
-                                                memoryWatchText,
-                                                sizeof(memoryWatchText),
-                                                &sourceOffset))
-            {
-                add_memory_watch_argument(memoryWatchText);
-            }
-            continue;
-        }
         if (strncmp(argument, "--memory-watch=", 15u) == 0)
         {
             add_memory_watch_argument(argument + 15u);
             continue;
         }
-        if (strcmp(argument, "--memory-stop-byte") == 0)
-        {
-            char memoryStopText[HYPERDOS_MONITOR_MEMORY_WATCH_TEXT_CAPACITY];
-            if (copy_next_command_line_argument(commandLine,
-                                                sourceOffset,
-                                                memoryStopText,
-                                                sizeof(memoryStopText),
-                                                &sourceOffset))
-            {
-                (void)parse_memory_stop_byte_argument(memoryStopText);
-            }
-            continue;
-        }
         if (strncmp(argument, "--memory-stop-byte=", 19u) == 0)
         {
-            (void)parse_memory_stop_byte_argument(argument + 19u);
-            continue;
-        }
-        if (strcmp(argument, "--boot-hard-disk") == 0)
-        {
-            globalBootHardDiskWithoutFloppy = 1;
+            if (!parse_memory_stop_byte_argument(argument + 19u))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
             continue;
         }
         if (strcmp(argument, "--8087") == 0)
         {
-            globalCoprocessorEnabled = 1;
+            globalCoprocessorModel = HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087;
             continue;
         }
         if (strcmp(argument, "--no-8087") == 0)
         {
-            globalCoprocessorEnabled = 0;
+            globalCoprocessorModel = HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
             continue;
         }
-        if (strcmp(argument, "--processor-clock") == 0 || strcmp(argument, "--cpu-clock") == 0)
+        if (strncmp(argument, "--processor-clock=", 18u) == 0)
         {
-            char     processorClockText[HYPERDOS_MONITOR_PATH_CAPACITY];
-            uint32_t processorFrequencyHertz = 0u;
-
-            if (copy_next_command_line_argument(commandLine,
-                                                sourceOffset,
-                                                processorClockText,
-                                                sizeof(processorClockText),
-                                                &sourceOffset) &&
-                parse_processor_frequency_hertz(processorClockText, &processorFrequencyHertz))
-            {
-                globalProcessorFrequencyHertz = processorFrequencyHertz;
-            }
-            continue;
-        }
-        if (strncmp(argument, "--processor-clock=", 18u) == 0 || strncmp(argument, "--cpu-clock=", 12u) == 0)
-        {
-            const char* processorClockText      = strncmp(argument, "--processor-clock=", 18u) == 0 ? argument + 18u
-                                                                                                    : argument + 12u;
+            const char* processorClockText      = argument + 18u;
             uint32_t    processorFrequencyHertz = 0u;
 
-            if (parse_processor_frequency_hertz(processorClockText, &processorFrequencyHertz))
+            if (!parse_processor_frequency_hertz(processorClockText, &processorFrequencyHertz))
             {
-                globalProcessorFrequencyHertz = processorFrequencyHertz;
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
             }
+            globalProcessorFrequencyHertz = processorFrequencyHertz;
             continue;
         }
-        if (strcmp(argument, "--unthrottled-turbo") == 0 || strcmp(argument, "--turbo") == 0)
+        if (strcmp(argument, "--unthrottled-turbo") == 0)
         {
             globalGuestClockThrottleEnabled = 0;
-            continue;
-        }
-        if (strcmp(argument, "--throttle") == 0 || strcmp(argument, "--no-turbo") == 0)
-        {
-            globalGuestClockThrottleEnabled = 1;
             continue;
         }
         if (strcmp(argument, "--divide-error-returns-to-faulting-instruction") == 0)
@@ -5752,75 +5986,24 @@ static void parse_command_line_disk_paths(const char* commandLine)
             globalDivideErrorReturnsToFaultingInstruction = 0;
             continue;
         }
-        (void)set_next_available_floppy_drive_path(argument);
-    }
-}
-
-static void configure_process_display_scale_awareness(void)
-{
-    typedef BOOL(WINAPI * hyperdos_monitor_set_process_display_scale_awareness_context_function)(HANDLE);
-    typedef HRESULT(WINAPI * hyperdos_monitor_set_process_display_scale_awareness_function)(int);
-    typedef BOOL(WINAPI * hyperdos_monitor_set_process_display_scale_aware_function)(void);
-
-    HMODULE userInterfaceLibrary = LoadLibraryA("user32.dll");
-    HMODULE shellScalingLibrary  = NULL;
-
-    if (userInterfaceLibrary == NULL)
-    {
-        return;
-    }
-
-    hyperdos_monitor_set_process_display_scale_awareness_context_function setProcessDisplayScaleAwarenessContext =
-            (hyperdos_monitor_set_process_display_scale_awareness_context_function)
-                    GetProcAddress(userInterfaceLibrary, "SetProcessDpiAwarenessContext");
-    if (setProcessDisplayScaleAwarenessContext != NULL &&
-        setProcessDisplayScaleAwarenessContext((HANDLE)(intptr_t)-4) != FALSE)
-    {
-        FreeLibrary(userInterfaceLibrary);
-        return;
-    }
-
-    shellScalingLibrary = LoadLibraryA("shcore.dll");
-    if (shellScalingLibrary != NULL)
-    {
-        hyperdos_monitor_set_process_display_scale_awareness_function
-                setProcessDisplayScaleAwareness = (hyperdos_monitor_set_process_display_scale_awareness_function)
-                        GetProcAddress(shellScalingLibrary, "SetProcessDpiAwareness");
-        if (setProcessDisplayScaleAwareness != NULL && setProcessDisplayScaleAwareness(2) >= 0)
+        if (argument[0] == '-')
         {
-            FreeLibrary(shellScalingLibrary);
-            FreeLibrary(userInterfaceLibrary);
-            return;
+            return set_command_line_error_text(errorText,
+                                               errorTextSize,
+                                               "Unsupported command-line option: %s",
+                                               argument);
         }
-        FreeLibrary(shellScalingLibrary);
+        return set_command_line_error_text(errorText,
+                                           errorTextSize,
+                                           "Disk image paths must use --floppy-drive=<drive>=<path> or "
+                                           "--fixed-drive=<drive>=<path>: %s",
+                                           argument);
     }
-
-    hyperdos_monitor_set_process_display_scale_aware_function
-            setProcessDisplayScaleAware = (hyperdos_monitor_set_process_display_scale_aware_function)
-                    GetProcAddress(userInterfaceLibrary, "SetProcessDPIAware");
-    if (setProcessDisplayScaleAware != NULL)
-    {
-        (void)setProcessDisplayScaleAware();
-    }
-    FreeLibrary(userInterfaceLibrary);
+    return 1;
 }
 
-int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, LPSTR commandLine, int showCommand)
+void hyperdos_win32_pc_monitor_open_trace_files(void)
 {
-    WNDCLASSA windowClass;
-    HWND      windowHandle = NULL;
-    HMENU     menuHandle   = NULL;
-    MSG       message;
-    DWORD     windowStyle = WS_OVERLAPPEDWINDOW;
-    RECT      requestedClientRectangle;
-    int       windowWidth    = 0;
-    int       windowHeight   = 0;
-    int       comInitialized = 0;
-
-    (void)previousInstanceHandle;
-    configure_process_display_scale_awareness();
-    comInitialized = SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED));
-    parse_command_line_disk_paths(commandLine);
     InitializeCriticalSection(&globalDiskTraceCriticalSection);
     globalDiskTraceCriticalSectionInitialized = 1;
     if (globalDiskTracePath[0] != '\0')
@@ -5841,62 +6024,10 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
             fflush(globalMemoryTraceFile);
         }
     }
-    requestedClientRectangle.left  = 0;
-    requestedClientRectangle.top   = 0;
-    requestedClientRectangle.right = HYPERDOS_COLOR_GRAPHICS_ADAPTER_COLUMN_COUNT * HYPERDOS_MONITOR_CHARACTER_WIDTH +
-                                     HYPERDOS_MONITOR_WINDOW_EXTRA_WIDTH;
-    requestedClientRectangle.bottom = HYPERDOS_VIDEO_GRAPHICS_ARRAY_MAXIMUM_DISPLAY_HEIGHT;
-    AdjustWindowRectEx(&requestedClientRectangle, windowStyle, TRUE, 0);
-    windowWidth  = requestedClientRectangle.right - requestedClientRectangle.left;
-    windowHeight = requestedClientRectangle.bottom - requestedClientRectangle.top;
-    memset(&windowClass, 0, sizeof(windowClass));
-    windowClass.style         = CS_DBLCLKS;
-    windowClass.lpfnWndProc   = monitor_window_procedure;
-    windowClass.hInstance     = instanceHandle;
-    windowClass.lpszClassName = "HyperDOSMonitorWindow";
-    windowClass.hCursor       = LoadCursor(NULL, IDC_ARROW);
-    windowClass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+}
 
-    if (!RegisterClassA(&windowClass))
-    {
-        if (comInitialized)
-        {
-            CoUninitialize();
-        }
-        return 1;
-    }
-
-    menuHandle   = create_monitor_menu();
-    windowHandle = CreateWindowExA(0,
-                                   windowClass.lpszClassName,
-                                   "HyperDOS PC Monitor",
-                                   windowStyle,
-                                   CW_USEDEFAULT,
-                                   CW_USEDEFAULT,
-                                   windowWidth,
-                                   windowHeight,
-                                   NULL,
-                                   menuHandle,
-                                   instanceHandle,
-                                   NULL);
-    if (windowHandle == NULL)
-    {
-        if (comInitialized)
-        {
-            CoUninitialize();
-        }
-        return 1;
-    }
-
-    ShowWindow(windowHandle, showCommand);
-    UpdateWindow(windowHandle);
-
-    while (GetMessageA(&message, NULL, 0, 0) > 0)
-    {
-        TranslateMessage(&message);
-        DispatchMessageA(&message);
-    }
-
+void hyperdos_win32_pc_monitor_close_trace_files(void)
+{
     if (globalDiskTraceFile != NULL)
     {
         fclose(globalDiskTraceFile);
@@ -5912,9 +6043,20 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
         DeleteCriticalSection(&globalDiskTraceCriticalSection);
         globalDiskTraceCriticalSectionInitialized = 0;
     }
-    if (comInitialized)
-    {
-        CoUninitialize();
-    }
-    return (int)message.wParam;
+}
+
+int hyperdos_win32_pc_monitor_get_initial_client_width(void)
+{
+    return HYPERDOS_COLOR_GRAPHICS_ADAPTER_COLUMN_COUNT * HYPERDOS_MONITOR_CHARACTER_WIDTH +
+           HYPERDOS_MONITOR_WINDOW_EXTRA_WIDTH;
+}
+
+int hyperdos_win32_pc_monitor_get_initial_client_height(void)
+{
+    return HYPERDOS_VIDEO_GRAPHICS_ARRAY_MAXIMUM_DISPLAY_HEIGHT;
+}
+
+int hyperdos_win32_pc_monitor_get_status_bar_height(void)
+{
+    return get_monitor_status_bar_height();
 }

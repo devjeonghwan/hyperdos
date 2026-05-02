@@ -31,7 +31,7 @@ fsutil file createnew images\harddisk.img 33554432
 그 다음 아래처럼 하드 디스크 부팅을 실행할 수 있습니다.
 
 ```bat
-cmake-build-debug\hyperdos_win32_pc_monitor.exe --hard-disk images\harddisk.img --boot-hard-disk
+cmake-build-debug\hyperdos_win32_pc_monitor.exe --fixed-drive=0=images\harddisk.img
 ```
 
 이 이미지는 빈 디스크입니다. DOS에서 `FDISK`로 파티션을 만들고, 재부팅 후 `FORMAT C: /S` 같은 명령으로 포맷해야 부팅 가능한 하드 디스크가 됩니다.
