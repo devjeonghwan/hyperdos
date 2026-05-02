@@ -120,6 +120,7 @@ typedef struct hyperdos_programmable_peripheral_interface
 typedef struct hyperdos_intel_8042_keyboard_controller
 {
     uint8_t outputQueue[HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY];
+    uint8_t outputQueueAuxiliaryDevice[HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY];
     size_t  outputQueueReadIndex;
     size_t  outputQueueWriteIndex;
     size_t  outputQueueCount;
@@ -133,8 +134,15 @@ typedef struct hyperdos_intel_8042_keyboard_controller
     uint8_t pendingKeyboardCommand;
     uint8_t keyboardScanCodeSet;
     uint8_t keyboardScanningEnabled;
+    uint8_t pendingAuxiliaryDeviceCommand;
+    uint8_t auxiliaryDeviceSampleRate;
+    uint8_t auxiliaryDeviceResolution;
+    uint8_t auxiliaryDeviceScalingTwoToOne;
+    uint8_t auxiliaryDeviceReportingEnabled;
+    uint8_t auxiliaryDeviceButtonMask;
     uint8_t auxiliaryDeviceDisabled;
-    uint8_t interruptRequestPending;
+    uint8_t keyboardInterruptRequestPending;
+    uint8_t auxiliaryDeviceInterruptRequestPending;
 } hyperdos_intel_8042_keyboard_controller;
 
 typedef struct hyperdos_universal_asynchronous_receiver_transmitter
@@ -226,6 +234,14 @@ void hyperdos_programmable_interrupt_controller_raise_request(hyperdos_programma
 int hyperdos_programmable_interrupt_controller_acknowledge(hyperdos_programmable_interrupt_controller* controller,
                                                            uint8_t*                                    interruptNumber);
 
+int hyperdos_programmable_interrupt_controller_acknowledge_request(
+        hyperdos_programmable_interrupt_controller* controller,
+        uint8_t*                                    requestLine,
+        uint8_t*                                    interruptNumber);
+
+int hyperdos_programmable_interrupt_controller_has_pending_unmasked_request(
+        const hyperdos_programmable_interrupt_controller* controller);
+
 void hyperdos_direct_memory_access_controller_initialize(hyperdos_direct_memory_access_controller* controller);
 
 uint8_t hyperdos_direct_memory_access_controller_read_byte(void* device, uint16_t port);
@@ -267,8 +283,24 @@ int hyperdos_intel_8042_keyboard_controller_output_queue_is_full(
 int hyperdos_intel_8042_keyboard_controller_has_interrupt_request(
         const hyperdos_intel_8042_keyboard_controller* controller);
 
+int hyperdos_intel_8042_keyboard_controller_has_auxiliary_device_interrupt_request(
+        const hyperdos_intel_8042_keyboard_controller* controller);
+
 void hyperdos_intel_8042_keyboard_controller_clear_interrupt_request(
         hyperdos_intel_8042_keyboard_controller* controller);
+
+void hyperdos_intel_8042_keyboard_controller_clear_auxiliary_device_interrupt_request(
+        hyperdos_intel_8042_keyboard_controller* controller);
+
+int hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        int16_t                                  horizontalMovement,
+        int16_t                                  verticalMovement,
+        uint8_t                                  buttonMask);
+
+void hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        uint8_t                                  enabled);
 
 void hyperdos_universal_asynchronous_receiver_transmitter_initialize(
         hyperdos_universal_asynchronous_receiver_transmitter* transmitter);

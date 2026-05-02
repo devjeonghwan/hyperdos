@@ -1,5 +1,10 @@
 #include "hyperdos/pc_machine.h"
 
+enum
+{
+    HYPERDOS_PC_MACHINE_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE = 2u
+};
+
 int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                          machine,
                                             const hyperdos_pc_machine_boot_configuration* configuration)
 {
@@ -35,6 +40,23 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
                                       hyperdos_pc_cmos_write_input_output_byte) != HYPERDOS_BUS_ACCESS_OK)
     {
         return 0;
+    }
+    if (configuration->pcModel == HYPERDOS_PC_MODEL_AT &&
+        hyperdos_bus_map_input_output(&machine->pc.bus,
+                                      HYPERDOS_PC_SLAVE_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT,
+                                      HYPERDOS_PC_SLAVE_INTERRUPT_CONTROLLER_PORT_COUNT,
+                                      &machine->pc.slaveProgrammableInterruptController,
+                                      hyperdos_programmable_interrupt_controller_read_byte,
+                                      hyperdos_programmable_interrupt_controller_write_byte) != HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    machine->pc.slaveProgrammableInterruptControllerEnabled = configuration->pcModel == HYPERDOS_PC_MODEL_AT ? 1u : 0u;
+    if (machine->pc.slaveProgrammableInterruptControllerEnabled != 0u)
+    {
+        machine->pc.programmableInterruptController.interruptMaskRegister =
+                (uint8_t)(machine->pc.programmableInterruptController.interruptMaskRegister &
+                          ~(1u << HYPERDOS_PC_MACHINE_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE));
     }
     hyperdos_x86_16_set_processor_model(&machine->pc.processor, configuration->processorModel);
     hyperdos_pc_set_speaker_state_change_function(&machine->pc,

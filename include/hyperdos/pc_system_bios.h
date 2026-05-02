@@ -19,6 +19,14 @@ typedef struct hyperdos_pc_system_bios
     uint8_t  waitEventActive;
     uint32_t waitEventFlagPhysicalAddress;
     uint64_t waitEventCompletionClockCount;
+    uint16_t pointingDeviceHandlerOffset;
+    uint16_t pointingDeviceHandlerSegment;
+    uint8_t  pointingDeviceEnabled;
+    uint8_t  pointingDeviceSampleRate;
+    uint8_t  pointingDeviceResolution;
+    uint8_t  pointingDeviceScalingTwoToOne;
+    uint8_t  pointingDevicePacketBytes[3];
+    uint8_t  pointingDevicePacketByteCount;
 } hyperdos_pc_system_bios;
 
 void hyperdos_pc_system_bios_initialize(hyperdos_pc_system_bios* systemBios);
@@ -41,14 +49,17 @@ void hyperdos_pc_system_bios_service_wait_event(hyperdos_pc_system_bios* systemB
 
 void hyperdos_pc_system_bios_advance_timer_tick(hyperdos_pc* pc);
 
-uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled, uint8_t floppyDriveCount);
+uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled,
+                                                     uint8_t floppyDriveCount,
+                                                     uint8_t pointingDevicePresent);
 
 uint16_t hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes(void);
 
 hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(
         hyperdos_x86_16_processor* processor,
         uint8_t                    coprocessorEnabled,
-        uint8_t                    floppyDriveCount);
+        uint8_t                    floppyDriveCount,
+        uint8_t                    pointingDevicePresent);
 
 hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(
         hyperdos_x86_16_processor* processor);

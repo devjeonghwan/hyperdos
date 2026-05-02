@@ -13,7 +13,11 @@ enum
     HYPERDOS_PC_BIOS_RUNTIME_KOREAN_VIDEO_INTERRUPT            = 0x0Au,
     HYPERDOS_PC_BIOS_RUNTIME_EXPANDED_MEMORY_MANAGER_INTERRUPT = 0x67u,
     HYPERDOS_PC_BIOS_RUNTIME_SERVICE_REGISTER_SHIFT            = 8u,
-    HYPERDOS_PC_BIOS_RUNTIME_VIDEO_SET_CURSOR_POSITION_SERVICE = 0x02u
+    HYPERDOS_PC_BIOS_RUNTIME_VIDEO_SET_CURSOR_POSITION_SERVICE = 0x02u,
+    HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_BYTE_COUNT       = 3u,
+    HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_ALWAYS_ONE       = 0x08u,
+    HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_STATUS_MASK    = 0xFBu,
+    HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_PADDING_WORD   = 0x0000u
 };
 
 static void hyperdos_pc_bios_runtime_trace(hyperdos_pc_bios_runtime* biosRuntime, const char* format, ...)
@@ -88,6 +92,20 @@ void hyperdos_pc_bios_runtime_initialize(hyperdos_pc_bios_runtime*              
     biosRuntime->userContext           = userContext;
 }
 
+static uint8_t hyperdos_pc_bios_runtime_pointing_device_is_present(const hyperdos_pc_bios_runtime* biosRuntime)
+{
+    if (biosRuntime == NULL || biosRuntime->pc == NULL || biosRuntime->systemBios == NULL)
+    {
+        return 0u;
+    }
+    if (!hyperdos_pc_system_bios_model_is_at_compatible(
+                hyperdos_pc_system_bios_get_model_identifier(biosRuntime->systemBios)))
+    {
+        return 0u;
+    }
+    return biosRuntime->pc->slaveProgrammableInterruptControllerEnabled != 0u ? 1u : 0u;
+}
+
 void hyperdos_pc_bios_runtime_initialize_data_area(hyperdos_pc_bios_runtime*     biosRuntime,
                                                    const hyperdos_pc_disk_image* activeFloppyDisk,
                                                    uint8_t                       fixedDiskCount)
@@ -101,6 +119,8 @@ void hyperdos_pc_bios_runtime_initialize_data_area(hyperdos_pc_bios_runtime*    
 
     equipmentFlags = hyperdos_pc_system_bios_get_equipment_flags(biosRuntime->coprocessorEnabled,
                                                                  hyperdos_pc_bios_runtime_get_floppy_drive_count(
+                                                                         biosRuntime),
+                                                                 hyperdos_pc_bios_runtime_pointing_device_is_present(
                                                                          biosRuntime));
     hyperdos_pc_bios_data_area_write_word(biosRuntime->pc,
                                           HYPERDOS_PC_BIOS_DATA_AREA_EQUIPMENT_FLAGS_OFFSET,
@@ -134,6 +154,78 @@ static hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_handle_korean_v
     return HYPERDOS_X86_16_EXECUTION_OK;
 }
 
+static void hyperdos_pc_bios_runtime_push_processor_word(hyperdos_x86_16_processor* processor, uint16_t value)
+{
+    uint16_t stackPointer = (uint16_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER] -
+                                       HYPERDOS_X86_16_WORD_SIZE);
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER] = stackPointer;
+    (void)hyperdos_x86_16_write_memory_byte(processor,
+                                            HYPERDOS_X86_16_SEGMENT_REGISTER_STACK,
+                                            stackPointer,
+                                            (uint8_t)(value & HYPERDOS_X86_16_LOW_BYTE_MASK));
+    (void)hyperdos_x86_16_write_memory_byte(processor,
+                                            HYPERDOS_X86_16_SEGMENT_REGISTER_STACK,
+                                            (uint16_t)(stackPointer + 1u),
+                                            (uint8_t)(value >> HYPERDOS_X86_16_BYTE_BIT_COUNT));
+}
+
+static void hyperdos_pc_bios_runtime_call_pointing_device_handler(hyperdos_x86_16_processor* processor,
+                                                                  hyperdos_pc_system_bios*   systemBios)
+{
+    uint16_t returnOffset       = processor->instructionPointer;
+    uint16_t returnSegment      = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_CODE];
+    uint16_t statusWord         = (uint16_t)(systemBios->pointingDevicePacketBytes[0] &
+                                     HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_STATUS_MASK);
+    uint16_t horizontalDataWord = systemBios->pointingDevicePacketBytes[1];
+    uint16_t verticalDataWord   = systemBios->pointingDevicePacketBytes[2];
+
+    hyperdos_pc_bios_runtime_push_processor_word(processor, returnSegment);
+    hyperdos_pc_bios_runtime_push_processor_word(processor, returnOffset);
+    hyperdos_pc_bios_runtime_push_processor_word(processor, statusWord);
+    hyperdos_pc_bios_runtime_push_processor_word(processor, horizontalDataWord);
+    hyperdos_pc_bios_runtime_push_processor_word(processor, verticalDataWord);
+    hyperdos_pc_bios_runtime_push_processor_word(processor, HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_PADDING_WORD);
+    hyperdos_pc_bios_runtime_push_processor_word(processor,
+                                                 HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_CALLBACK_CLEANUP_STUB_SEGMENT);
+    hyperdos_pc_bios_runtime_push_processor_word(processor,
+                                                 HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_CALLBACK_CLEANUP_STUB_OFFSET);
+    hyperdos_x86_16_set_segment_register(processor,
+                                         HYPERDOS_X86_16_SEGMENT_REGISTER_CODE,
+                                         systemBios->pointingDeviceHandlerSegment);
+    processor->instructionPointer = systemBios->pointingDeviceHandlerOffset;
+}
+
+static hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_handle_auxiliary_device_hardware_interrupt(
+        hyperdos_x86_16_processor* processor,
+        hyperdos_pc_bios_runtime*  biosRuntime)
+{
+    hyperdos_pc_system_bios* systemBios = biosRuntime->systemBios;
+    uint8_t packetByte = hyperdos_intel_8042_keyboard_controller_read_byte(&biosRuntime->pc->keyboardController,
+                                                                           HYPERDOS_PC_KEYBOARD_CONTROLLER_DATA_PORT);
+
+    if (systemBios->pointingDevicePacketByteCount == 0u &&
+        (packetByte & HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_ALWAYS_ONE) == 0u)
+    {
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    }
+
+    systemBios->pointingDevicePacketBytes[systemBios->pointingDevicePacketByteCount] = packetByte;
+    ++systemBios->pointingDevicePacketByteCount;
+    if (systemBios->pointingDevicePacketByteCount < HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_BYTE_COUNT)
+    {
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    }
+
+    systemBios->pointingDevicePacketByteCount = 0u;
+    if (systemBios->pointingDeviceEnabled != 0u &&
+        (systemBios->pointingDeviceHandlerOffset != 0u || systemBios->pointingDeviceHandlerSegment != 0u))
+    {
+        hyperdos_pc_bios_runtime_call_pointing_device_handler(processor, systemBios);
+    }
+    return HYPERDOS_X86_16_EXECUTION_OK;
+}
+
 static hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_handle_keyboard_hardware_interrupt(
         hyperdos_x86_16_processor* processor,
         hyperdos_pc_bios_runtime*  biosRuntime)
@@ -163,6 +255,7 @@ static int hyperdos_pc_bios_runtime_is_legacy_bios_interrupt(uint8_t interruptNu
            interruptNumber == HYPERDOS_PC_BIOS_KEYBOARD_INTERRUPT ||
            interruptNumber == HYPERDOS_PC_BIOS_PRINTER_INTERRUPT ||
            interruptNumber == HYPERDOS_PC_BIOS_TIME_INTERRUPT ||
+           interruptNumber == HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_INTERRUPT ||
            interruptNumber == HYPERDOS_PC_BIOS_USER_TIMER_TICK_INTERRUPT;
 }
 
@@ -222,6 +315,10 @@ hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyper
     {
         hyperdos_pc_system_bios_advance_timer_tick(biosRuntime->pc);
         return HYPERDOS_X86_16_EXECUTION_OK;
+    }
+    if (interruptNumber == HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_SERVICE_INTERRUPT)
+    {
+        return hyperdos_pc_bios_runtime_handle_auxiliary_device_hardware_interrupt(processor, biosRuntime);
     }
     if (interruptNumber == HYPERDOS_PC_BIOS_KEYBOARD_SOFTWARE_SERVICE_INTERRUPT)
     {
@@ -284,10 +381,13 @@ hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyper
     }
     if (interruptNumber == HYPERDOS_PC_BIOS_EQUIPMENT_SERVICE_INTERRUPT)
     {
+        uint8_t pointingDevicePresent = hyperdos_pc_bios_runtime_pointing_device_is_present(biosRuntime);
+        uint8_t floppyDriveCount      = hyperdos_pc_bios_runtime_get_floppy_drive_count(biosRuntime);
+
         return hyperdos_pc_system_bios_handle_equipment_interrupt(processor,
                                                                   biosRuntime->coprocessorEnabled,
-                                                                  hyperdos_pc_bios_runtime_get_floppy_drive_count(
-                                                                          biosRuntime));
+                                                                  floppyDriveCount,
+                                                                  pointingDevicePresent);
     }
     if (interruptNumber == HYPERDOS_PC_BIOS_MEMORY_SIZE_SERVICE_INTERRUPT)
     {
@@ -458,6 +558,9 @@ hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_service_pending_hardwa
     hyperdos_pc_raise_keyboard_controller_interrupt_request(biosRuntime->pc,
                                                             biosRuntime->traceFunction,
                                                             biosRuntime->userContext);
+    hyperdos_pc_raise_auxiliary_device_interrupt_request(biosRuntime->pc,
+                                                         biosRuntime->traceFunction,
+                                                         biosRuntime->userContext);
     hyperdos_pc_raise_interval_timer_interrupt_request(biosRuntime->pc,
                                                        biosRuntime->traceFunction,
                                                        biosRuntime->userContext);
@@ -466,8 +569,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_service_pending_hardwa
     {
         return HYPERDOS_X86_16_EXECUTION_OK;
     }
-    if (!hyperdos_programmable_interrupt_controller_acknowledge(&biosRuntime->pc->programmableInterruptController,
-                                                                &interruptNumber))
+    if (!hyperdos_pc_acknowledge_interrupt_request(biosRuntime->pc, &interruptNumber))
     {
         return HYPERDOS_X86_16_EXECUTION_OK;
     }

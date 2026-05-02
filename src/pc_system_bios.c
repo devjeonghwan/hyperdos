@@ -10,7 +10,7 @@ enum
     HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT                              = 8u,
     HYPERDOS_PC_SYSTEM_BIOS_CONVENTIONAL_MEMORY_KILOBYTES                       = 640u,
     HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_SEGMENT                         = 0xF000u,
-    HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_OFFSET                          = 0x0140u,
+    HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_OFFSET                          = 0xE6F5u,
     HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_BYTE_COUNT                      = 10u,
     HYPERDOS_PC_SYSTEM_BIOS_DATE_PHYSICAL_ADDRESS                               = 0xFFFF5u,
     HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_PHYSICAL_ADDRESS                   = 0xFFFFEu,
@@ -18,6 +18,7 @@ enum
     HYPERDOS_PC_SYSTEM_BIOS_SIGNATURE                                           = 0x55u,
     HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_DISKETTE_PRESENT                    = 0x0001u,
     HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_COPROCESSOR_PRESENT                 = 0x0002u,
+    HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_POINTING_DEVICE_PRESENT             = 0x0004u,
     HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_DISKETTE_DRIVE_COUNT_SHIFT          = 6u,
     HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_MAXIMUM_DISKETTE_DRIVE_COUNT        = 4u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_GATE_SERVICE                    = 0x24u,
@@ -26,6 +27,7 @@ enum
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_WAIT_SERVICE                        = 0x86u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_KEYBOARD_INTERCEPT_SERVICE          = 0x4Fu,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_CONFIGURATION_SERVICE           = 0xC0u,
+    HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_POINTING_DEVICE_SERVICE             = 0xC2u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS                      = 0x00u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_WAIT_BUSY_STATUS                    = 0x83u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_UNSUPPORTED_STATUS                  = 0x86u,
@@ -38,6 +40,28 @@ enum
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_EVENT_WAIT_FLAG_MASK                = 0x80u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_KEYBOARD_CONTROLLER_SUPPORT     = 0x0002u,
     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_FAST_GATE_SUPPORT               = 0x0001u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_ENABLE_SUBSERVICE                   = 0x00u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_SUBSERVICE                    = 0x01u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_SAMPLE_RATE_SUBSERVICE          = 0x02u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_RESOLUTION_SUBSERVICE           = 0x03u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_READ_DEVICE_TYPE_SUBSERVICE         = 0x04u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_INITIALIZE_SUBSERVICE               = 0x05u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_EXTENDED_COMMANDS_SUBSERVICE        = 0x06u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_HANDLER_SUBSERVICE              = 0x07u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS                      = 0x00u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_FUNCTION             = 0x01u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT                = 0x02u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_NO_HANDLER                   = 0x05u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_TYPE_STANDARD_MOUSE                 = 0x00u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_PASSED                        = 0xAAu,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_PACKET_LEFT_BUTTON                  = 0x01u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_PACKET_RIGHT_BUTTON                 = 0x02u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_RIGHT_BUTTON                 = 0x01u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_LEFT_BUTTON                  = 0x04u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SCALING_TWO_TO_ONE           = 0x10u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_ENABLED                      = 0x20u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_DEFAULT_SAMPLE_RATE                 = 100u,
+    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_DEFAULT_RESOLUTION                  = 2u,
     HYPERDOS_PC_SYSTEM_BIOS_SERIAL_INITIALIZE_SERVICE                           = 0x00u,
     HYPERDOS_PC_SYSTEM_BIOS_SERIAL_WRITE_SERVICE                                = 0x01u,
     HYPERDOS_PC_SYSTEM_BIOS_SERIAL_READ_SERVICE                                 = 0x02u,
@@ -154,7 +178,9 @@ void hyperdos_pc_system_bios_reset(hyperdos_pc_system_bios* systemBios)
         return;
     }
     memset(systemBios, 0, sizeof(*systemBios));
-    systemBios->modelIdentifier = HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_AT;
+    systemBios->modelIdentifier          = HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_AT;
+    systemBios->pointingDeviceSampleRate = HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_DEFAULT_SAMPLE_RATE;
+    systemBios->pointingDeviceResolution = HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_DEFAULT_RESOLUTION;
 }
 
 void hyperdos_pc_system_bios_set_model_identifier(hyperdos_pc_system_bios* systemBios, uint8_t modelIdentifier)
@@ -273,7 +299,9 @@ void hyperdos_pc_system_bios_advance_timer_tick(hyperdos_pc* pc)
                                                  timerTickCount);
 }
 
-uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled, uint8_t floppyDriveCount)
+uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled,
+                                                     uint8_t floppyDriveCount,
+                                                     uint8_t pointingDevicePresent)
 {
     uint16_t equipmentFlags = 0u;
 
@@ -292,6 +320,10 @@ uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled,
     {
         equipmentFlags |= HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_COPROCESSOR_PRESENT;
     }
+    if (pointingDevicePresent)
+    {
+        equipmentFlags |= HYPERDOS_PC_SYSTEM_BIOS_EQUIPMENT_FLAGS_POINTING_DEVICE_PRESENT;
+    }
     return equipmentFlags;
 }
 
@@ -303,14 +335,15 @@ uint16_t hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes(void)
 hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(
         hyperdos_x86_16_processor* processor,
         uint8_t                    coprocessorEnabled,
-        uint8_t                    floppyDriveCount)
+        uint8_t                    floppyDriveCount,
+        uint8_t                    pointingDevicePresent)
 {
     if (processor == NULL)
     {
         return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
     }
     processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            hyperdos_pc_system_bios_get_equipment_flags(coprocessorEnabled, floppyDriveCount);
+            hyperdos_pc_system_bios_get_equipment_flags(coprocessorEnabled, floppyDriveCount, pointingDevicePresent);
     return HYPERDOS_X86_16_EXECUTION_OK;
 }
 
@@ -358,6 +391,209 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_serial_interrupt
     return HYPERDOS_X86_16_EXECUTION_INTERRUPT_NOT_HANDLED;
 }
 
+static void hyperdos_pc_system_bios_set_pointing_device_defaults(hyperdos_pc_system_bios* systemBios)
+{
+    systemBios->pointingDeviceEnabled         = 0u;
+    systemBios->pointingDeviceSampleRate      = HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_DEFAULT_SAMPLE_RATE;
+    systemBios->pointingDeviceResolution      = HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_DEFAULT_RESOLUTION;
+    systemBios->pointingDeviceScalingTwoToOne = 0u;
+    systemBios->pointingDevicePacketByteCount = 0u;
+}
+
+static uint8_t hyperdos_pc_system_bios_get_high_register_byte(const hyperdos_x86_16_processor*       processor,
+                                                              hyperdos_x86_16_general_register_index registerIndex)
+{
+    return (uint8_t)(processor->generalRegisters[registerIndex] >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+}
+
+static void hyperdos_pc_system_bios_write_low_register_byte(hyperdos_x86_16_processor*             processor,
+                                                            hyperdos_x86_16_general_register_index registerIndex,
+                                                            uint8_t                                value)
+{
+    processor->generalRegisters[registerIndex] = (uint16_t)((processor->generalRegisters[registerIndex] &
+                                                             HYPERDOS_X86_16_HIGH_BYTE_MASK) |
+                                                            value);
+}
+
+static uint8_t hyperdos_pc_system_bios_get_pointing_device_status_byte(const hyperdos_pc*             pc,
+                                                                       const hyperdos_pc_system_bios* systemBios)
+{
+    uint8_t pointingDeviceStatus = 0u;
+
+    if ((pc->keyboardController.auxiliaryDeviceButtonMask &
+         HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_PACKET_RIGHT_BUTTON) != 0u)
+    {
+        pointingDeviceStatus |= HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_RIGHT_BUTTON;
+    }
+    if ((pc->keyboardController.auxiliaryDeviceButtonMask &
+         HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_PACKET_LEFT_BUTTON) != 0u)
+    {
+        pointingDeviceStatus |= HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_LEFT_BUTTON;
+    }
+    if (systemBios->pointingDeviceScalingTwoToOne != 0u)
+    {
+        pointingDeviceStatus |= HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SCALING_TWO_TO_ONE;
+    }
+    if (systemBios->pointingDeviceEnabled != 0u)
+    {
+        pointingDeviceStatus |= HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_ENABLED;
+    }
+    return pointingDeviceStatus;
+}
+
+static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_device_interrupt(
+        hyperdos_x86_16_processor* processor,
+        hyperdos_pc*               pc,
+        hyperdos_pc_system_bios*   systemBios)
+{
+    static const uint8_t sampleRates[] = {10u, 20u, 40u, 60u, 80u, 100u, 200u};
+    uint8_t subservice   = (uint8_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
+                                   HYPERDOS_X86_16_LOW_BYTE_MASK);
+    uint8_t baseHighByte = hyperdos_pc_system_bios_get_high_register_byte(processor,
+                                                                          HYPERDOS_X86_16_GENERAL_REGISTER_BASE);
+
+    switch (subservice)
+    {
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_ENABLE_SUBSERVICE:
+        if (baseHighByte > 1u)
+        {
+            hyperdos_pc_system_bios_set_system_services_status(
+                    processor,
+                    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
+                    1);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        if (baseHighByte != 0u && systemBios->pointingDeviceHandlerOffset == 0u &&
+            systemBios->pointingDeviceHandlerSegment == 0u)
+        {
+            hyperdos_pc_system_bios_set_system_services_status(
+                    processor,
+                    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_NO_HANDLER,
+                    1);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        systemBios->pointingDeviceEnabled = baseHighByte != 0u ? 1u : 0u;
+        hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(
+                &pc->keyboardController,
+                systemBios->pointingDeviceEnabled);
+        hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(pc, systemBios->pointingDeviceEnabled);
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_SUBSERVICE:
+        hyperdos_pc_system_bios_set_pointing_device_defaults(systemBios);
+        hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(&pc->keyboardController, 0u);
+        hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(pc, 0u);
+        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] =
+                (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_TYPE_STANDARD_MOUSE
+                            << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
+                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_PASSED);
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_SAMPLE_RATE_SUBSERVICE:
+        if (baseHighByte >= sizeof(sampleRates))
+        {
+            hyperdos_pc_system_bios_set_system_services_status(
+                    processor,
+                    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
+                    1);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        systemBios->pointingDeviceSampleRate = sampleRates[baseHighByte];
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_RESOLUTION_SUBSERVICE:
+        if (baseHighByte > 3u)
+        {
+            hyperdos_pc_system_bios_set_system_services_status(
+                    processor,
+                    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
+                    1);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        systemBios->pointingDeviceResolution = baseHighByte;
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_READ_DEVICE_TYPE_SUBSERVICE:
+        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] =
+                (uint16_t)((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] &
+                            HYPERDOS_X86_16_LOW_BYTE_MASK) |
+                           (HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_TYPE_STANDARD_MOUSE
+                            << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_INITIALIZE_SUBSERVICE:
+        if (baseHighByte == 0u || baseHighByte > 8u)
+        {
+            hyperdos_pc_system_bios_set_system_services_status(
+                    processor,
+                    HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
+                    1);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        hyperdos_pc_system_bios_set_pointing_device_defaults(systemBios);
+        hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(&pc->keyboardController, 0u);
+        hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(pc, 0u);
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_EXTENDED_COMMANDS_SUBSERVICE:
+        if (baseHighByte == 0u)
+        {
+            uint8_t pointingDeviceStatus = hyperdos_pc_system_bios_get_pointing_device_status_byte(pc, systemBios);
+            hyperdos_pc_system_bios_write_low_register_byte(processor,
+                                                            HYPERDOS_X86_16_GENERAL_REGISTER_BASE,
+                                                            pointingDeviceStatus);
+            hyperdos_pc_system_bios_write_low_register_byte(processor,
+                                                            HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER,
+                                                            systemBios->pointingDeviceResolution);
+            hyperdos_pc_system_bios_write_low_register_byte(processor,
+                                                            HYPERDOS_X86_16_GENERAL_REGISTER_DATA,
+                                                            systemBios->pointingDeviceSampleRate);
+            hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                               HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                               0);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        if (baseHighByte == 1u || baseHighByte == 2u)
+        {
+            systemBios->pointingDeviceScalingTwoToOne = baseHighByte == 2u ? 1u : 0u;
+            hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                               HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                               0);
+            return HYPERDOS_X86_16_EXECUTION_OK;
+        }
+        hyperdos_pc_system_bios_set_system_services_status(
+                processor,
+                HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_FUNCTION,
+                1);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_HANDLER_SUBSERVICE:
+        systemBios->pointingDeviceHandlerOffset  = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE];
+        systemBios->pointingDeviceHandlerSegment = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA];
+        hyperdos_pc_system_bios_set_system_services_status(processor,
+                                                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
+                                                           0);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    default:
+        hyperdos_pc_system_bios_set_system_services_status(
+                processor,
+                HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_FUNCTION,
+                1);
+        return HYPERDOS_X86_16_EXECUTION_OK;
+    }
+}
+
 hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_interrupt(
         hyperdos_x86_16_processor* processor,
         hyperdos_pc*               pc,
@@ -376,7 +612,8 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
          serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_EVENT_WAIT_SERVICE ||
          serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_EXTENDED_MEMORY_SIZE_SERVICE ||
          serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_WAIT_SERVICE ||
-         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_CONFIGURATION_SERVICE))
+         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_CONFIGURATION_SERVICE ||
+         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_POINTING_DEVICE_SERVICE))
     {
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_UNSUPPORTED_STATUS,
@@ -387,6 +624,10 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
     {
         hyperdos_pc_system_bios_set_carry_flag(processor, 1);
         return HYPERDOS_X86_16_EXECUTION_OK;
+    }
+    if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_POINTING_DEVICE_SERVICE)
+    {
+        return hyperdos_pc_system_bios_handle_pointing_device_interrupt(processor, pc, systemBios);
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_GATE_SERVICE)
     {

@@ -5,6 +5,7 @@
 #include <commdlg.h>
 
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,7 +38,7 @@ enum
     HYPERDOS_MONITOR_CHARACTER_HEIGHT                     = 16,
     HYPERDOS_MONITOR_CHARACTER_COUNT                      = 256u,
     HYPERDOS_MONITOR_WINDOW_EXTRA_WIDTH                   = 32,
-    HYPERDOS_MONITOR_WINDOW_EXTRA_HEIGHT                  = 48,
+    HYPERDOS_MONITOR_DISPLAY_BORDER_THICKNESS             = 1,
     HYPERDOS_MONITOR_RENDER_TIMER_IDENTIFIER              = 1u,
     HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS     = 16u,
     HYPERDOS_MONITOR_TEXT_SCREEN_DUMP_PERIOD_MILLISECONDS = 250u,
@@ -46,6 +47,9 @@ enum
     HYPERDOS_MONITOR_VIDEO_PREVIEW_HEIGHT                 = 50u,
     HYPERDOS_MONITOR_INSTRUCTIONS_PER_SLICE               = 32768u,
     HYPERDOS_MONITOR_HOST_SCAN_CODE_QUEUE_CAPACITY        = 512u,
+    HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY      = 512u,
+    HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MINIMUM   = -127,
+    HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MAXIMUM   = 127,
     HYPERDOS_MONITOR_HOST_KEY_STATE_CAPACITY              = 512u,
     HYPERDOS_MONITOR_KEYBOARD_SCAN_CODE_SEQUENCE_CAPACITY = 8u,
     HYPERDOS_MONITOR_CPU_TRACE_ENTRY_COUNT                = 262144u,
@@ -76,8 +80,20 @@ enum
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT                             = 2202u,
     HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_CODE_PAGE_437        = 3001u,
     HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_KOREAN_CODE_PAGE_949 = 3002u,
+    HYPERDOS_MONITOR_COMMAND_TOGGLE_MOUSE_CAPTURE                    = 3003u,
+    HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_CONFINEMENT    = 3004u,
+    HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_HIDING         = 3005u,
+    HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE       = 3006u,
+    HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_INTEGER_SCALE       = 3007u,
+    HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW       = 3008u,
     HYPERDOS_MONITOR_HOST_EXTENDED_KEY_STATE_OFFSET                  = 0x100u,
-    HYPERDOS_MONITOR_HOST_KEY_STATE_NONE                             = 0xFFFFu
+    HYPERDOS_MONITOR_HOST_KEY_STATE_NONE                             = 0xFFFFu,
+    HYPERDOS_MONITOR_RAW_INPUT_USAGE_PAGE_GENERIC                    = 0x01u,
+    HYPERDOS_MONITOR_RAW_INPUT_USAGE_MOUSE                           = 0x02u,
+    HYPERDOS_MONITOR_RAW_INPUT_DEVICE_INPUT_SINK                     = 0x00000100u,
+    HYPERDOS_MONITOR_MOUSE_LEFT_BUTTON                               = 0x01u,
+    HYPERDOS_MONITOR_MOUSE_RIGHT_BUTTON                              = 0x02u,
+    HYPERDOS_MONITOR_MOUSE_MIDDLE_BUTTON                             = 0x04u
 };
 
 typedef struct hyperdos_monitor_cpu_trace_entry
@@ -107,12 +123,26 @@ typedef enum hyperdos_monitor_text_character_set
     HYPERDOS_MONITOR_TEXT_CHARACTER_SET_KOREAN_CODE_PAGE_949
 } hyperdos_monitor_text_character_set;
 
+typedef enum hyperdos_monitor_display_resize_mode
+{
+    HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE = 0,
+    HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE,
+    HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW
+} hyperdos_monitor_display_resize_mode;
+
 typedef struct hyperdos_monitor_memory_watch
 {
     uint32_t firstPhysicalAddress;
     uint32_t lastPhysicalAddress;
     char     text[HYPERDOS_MONITOR_MEMORY_WATCH_TEXT_CAPACITY];
 } hyperdos_monitor_memory_watch;
+
+typedef struct hyperdos_monitor_mouse_event
+{
+    int16_t horizontalMovement;
+    int16_t verticalMovement;
+    uint8_t buttonMask;
+} hyperdos_monitor_mouse_event;
 
 typedef struct hyperdos_win32_boot_state
 {
@@ -123,6 +153,10 @@ typedef struct hyperdos_win32_boot_state
     uint8_t                              hostScanCodeQueue[HYPERDOS_MONITOR_HOST_SCAN_CODE_QUEUE_CAPACITY];
     size_t                               hostScanCodeQueueReadIndex;
     size_t                               hostScanCodeQueueWriteIndex;
+    hyperdos_monitor_mouse_event         hostMouseEventQueue[HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY];
+    size_t                               hostMouseEventQueueReadIndex;
+    size_t                               hostMouseEventQueueWriteIndex;
+    size_t                               hostMouseEventQueueCount;
     uint8_t                              hostScanCodePressed[HYPERDOS_MONITOR_HOST_KEY_STATE_CAPACITY];
     uint64_t                             keyboardDataAreaBufferWriteSequence;
     uint64_t                             keyboardDataAreaShiftWriteSequence;
@@ -141,6 +175,16 @@ typedef struct hyperdos_win32_boot_state
     hyperdos_monitor_cpu_trace_entry     cpuTraceEntries[HYPERDOS_MONITOR_CPU_TRACE_ENTRY_COUNT];
     hyperdos_x86_16_execution_result     executionResult;
     char                                 statusText[HYPERDOS_MONITOR_STATUS_TEXT_CAPACITY];
+    int                                  mouseCaptureLastClientHorizontalPosition;
+    int                                  mouseCaptureLastClientVerticalPosition;
+    uint8_t                              mouseButtonMask;
+    uint8_t                              hostMouseCaptureActive;
+    uint8_t                              hostMouseRawInputRegistered;
+    uint8_t                              hostMouseRawMovementObserved;
+    uint8_t                              hostMouseCursorConfinementEnabled;
+    uint8_t                              hostMouseCursorHidingEnabled;
+    uint8_t                              mouseCaptureLastClientPositionValid;
+    uint8_t                              hostMouseCaptureToggleKeyDown;
 } hyperdos_win32_boot_state;
 
 static hyperdos_win32_boot_state globalBootState;
@@ -173,7 +217,9 @@ static HFONT                           globalCodePage437TextFontHandle;
 static uint16_t globalCodePage437GlyphRows[HYPERDOS_MONITOR_CHARACTER_COUNT][HYPERDOS_MONITOR_CHARACTER_HEIGHT];
 static int      globalCodePage437GlyphRowsInitialized;
 static hyperdos_monitor_text_character_set globalTextCharacterSet = HYPERDOS_MONITOR_TEXT_CHARACTER_SET_CODE_PAGE_437;
-static uint32_t                            globalGraphicsPixels[HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY];
+static hyperdos_monitor_display_resize_mode
+                globalDisplayResizeMode = HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE;
+static uint32_t globalGraphicsPixels[HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY];
 
 static void write_text_screen_dump_file(const hyperdos_win32_boot_state* bootState);
 
@@ -526,6 +572,78 @@ static void consume_host_scan_code(hyperdos_win32_boot_state* bootState)
     {
         bootState->hostScanCodeQueueReadIndex = (bootState->hostScanCodeQueueReadIndex + 1u) %
                                                 HYPERDOS_MONITOR_HOST_SCAN_CODE_QUEUE_CAPACITY;
+    }
+    LeaveCriticalSection(&bootState->keyboardCriticalSection);
+}
+
+static int push_host_mouse_event(hyperdos_win32_boot_state* bootState,
+                                 int16_t                    horizontalMovement,
+                                 int16_t                    verticalMovement,
+                                 uint8_t                    buttonMask,
+                                 int                        forcePacket)
+{
+    hyperdos_monitor_mouse_event mouseEvent;
+    int                          eventQueued     = 0;
+    int                          movementSkipped = 0;
+
+    mouseEvent.horizontalMovement = horizontalMovement;
+    mouseEvent.verticalMovement   = verticalMovement;
+    mouseEvent.buttonMask         = buttonMask;
+    EnterCriticalSection(&bootState->keyboardCriticalSection);
+    if (forcePacket == 0 && bootState->hostMouseEventQueueCount != 0u)
+    {
+        movementSkipped = 1;
+    }
+    else if (bootState->hostMouseEventQueueCount < HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY)
+    {
+        bootState->hostMouseEventQueue[bootState->hostMouseEventQueueWriteIndex] = mouseEvent;
+        bootState->hostMouseEventQueueWriteIndex = (bootState->hostMouseEventQueueWriteIndex + 1u) %
+                                                   HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY;
+        ++bootState->hostMouseEventQueueCount;
+        eventQueued = 1;
+    }
+    LeaveCriticalSection(&bootState->keyboardCriticalSection);
+
+    if (movementSkipped)
+    {
+        return 1;
+    }
+    if (!eventQueued)
+    {
+        return 0;
+    }
+    InterlockedExchange(&bootState->isWaitingForKeyboard, 0);
+    SetEvent(bootState->keyboardEventHandle);
+    return 1;
+}
+
+static int peek_host_mouse_event(hyperdos_win32_boot_state* bootState, hyperdos_monitor_mouse_event* mouseEvent)
+{
+    int found = 0;
+
+    if (mouseEvent == NULL)
+    {
+        return 0;
+    }
+
+    EnterCriticalSection(&bootState->keyboardCriticalSection);
+    if (bootState->hostMouseEventQueueCount != 0u)
+    {
+        *mouseEvent = bootState->hostMouseEventQueue[bootState->hostMouseEventQueueReadIndex];
+        found       = 1;
+    }
+    LeaveCriticalSection(&bootState->keyboardCriticalSection);
+    return found;
+}
+
+static void consume_host_mouse_event(hyperdos_win32_boot_state* bootState)
+{
+    EnterCriticalSection(&bootState->keyboardCriticalSection);
+    if (bootState->hostMouseEventQueueCount != 0u)
+    {
+        bootState->hostMouseEventQueueReadIndex = (bootState->hostMouseEventQueueReadIndex + 1u) %
+                                                  HYPERDOS_MONITOR_HOST_MOUSE_EVENT_QUEUE_CAPACITY;
+        --bootState->hostMouseEventQueueCount;
     }
     LeaveCriticalSection(&bootState->keyboardCriticalSection);
 }
@@ -948,18 +1066,44 @@ static void drain_host_scan_codes_to_keyboard_controller(hyperdos_win32_boot_sta
                          keyboardScanCode,
                          bootState->machine.pc.keyboardController.commandByte,
                          bootState->machine.pc.keyboardController.outputQueueCount,
-                         bootState->machine.pc.keyboardController.interruptRequestPending);
+                         bootState->machine.pc.keyboardController.keyboardInterruptRequestPending);
+    }
+}
+
+static void drain_host_mouse_events_to_keyboard_controller(hyperdos_win32_boot_state* bootState)
+{
+    hyperdos_intel_8042_keyboard_controller* keyboardController = &bootState->machine.pc.keyboardController;
+    hyperdos_monitor_mouse_event             mouseEvent;
+
+    while (peek_host_mouse_event(bootState, &mouseEvent))
+    {
+        if (keyboardController->outputQueueCount != 0u)
+        {
+            break;
+        }
+        if (!hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(keyboardController,
+                                                                                    mouseEvent.horizontalMovement,
+                                                                                    mouseEvent.verticalMovement,
+                                                                                    mouseEvent.buttonMask))
+        {
+            break;
+        }
+        consume_host_mouse_event(bootState);
     }
 }
 
 static void drain_keyboard_input_for_bios_runtime(void* userContext)
 {
-    drain_host_scan_codes_to_keyboard_controller((hyperdos_win32_boot_state*)userContext);
+    hyperdos_win32_boot_state* bootState = (hyperdos_win32_boot_state*)userContext;
+
+    drain_host_scan_codes_to_keyboard_controller(bootState);
+    drain_host_mouse_events_to_keyboard_controller(bootState);
 }
 
 static void refresh_keyboard_input_state(hyperdos_win32_boot_state* bootState)
 {
     drain_host_scan_codes_to_keyboard_controller(bootState);
+    drain_host_mouse_events_to_keyboard_controller(bootState);
     if (hyperdos_pc_bios_keyboard_hardware_interrupt_vector_is_default(&bootState->machine.pc))
     {
         (void)hyperdos_pc_keyboard_bios_service_hardware_byte(&bootState->machine.keyboardBios,
@@ -1315,8 +1459,18 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     {
         bootState->floppyDriveCount = HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT;
     }
-    bootState->hostScanCodeQueueReadIndex  = 0u;
-    bootState->hostScanCodeQueueWriteIndex = 0u;
+    bootState->hostScanCodeQueueReadIndex               = 0u;
+    bootState->hostScanCodeQueueWriteIndex              = 0u;
+    bootState->hostMouseEventQueueReadIndex             = 0u;
+    bootState->hostMouseEventQueueWriteIndex            = 0u;
+    bootState->hostMouseEventQueueCount                 = 0u;
+    bootState->mouseCaptureLastClientHorizontalPosition = 0;
+    bootState->mouseCaptureLastClientVerticalPosition   = 0;
+    bootState->hostMouseRawMovementObserved             = 0u;
+    bootState->mouseCaptureLastClientPositionValid      = 0u;
+    bootState->mouseButtonMask                          = 0u;
+    bootState->hostMouseCaptureActive                   = 0u;
+    bootState->hostMouseCaptureToggleKeyDown            = 0u;
     memset(bootState->hostScanCodePressed, 0, sizeof(bootState->hostScanCodePressed));
     bootState->lastTextScreenDumpTick = 0u;
     bootState->lastVideoStateDumpTick = 0u;
@@ -1439,12 +1593,31 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     return 1;
 }
 
+static int initialize_emulation_pacing(LARGE_INTEGER*                   performanceCounterFrequency,
+                                       LARGE_INTEGER*                   hostPerformanceCounterBase,
+                                       uint64_t*                        guestClockBase,
+                                       const hyperdos_win32_boot_state* bootState);
+
+static void pace_emulation_to_guest_clock(const hyperdos_win32_boot_state* bootState,
+                                          const LARGE_INTEGER*             performanceCounterFrequency,
+                                          const LARGE_INTEGER*             hostPerformanceCounterBase,
+                                          uint64_t                         guestClockBase);
+
 static DWORD WINAPI emulation_thread_main(void* parameter)
 {
     hyperdos_win32_boot_state* bootState                = (hyperdos_win32_boot_state*)parameter;
     uint64_t                   previousInstructionCount = 0;
     uint64_t                   instructionLimit         = 0;
     ULONGLONG                  lastRenderTick           = GetTickCount64();
+    LARGE_INTEGER              performanceCounterFrequency;
+    LARGE_INTEGER              hostPerformanceCounterBase;
+    uint64_t                   guestClockBase         = 0u;
+    int                        emulationPacingEnabled = 0;
+
+    emulationPacingEnabled = initialize_emulation_pacing(&performanceCounterFrequency,
+                                                         &hostPerformanceCounterBase,
+                                                         &guestClockBase,
+                                                         bootState);
 
     while (InterlockedCompareExchange(&bootState->stopRequested, 0, 0) == 0 &&
            InterlockedCompareExchange(&bootState->isRunning, 0, 0) != 0)
@@ -1523,6 +1696,13 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
         {
             PostMessageA(bootState->windowHandle, HYPERDOS_MONITOR_USER_RENDER_MESSAGE, 0, 0);
             lastRenderTick = GetTickCount64();
+        }
+        if (emulationPacingEnabled)
+        {
+            pace_emulation_to_guest_clock(bootState,
+                                          &performanceCounterFrequency,
+                                          &hostPerformanceCounterBase,
+                                          guestClockBase);
         }
         Sleep(0);
     }
@@ -2202,7 +2382,7 @@ static void maybe_write_video_state_dump_file(hyperdos_win32_boot_state* bootSta
     }
 }
 
-static void render_text_display(HDC deviceContext, const hyperdos_win32_boot_state* bootState)
+static void render_text_display_native(HDC deviceContext, const hyperdos_win32_boot_state* bootState)
 {
     HFONT    previousFontHandle = (HFONT)SelectObject(deviceContext, globalTextFontHandle);
     HBRUSH   backgroundBrush    = (HBRUSH)GetStockObject(DC_BRUSH);
@@ -2236,10 +2416,8 @@ static void render_text_display(HDC deviceContext, const hyperdos_win32_boot_sta
                 backgroundColor = hyperdos_pc_video_services_color_graphics_adapter_color_from_index(
                         (uint8_t)(attribute >> 4u));
             }
-            cellRectangle.left = HYPERDOS_MONITOR_WINDOW_EXTRA_WIDTH / 2 +
-                                 (LONG)column * HYPERDOS_MONITOR_CHARACTER_WIDTH;
-            cellRectangle.top = HYPERDOS_MONITOR_WINDOW_EXTRA_HEIGHT / 2 +
-                                (LONG)row * HYPERDOS_MONITOR_CHARACTER_HEIGHT;
+            cellRectangle.left   = (LONG)column * HYPERDOS_MONITOR_CHARACTER_WIDTH;
+            cellRectangle.top    = (LONG)row * HYPERDOS_MONITOR_CHARACTER_HEIGHT;
             cellRectangle.right  = cellRectangle.left + HYPERDOS_MONITOR_CHARACTER_WIDTH;
             cellRectangle.bottom = cellRectangle.top + HYPERDOS_MONITOR_CHARACTER_HEIGHT;
             SetDCBrushColor(deviceContext, backgroundColor);
@@ -2275,10 +2453,8 @@ static void render_text_display(HDC deviceContext, const hyperdos_win32_boot_sta
                         (uint8_t)(attribute & 0x0Fu));
             }
             SetTextColor(deviceContext, foregroundColor);
-            characterRectangle.left = HYPERDOS_MONITOR_WINDOW_EXTRA_WIDTH / 2 +
-                                      (LONG)column * HYPERDOS_MONITOR_CHARACTER_WIDTH;
-            characterRectangle.top = HYPERDOS_MONITOR_WINDOW_EXTRA_HEIGHT / 2 +
-                                     (LONG)row * HYPERDOS_MONITOR_CHARACTER_HEIGHT;
+            characterRectangle.left   = (LONG)column * HYPERDOS_MONITOR_CHARACTER_WIDTH;
+            characterRectangle.top    = (LONG)row * HYPERDOS_MONITOR_CHARACTER_HEIGHT;
             characterRectangle.right  = characterRectangle.left + HYPERDOS_MONITOR_CHARACTER_WIDTH;
             characterRectangle.bottom = characterRectangle.top + HYPERDOS_MONITOR_CHARACTER_HEIGHT;
             if (try_read_korean_code_page_text_character(bootState, row, column, characterByte, &wideCharacter))
@@ -2348,6 +2524,172 @@ static void convert_graphics_pixels_to_device_independent_bitmap_pixels(uint32_t
     }
 }
 
+static void get_display_source_dimensions(const hyperdos_win32_boot_state* bootState,
+                                          int*                             sourceWidth,
+                                          int*                             sourceHeight)
+{
+    const hyperdos_color_graphics_adapter* adapter = &bootState->machine.pc.colorGraphicsAdapter;
+
+    if (hyperdos_color_graphics_adapter_graphics_mode_is_enabled(adapter))
+    {
+        int graphicsSourceWidth  = (adapter->modeControl & HYPERDOS_COLOR_GRAPHICS_ADAPTER_MODE_HIGH_RESOLUTION) != 0u
+                                           ? HYPERDOS_COLOR_GRAPHICS_ADAPTER_GRAPHICS_WIDTH_HIGH
+                                           : HYPERDOS_COLOR_GRAPHICS_ADAPTER_GRAPHICS_WIDTH_LOW;
+        int graphicsSourceHeight = HYPERDOS_COLOR_GRAPHICS_ADAPTER_GRAPHICS_HEIGHT;
+
+        (void)hyperdos_pc_video_services_get_video_graphics_array_mode_dimensions(
+                bootState->machine.videoServices.videoMode,
+                &graphicsSourceWidth,
+                &graphicsSourceHeight);
+        *sourceWidth  = graphicsSourceWidth;
+        *sourceHeight = graphicsSourceHeight;
+        return;
+    }
+
+    *sourceWidth  = HYPERDOS_COLOR_GRAPHICS_ADAPTER_COLUMN_COUNT * HYPERDOS_MONITOR_CHARACTER_WIDTH;
+    *sourceHeight = HYPERDOS_COLOR_GRAPHICS_ADAPTER_ROW_COUNT * HYPERDOS_MONITOR_CHARACTER_HEIGHT;
+}
+
+static void calculate_fit_to_window_display_size(int  sourceWidth,
+                                                 int  sourceHeight,
+                                                 int  clientWidth,
+                                                 int  clientHeight,
+                                                 int* destinationWidth,
+                                                 int* destinationHeight)
+{
+    if (sourceWidth <= 0 || sourceHeight <= 0 || clientWidth <= 0 || clientHeight <= 0)
+    {
+        *destinationWidth  = 0;
+        *destinationHeight = 0;
+        return;
+    }
+
+    if ((int64_t)clientWidth * (int64_t)sourceHeight <= (int64_t)clientHeight * (int64_t)sourceWidth)
+    {
+        *destinationWidth  = clientWidth;
+        *destinationHeight = (clientWidth * sourceHeight) / sourceWidth;
+    }
+    else
+    {
+        *destinationHeight = clientHeight;
+        *destinationWidth  = (clientHeight * sourceWidth) / sourceHeight;
+    }
+    if (*destinationWidth <= 0)
+    {
+        *destinationWidth = 1;
+    }
+    if (*destinationHeight <= 0)
+    {
+        *destinationHeight = 1;
+    }
+}
+
+static void calculate_display_destination_rectangle(const RECT* clientRectangle,
+                                                    int         sourceWidth,
+                                                    int         sourceHeight,
+                                                    RECT*       destinationRectangle)
+{
+    int clientWidth       = clientRectangle->right - clientRectangle->left;
+    int clientHeight      = clientRectangle->bottom - clientRectangle->top;
+    int destinationWidth  = sourceWidth;
+    int destinationHeight = sourceHeight;
+
+    if (globalDisplayResizeMode == HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW)
+    {
+        calculate_fit_to_window_display_size(sourceWidth,
+                                             sourceHeight,
+                                             clientWidth,
+                                             clientHeight,
+                                             &destinationWidth,
+                                             &destinationHeight);
+    }
+    else if (globalDisplayResizeMode == HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE)
+    {
+        int horizontalScale = sourceWidth > 0 ? clientWidth / sourceWidth : 0;
+        int verticalScale   = sourceHeight > 0 ? clientHeight / sourceHeight : 0;
+
+        if (horizontalScale > 0 && verticalScale > 0)
+        {
+            int integerScale = horizontalScale < verticalScale ? horizontalScale : verticalScale;
+
+            destinationWidth  = sourceWidth * integerScale;
+            destinationHeight = sourceHeight * integerScale;
+        }
+        else
+        {
+            calculate_fit_to_window_display_size(sourceWidth,
+                                                 sourceHeight,
+                                                 clientWidth,
+                                                 clientHeight,
+                                                 &destinationWidth,
+                                                 &destinationHeight);
+        }
+    }
+
+    destinationRectangle->left   = clientRectangle->left + (clientWidth - destinationWidth) / 2;
+    destinationRectangle->top    = clientRectangle->top + (clientHeight - destinationHeight) / 2;
+    destinationRectangle->right  = destinationRectangle->left + destinationWidth;
+    destinationRectangle->bottom = destinationRectangle->top + destinationHeight;
+}
+
+static void get_display_geometry(const hyperdos_win32_boot_state* bootState,
+                                 const RECT*                      clientRectangle,
+                                 RECT*                            destinationRectangle,
+                                 int*                             sourceWidth,
+                                 int*                             sourceHeight)
+{
+    get_display_source_dimensions(bootState, sourceWidth, sourceHeight);
+    calculate_display_destination_rectangle(clientRectangle, *sourceWidth, *sourceHeight, destinationRectangle);
+}
+
+static void render_text_display(HDC                              deviceContext,
+                                const hyperdos_win32_boot_state* bootState,
+                                const RECT*                      clientRectangle)
+{
+    RECT    destinationRectangle;
+    int     sourceWidth         = 0;
+    int     sourceHeight        = 0;
+    HDC     memoryDeviceContext = NULL;
+    HBITMAP sourceBitmap        = NULL;
+    HGDIOBJ previousBitmap      = NULL;
+
+    get_display_geometry(bootState, clientRectangle, &destinationRectangle, &sourceWidth, &sourceHeight);
+    if (sourceWidth <= 0 || sourceHeight <= 0 || destinationRectangle.right <= destinationRectangle.left ||
+        destinationRectangle.bottom <= destinationRectangle.top)
+    {
+        return;
+    }
+
+    memoryDeviceContext = CreateCompatibleDC(deviceContext);
+    if (memoryDeviceContext == NULL)
+    {
+        return;
+    }
+    sourceBitmap = CreateCompatibleBitmap(deviceContext, sourceWidth, sourceHeight);
+    if (sourceBitmap == NULL)
+    {
+        DeleteDC(memoryDeviceContext);
+        return;
+    }
+    previousBitmap = SelectObject(memoryDeviceContext, sourceBitmap);
+    render_text_display_native(memoryDeviceContext, bootState);
+    SetStretchBltMode(deviceContext, COLORONCOLOR);
+    StretchBlt(deviceContext,
+               destinationRectangle.left,
+               destinationRectangle.top,
+               destinationRectangle.right - destinationRectangle.left,
+               destinationRectangle.bottom - destinationRectangle.top,
+               memoryDeviceContext,
+               0,
+               0,
+               sourceWidth,
+               sourceHeight,
+               SRCCOPY);
+    SelectObject(memoryDeviceContext, previousBitmap);
+    DeleteObject(sourceBitmap);
+    DeleteDC(memoryDeviceContext);
+}
+
 static void render_graphics_display(HDC                              deviceContext,
                                     const hyperdos_win32_boot_state* bootState,
                                     const RECT*                      clientRectangle)
@@ -2363,14 +2705,6 @@ static void render_graphics_display(HDC                              deviceConte
             bootState->machine.videoServices.videoMode,
             &sourceWidth,
             &sourceHeight);
-    int    clientWidth       = clientRectangle->right - clientRectangle->left;
-    int    clientHeight      = clientRectangle->bottom - clientRectangle->top;
-    int    integerScale      = 1;
-    int    destinationWidth  = sourceWidth;
-    int    destinationHeight = sourceHeight;
-    int    horizontalScale   = sourceWidth > 0 ? clientWidth / sourceWidth : 1;
-    int    verticalScale     = sourceHeight > 0 ? clientHeight / sourceHeight : 1;
-    HBRUSH backgroundBrush   = (HBRUSH)GetStockObject(BLACK_BRUSH);
 
     memset(&bitmapInfo, 0, sizeof(bitmapInfo));
     bitmapInfo.bmiHeader.biSize        = sizeof(bitmapInfo.bmiHeader);
@@ -2404,31 +2738,8 @@ static void render_graphics_display(HDC                              deviceConte
         hyperdos_pc_video_services_render_low_resolution_graphics_pixels(adapter, globalGraphicsPixels);
     }
     convert_graphics_pixels_to_device_independent_bitmap_pixels(globalGraphicsPixels, sourceWidth, sourceHeight);
-    if (horizontalScale > 0 && verticalScale > 0)
-    {
-        integerScale      = horizontalScale < verticalScale ? horizontalScale : verticalScale;
-        destinationWidth  = sourceWidth * integerScale;
-        destinationHeight = sourceHeight * integerScale;
-    }
-    else if (sourceWidth > 0 && sourceHeight > 0 && clientWidth > 0 && clientHeight > 0)
-    {
-        if (clientWidth * sourceHeight <= clientHeight * sourceWidth)
-        {
-            destinationWidth  = clientWidth;
-            destinationHeight = (clientWidth * sourceHeight) / sourceWidth;
-        }
-        else
-        {
-            destinationHeight = clientHeight;
-            destinationWidth  = (clientHeight * sourceWidth) / sourceHeight;
-        }
-    }
-    destinationRectangle.left   = (clientWidth - destinationWidth) / 2;
-    destinationRectangle.top    = (clientHeight - destinationHeight) / 2;
-    destinationRectangle.right  = destinationRectangle.left + destinationWidth;
-    destinationRectangle.bottom = destinationRectangle.top + destinationHeight;
+    get_display_geometry(bootState, clientRectangle, &destinationRectangle, &sourceWidth, &sourceHeight);
 
-    FillRect(deviceContext, clientRectangle, backgroundBrush);
     SetStretchBltMode(deviceContext, COLORONCOLOR);
     StretchDIBits(deviceContext,
                   destinationRectangle.left,
@@ -2455,8 +2766,98 @@ static void render_display(HDC deviceContext, const hyperdos_win32_boot_state* b
     }
     else
     {
-        render_text_display(deviceContext, bootState);
+        render_text_display(deviceContext, bootState, clientRectangle);
     }
+}
+
+static COLORREF get_display_padding_color(void)
+{
+    return RGB(24, 28, 34);
+}
+
+static COLORREF get_display_border_color(void)
+{
+    return RGB(91, 111, 134);
+}
+
+static void fill_display_padding(HDC deviceContext, const RECT* clientRectangle)
+{
+    HBRUSH backgroundBrush = (HBRUSH)GetStockObject(DC_BRUSH);
+
+    SetDCBrushColor(deviceContext, get_display_padding_color());
+    FillRect(deviceContext, clientRectangle, backgroundBrush);
+}
+
+static void fill_display_border_segment(HDC         deviceContext,
+                                        const RECT* clientRectangle,
+                                        const RECT* borderRectangle,
+                                        HBRUSH      borderBrush)
+{
+    RECT clippedRectangle;
+
+    if (IntersectRect(&clippedRectangle, clientRectangle, borderRectangle))
+    {
+        FillRect(deviceContext, &clippedRectangle, borderBrush);
+    }
+}
+
+static void draw_display_border(HDC                              deviceContext,
+                                const hyperdos_win32_boot_state* bootState,
+                                const RECT*                      clientRectangle)
+{
+    RECT   destinationRectangle;
+    RECT   borderRectangle;
+    int    sourceWidth     = 0;
+    int    sourceHeight    = 0;
+    HBRUSH borderBrush     = (HBRUSH)GetStockObject(DC_BRUSH);
+    LONG   borderThickness = HYPERDOS_MONITOR_DISPLAY_BORDER_THICKNESS;
+
+    get_display_geometry(bootState, clientRectangle, &destinationRectangle, &sourceWidth, &sourceHeight);
+    if (sourceWidth <= 0 || sourceHeight <= 0 || destinationRectangle.right <= destinationRectangle.left ||
+        destinationRectangle.bottom <= destinationRectangle.top)
+    {
+        return;
+    }
+
+    if (borderBrush == NULL)
+    {
+        return;
+    }
+
+    SetDCBrushColor(deviceContext, get_display_border_color());
+
+    borderRectangle.left   = destinationRectangle.left - borderThickness;
+    borderRectangle.top    = destinationRectangle.top - borderThickness;
+    borderRectangle.right  = destinationRectangle.right + borderThickness;
+    borderRectangle.bottom = destinationRectangle.top;
+    fill_display_border_segment(deviceContext, clientRectangle, &borderRectangle, borderBrush);
+
+    borderRectangle.left   = destinationRectangle.left - borderThickness;
+    borderRectangle.top    = destinationRectangle.top;
+    borderRectangle.right  = destinationRectangle.left;
+    borderRectangle.bottom = destinationRectangle.bottom;
+    fill_display_border_segment(deviceContext, clientRectangle, &borderRectangle, borderBrush);
+
+    borderRectangle.left   = destinationRectangle.right;
+    borderRectangle.top    = destinationRectangle.top;
+    borderRectangle.right  = destinationRectangle.right + borderThickness;
+    borderRectangle.bottom = destinationRectangle.bottom;
+    fill_display_border_segment(deviceContext, clientRectangle, &borderRectangle, borderBrush);
+
+    borderRectangle.left   = destinationRectangle.left - borderThickness;
+    borderRectangle.top    = destinationRectangle.bottom;
+    borderRectangle.right  = destinationRectangle.right + borderThickness;
+    borderRectangle.bottom = destinationRectangle.bottom + borderThickness;
+    fill_display_border_segment(deviceContext, clientRectangle, &borderRectangle, borderBrush);
+}
+
+static void render_display_surface(HDC                              deviceContext,
+                                   const hyperdos_win32_boot_state* bootState,
+                                   const RECT*                      clientRectangle)
+{
+    fill_display_padding(deviceContext, clientRectangle);
+    render_display(deviceContext, bootState, clientRectangle);
+    draw_display_border(deviceContext, bootState, clientRectangle);
 }
 
 static void render_display_to_window(HDC                              windowDeviceContext,
@@ -2468,7 +2869,6 @@ static void render_display_to_window(HDC                              windowDevi
     HDC     memoryDeviceContext = NULL;
     HBITMAP backBufferBitmap    = NULL;
     HGDIOBJ previousBitmap      = NULL;
-    HBRUSH  backgroundBrush     = NULL;
 
     if (clientWidth <= 0 || clientHeight <= 0)
     {
@@ -2478,34 +2878,688 @@ static void render_display_to_window(HDC                              windowDevi
     memoryDeviceContext = CreateCompatibleDC(windowDeviceContext);
     if (memoryDeviceContext == NULL)
     {
-        render_display(windowDeviceContext, bootState, clientRectangle);
+        render_display_surface(windowDeviceContext, bootState, clientRectangle);
         return;
     }
     backBufferBitmap = CreateCompatibleBitmap(windowDeviceContext, clientWidth, clientHeight);
     if (backBufferBitmap == NULL)
     {
         DeleteDC(memoryDeviceContext);
-        render_display(windowDeviceContext, bootState, clientRectangle);
+        render_display_surface(windowDeviceContext, bootState, clientRectangle);
         return;
     }
-    previousBitmap  = SelectObject(memoryDeviceContext, backBufferBitmap);
-    backgroundBrush = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    FillRect(memoryDeviceContext, clientRectangle, backgroundBrush);
-    render_display(memoryDeviceContext, bootState, clientRectangle);
+    previousBitmap = SelectObject(memoryDeviceContext, backBufferBitmap);
+    render_display_surface(memoryDeviceContext, bootState, clientRectangle);
     BitBlt(windowDeviceContext, 0, 0, clientWidth, clientHeight, memoryDeviceContext, 0, 0, SRCCOPY);
     SelectObject(memoryDeviceContext, previousBitmap);
     DeleteObject(backBufferBitmap);
     DeleteDC(memoryDeviceContext);
 }
 
+static int get_mouse_message_horizontal_position(LPARAM longParameter)
+{
+    return (int)(short)(longParameter & 0xFFFFu);
+}
+
+static int get_mouse_message_vertical_position(LPARAM longParameter)
+{
+    return (int)(short)(((uint32_t)longParameter >> 16u) & 0xFFFFu);
+}
+
+static uint8_t get_mouse_button_mask_from_word_parameter(WPARAM wordParameter)
+{
+    uint8_t buttonMask = 0u;
+
+    if ((wordParameter & MK_LBUTTON) != 0u)
+    {
+        buttonMask |= HYPERDOS_MONITOR_MOUSE_LEFT_BUTTON;
+    }
+    if ((wordParameter & MK_RBUTTON) != 0u)
+    {
+        buttonMask |= HYPERDOS_MONITOR_MOUSE_RIGHT_BUTTON;
+    }
+    if ((wordParameter & MK_MBUTTON) != 0u)
+    {
+        buttonMask |= HYPERDOS_MONITOR_MOUSE_MIDDLE_BUTTON;
+    }
+    return buttonMask;
+}
+
+static uint8_t get_mouse_button_mask_from_message(UINT message, WPARAM wordParameter, uint8_t previousButtonMask)
+{
+    uint8_t buttonMask = get_mouse_button_mask_from_word_parameter(wordParameter);
+
+    if (message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK)
+    {
+        buttonMask |= HYPERDOS_MONITOR_MOUSE_LEFT_BUTTON;
+    }
+    else if (message == WM_LBUTTONUP)
+    {
+        buttonMask &= (uint8_t)~HYPERDOS_MONITOR_MOUSE_LEFT_BUTTON;
+    }
+    else if (message == WM_RBUTTONDOWN || message == WM_RBUTTONDBLCLK)
+    {
+        buttonMask |= HYPERDOS_MONITOR_MOUSE_RIGHT_BUTTON;
+    }
+    else if (message == WM_RBUTTONUP)
+    {
+        buttonMask &= (uint8_t)~HYPERDOS_MONITOR_MOUSE_RIGHT_BUTTON;
+    }
+    else if (message == WM_MBUTTONDOWN || message == WM_MBUTTONDBLCLK)
+    {
+        buttonMask |= HYPERDOS_MONITOR_MOUSE_MIDDLE_BUTTON;
+    }
+    else if (message == WM_MBUTTONUP)
+    {
+        buttonMask &= (uint8_t)~HYPERDOS_MONITOR_MOUSE_MIDDLE_BUTTON;
+    }
+    else if (message != WM_MOUSEMOVE)
+    {
+        buttonMask = previousButtonMask;
+    }
+    return buttonMask;
+}
+
+static int mouse_button_down_message_is(UINT message)
+{
+    return message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK || message == WM_RBUTTONDOWN ||
+           message == WM_RBUTTONDBLCLK || message == WM_MBUTTONDOWN || message == WM_MBUTTONDBLCLK;
+}
+
+static int client_position_is_inside_display(const hyperdos_win32_boot_state* bootState,
+                                             HWND                             windowHandle,
+                                             int                              clientHorizontalPosition,
+                                             int                              clientVerticalPosition)
+{
+    RECT clientRectangle;
+    RECT displayRectangle;
+    int  sourceWidth       = 0;
+    int  sourceHeight      = 0;
+    int  destinationWidth  = 0;
+    int  destinationHeight = 0;
+
+    GetClientRect(windowHandle, &clientRectangle);
+    get_display_geometry(bootState, &clientRectangle, &displayRectangle, &sourceWidth, &sourceHeight);
+    destinationWidth  = displayRectangle.right - displayRectangle.left;
+    destinationHeight = displayRectangle.bottom - displayRectangle.top;
+    return sourceWidth > 0 && sourceHeight > 0 && destinationWidth > 0 && destinationHeight > 0 &&
+           clientHorizontalPosition >= displayRectangle.left && clientVerticalPosition >= displayRectangle.top &&
+           clientHorizontalPosition < displayRectangle.right && clientVerticalPosition < displayRectangle.bottom;
+}
+
+static int get_display_clipping_rectangle(HWND                             windowHandle,
+                                          const hyperdos_win32_boot_state* bootState,
+                                          RECT*                            displayClippingRectangle)
+{
+    RECT  clientRectangle;
+    RECT  displayRectangle;
+    RECT  visibleDisplayRectangle;
+    POINT displayUpperLeftPoint;
+    POINT displayLowerRightPoint;
+    int   sourceWidth       = 0;
+    int   sourceHeight      = 0;
+    int   destinationWidth  = 0;
+    int   destinationHeight = 0;
+
+    if (bootState == NULL || displayClippingRectangle == NULL)
+    {
+        return 0;
+    }
+
+    GetClientRect(windowHandle, &clientRectangle);
+    get_display_geometry(bootState, &clientRectangle, &displayRectangle, &sourceWidth, &sourceHeight);
+    destinationWidth  = displayRectangle.right - displayRectangle.left;
+    destinationHeight = displayRectangle.bottom - displayRectangle.top;
+    if (sourceWidth <= 0 || sourceHeight <= 0 || destinationWidth <= 0 || destinationHeight <= 0)
+    {
+        return 0;
+    }
+    if (!IntersectRect(&visibleDisplayRectangle, &displayRectangle, &clientRectangle))
+    {
+        return 0;
+    }
+
+    displayUpperLeftPoint.x  = visibleDisplayRectangle.left;
+    displayUpperLeftPoint.y  = visibleDisplayRectangle.top;
+    displayLowerRightPoint.x = visibleDisplayRectangle.right;
+    displayLowerRightPoint.y = visibleDisplayRectangle.bottom;
+    if (!ClientToScreen(windowHandle, &displayUpperLeftPoint) || !ClientToScreen(windowHandle, &displayLowerRightPoint))
+    {
+        return 0;
+    }
+
+    displayClippingRectangle->left   = displayUpperLeftPoint.x;
+    displayClippingRectangle->top    = displayUpperLeftPoint.y;
+    displayClippingRectangle->right  = displayLowerRightPoint.x;
+    displayClippingRectangle->bottom = displayLowerRightPoint.y;
+    return displayClippingRectangle->right > displayClippingRectangle->left &&
+           displayClippingRectangle->bottom > displayClippingRectangle->top;
+}
+
+static int get_display_capture_geometry(HWND                             windowHandle,
+                                        const hyperdos_win32_boot_state* bootState,
+                                        POINT*                           clientCenterPoint,
+                                        POINT*                           screenCenterPoint,
+                                        int*                             sourceWidth,
+                                        int*                             sourceHeight,
+                                        int*                             destinationWidth,
+                                        int*                             destinationHeight)
+{
+    RECT clientRectangle;
+    RECT displayRectangle;
+    int  currentSourceWidth  = 0;
+    int  currentSourceHeight = 0;
+
+    if (clientCenterPoint == NULL || screenCenterPoint == NULL || sourceWidth == NULL || sourceHeight == NULL ||
+        destinationWidth == NULL || destinationHeight == NULL)
+    {
+        return 0;
+    }
+
+    GetClientRect(windowHandle, &clientRectangle);
+    get_display_geometry(bootState, &clientRectangle, &displayRectangle, &currentSourceWidth, &currentSourceHeight);
+    *destinationWidth  = displayRectangle.right - displayRectangle.left;
+    *destinationHeight = displayRectangle.bottom - displayRectangle.top;
+    if (currentSourceWidth <= 0 || currentSourceHeight <= 0 || *destinationWidth <= 0 || *destinationHeight <= 0 ||
+        displayRectangle.right <= displayRectangle.left || displayRectangle.bottom <= displayRectangle.top)
+    {
+        return 0;
+    }
+
+    clientCenterPoint->x = displayRectangle.left + (displayRectangle.right - displayRectangle.left) / 2;
+    clientCenterPoint->y = displayRectangle.top + (displayRectangle.bottom - displayRectangle.top) / 2;
+    *screenCenterPoint   = *clientCenterPoint;
+    *sourceWidth         = currentSourceWidth;
+    *sourceHeight        = currentSourceHeight;
+    return ClientToScreen(windowHandle, screenCenterPoint) != FALSE;
+}
+
+static int center_host_mouse_capture_cursor(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
+{
+    POINT clientCenterPoint;
+    POINT screenCenterPoint;
+    int   sourceWidth       = 0;
+    int   sourceHeight      = 0;
+    int   destinationWidth  = 0;
+    int   destinationHeight = 0;
+
+    if (bootState == NULL || bootState->hostMouseCaptureActive == 0u)
+    {
+        return 1;
+    }
+    if (!get_display_capture_geometry(windowHandle,
+                                      bootState,
+                                      &clientCenterPoint,
+                                      &screenCenterPoint,
+                                      &sourceWidth,
+                                      &sourceHeight,
+                                      &destinationWidth,
+                                      &destinationHeight))
+    {
+        return 0;
+    }
+    return SetCursorPos(screenCenterPoint.x, screenCenterPoint.y) != FALSE;
+}
+
+static int host_mouse_capture_uses_message_movement(const hyperdos_win32_boot_state* bootState)
+{
+    return bootState != NULL && bootState->hostMouseRawInputRegistered == 0u;
+}
+
+static void update_mouse_capture_menu(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
+{
+    HMENU menuHandle = GetMenu(windowHandle);
+
+    if (menuHandle == NULL)
+    {
+        return;
+    }
+    CheckMenuItem(menuHandle,
+                  HYPERDOS_MONITOR_COMMAND_TOGGLE_MOUSE_CAPTURE,
+                  MF_BYCOMMAND | (bootState->hostMouseCaptureActive != 0u ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(menuHandle,
+                  HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_CONFINEMENT,
+                  MF_BYCOMMAND | (bootState->hostMouseCursorConfinementEnabled != 0u ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(menuHandle,
+                  HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_HIDING,
+                  MF_BYCOMMAND | (bootState->hostMouseCursorHidingEnabled != 0u ? MF_CHECKED : MF_UNCHECKED));
+    DrawMenuBar(windowHandle);
+}
+
+static int mouse_capture_clipping_rectangles_are_equal(const RECT* firstRectangle, const RECT* secondRectangle)
+{
+    return firstRectangle != NULL && secondRectangle != NULL && firstRectangle->left == secondRectangle->left &&
+           firstRectangle->top == secondRectangle->top && firstRectangle->right == secondRectangle->right &&
+           firstRectangle->bottom == secondRectangle->bottom;
+}
+
+static int host_mouse_capture_clipping_is_current(const RECT* displayClippingRectangle)
+{
+    RECT currentClippingRectangle;
+
+    if (displayClippingRectangle == NULL)
+    {
+        return 0;
+    }
+    if (GetClipCursor(&currentClippingRectangle) == 0)
+    {
+        return 0;
+    }
+    return mouse_capture_clipping_rectangles_are_equal(&currentClippingRectangle, displayClippingRectangle);
+}
+
+static int update_host_mouse_capture_clipping(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    RECT displayClippingRectangle;
+
+    if (bootState == NULL || bootState->hostMouseCaptureActive == 0u ||
+        bootState->hostMouseCursorConfinementEnabled == 0u)
+    {
+        return 1;
+    }
+    if (!get_display_clipping_rectangle(windowHandle, bootState, &displayClippingRectangle))
+    {
+        return 0;
+    }
+    if (host_mouse_capture_clipping_is_current(&displayClippingRectangle))
+    {
+        return 1;
+    }
+    if (ClipCursor(&displayClippingRectangle) == 0)
+    {
+        trace_disk_event(bootState,
+                         "host mouse clipping failed left=%ld top=%ld right=%ld bottom=%ld error=%lu",
+                         (long)displayClippingRectangle.left,
+                         (long)displayClippingRectangle.top,
+                         (long)displayClippingRectangle.right,
+                         (long)displayClippingRectangle.bottom,
+                         GetLastError());
+        return 0;
+    }
+    return 1;
+}
+
+static void release_host_mouse_capture_clipping(hyperdos_win32_boot_state* bootState)
+{
+    if (ClipCursor(NULL) == 0)
+    {
+        trace_disk_event(bootState, "host mouse clipping release failed error=%lu", GetLastError());
+    }
+}
+
+static void set_host_mouse_capture_cursor(const hyperdos_win32_boot_state* bootState)
+{
+    if (bootState == NULL || bootState->hostMouseCursorHidingEnabled == 0u)
+    {
+        SetCursor(LoadCursorA(NULL, IDC_ARROW));
+        return;
+    }
+    SetCursor(NULL);
+}
+
+static void reset_host_mouse_capture_motion_state(hyperdos_win32_boot_state* bootState);
+
+static int capture_host_mouse(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    if (bootState == NULL)
+    {
+        return 0;
+    }
+    if (bootState->hostMouseCaptureActive != 0u)
+    {
+        return update_host_mouse_capture_clipping(windowHandle, bootState) &&
+               (!host_mouse_capture_uses_message_movement(bootState) ||
+                center_host_mouse_capture_cursor(windowHandle, bootState));
+    }
+
+    bootState->hostMouseCaptureActive = 1u;
+    reset_host_mouse_capture_motion_state(bootState);
+    if (!update_host_mouse_capture_clipping(windowHandle, bootState))
+    {
+        bootState->hostMouseCaptureActive = 0u;
+        release_host_mouse_capture_clipping(bootState);
+        return 0;
+    }
+    SetCapture(windowHandle);
+    set_host_mouse_capture_cursor(bootState);
+    if (host_mouse_capture_uses_message_movement(bootState))
+    {
+        (void)center_host_mouse_capture_cursor(windowHandle, bootState);
+    }
+    update_mouse_capture_menu(windowHandle, bootState);
+    return 1;
+}
+
+static void release_host_mouse_capture(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    if (bootState == NULL)
+    {
+        return;
+    }
+    if (bootState->hostMouseCaptureActive == 0u)
+    {
+        return;
+    }
+    bootState->hostMouseCaptureActive = 0u;
+    reset_host_mouse_capture_motion_state(bootState);
+    release_host_mouse_capture_clipping(bootState);
+    if (GetCapture() == windowHandle)
+    {
+        ReleaseCapture();
+    }
+    SetCursor(LoadCursorA(NULL, IDC_ARROW));
+    update_mouse_capture_menu(windowHandle, bootState);
+}
+
+static int host_mouse_capture_toggle_shortcut_is_down(WPARAM wordParameter)
+{
+    return wordParameter == VK_F10 &&
+           ((GetKeyState(VK_CONTROL) & 0x8000) != 0 || (GetKeyState(VK_LCONTROL) & 0x8000) != 0 ||
+            (GetKeyState(VK_RCONTROL) & 0x8000) != 0);
+}
+
+static void toggle_host_mouse_capture(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    if (bootState->hostMouseCaptureActive != 0u)
+    {
+        release_host_mouse_capture(windowHandle, bootState);
+        return;
+    }
+    (void)capture_host_mouse(windowHandle, bootState);
+}
+
+static void toggle_host_mouse_cursor_confinement(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    if (bootState == NULL)
+    {
+        return;
+    }
+    bootState->hostMouseCursorConfinementEnabled = bootState->hostMouseCursorConfinementEnabled != 0u ? 0u : 1u;
+    if (bootState->hostMouseCursorConfinementEnabled != 0u)
+    {
+        (void)update_host_mouse_capture_clipping(windowHandle, bootState);
+    }
+    else
+    {
+        release_host_mouse_capture_clipping(bootState);
+    }
+    update_mouse_capture_menu(windowHandle, bootState);
+}
+
+static void toggle_host_mouse_cursor_hiding(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    if (bootState == NULL)
+    {
+        return;
+    }
+    bootState->hostMouseCursorHidingEnabled = bootState->hostMouseCursorHidingEnabled != 0u ? 0u : 1u;
+    if (bootState->hostMouseCaptureActive != 0u)
+    {
+        set_host_mouse_capture_cursor(bootState);
+    }
+    update_mouse_capture_menu(windowHandle, bootState);
+}
+
+static int register_host_mouse_raw_input(HWND windowHandle)
+{
+    RAWINPUTDEVICE rawInputDevice;
+
+    memset(&rawInputDevice, 0, sizeof(rawInputDevice));
+    rawInputDevice.usUsagePage = HYPERDOS_MONITOR_RAW_INPUT_USAGE_PAGE_GENERIC;
+    rawInputDevice.usUsage     = HYPERDOS_MONITOR_RAW_INPUT_USAGE_MOUSE;
+    rawInputDevice.dwFlags     = HYPERDOS_MONITOR_RAW_INPUT_DEVICE_INPUT_SINK;
+    rawInputDevice.hwndTarget  = windowHandle;
+    return RegisterRawInputDevices(&rawInputDevice, 1u, sizeof(rawInputDevice)) != FALSE;
+}
+
+static int16_t clamp_monitor_mouse_movement(int movement)
+{
+    if (movement < HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MINIMUM)
+    {
+        return HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MINIMUM;
+    }
+    if (movement > HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MAXIMUM)
+    {
+        return HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MAXIMUM;
+    }
+    return (int16_t)movement;
+}
+
+static int scale_mouse_capture_axis_movement(int hostMovement, int sourceLength, int destinationLength)
+{
+    if (sourceLength <= 0 || destinationLength <= 0)
+    {
+        return hostMovement;
+    }
+    return (int)(((int64_t)hostMovement * sourceLength) / destinationLength);
+}
+
+static int mouse_capture_message_movement_should_run(const hyperdos_win32_boot_state* bootState)
+{
+    return bootState != NULL &&
+           (bootState->hostMouseRawInputRegistered == 0u || bootState->hostMouseRawMovementObserved == 0u);
+}
+
+static int get_current_client_mouse_position(HWND windowHandle,
+                                             int* clientHorizontalPosition,
+                                             int* clientVerticalPosition)
+{
+    POINT screenPoint;
+
+    if (clientHorizontalPosition == NULL || clientVerticalPosition == NULL)
+    {
+        return 0;
+    }
+    if (!GetCursorPos(&screenPoint) || !ScreenToClient(windowHandle, &screenPoint))
+    {
+        return 0;
+    }
+
+    *clientHorizontalPosition = screenPoint.x;
+    *clientVerticalPosition   = screenPoint.y;
+    return 1;
+}
+
+static void reset_host_mouse_capture_motion_state(hyperdos_win32_boot_state* bootState)
+{
+    bootState->mouseCaptureLastClientHorizontalPosition = 0;
+    bootState->mouseCaptureLastClientVerticalPosition   = 0;
+    bootState->mouseCaptureLastClientPositionValid      = 0u;
+    bootState->hostMouseRawMovementObserved             = 0u;
+}
+
+static void push_host_mouse_movement(hyperdos_win32_boot_state* bootState,
+                                     int                        horizontalMovement,
+                                     int                        verticalMovement,
+                                     uint8_t                    buttonMask,
+                                     int                        forcePacket)
+{
+    while (horizontalMovement != 0 || verticalMovement != 0 || forcePacket)
+    {
+        int16_t packetHorizontalMovement = clamp_monitor_mouse_movement(horizontalMovement);
+        int16_t packetVerticalMovement   = clamp_monitor_mouse_movement(verticalMovement);
+
+        if (!push_host_mouse_event(bootState,
+                                   packetHorizontalMovement,
+                                   packetVerticalMovement,
+                                   buttonMask,
+                                   forcePacket))
+        {
+            return;
+        }
+        horizontalMovement = 0;
+        verticalMovement   = 0;
+        forcePacket        = 0;
+    }
+}
+
+static void handle_host_mouse_input(HWND                       windowHandle,
+                                    hyperdos_win32_boot_state* bootState,
+                                    UINT                       message,
+                                    WPARAM                     wordParameter,
+                                    LPARAM                     longParameter)
+{
+    int     clientHorizontalPosition = get_mouse_message_horizontal_position(longParameter);
+    int     clientVerticalPosition   = get_mouse_message_vertical_position(longParameter);
+    int     positionInsideDisplay    = client_position_is_inside_display(bootState,
+                                                                  windowHandle,
+                                                                  clientHorizontalPosition,
+                                                                  clientVerticalPosition);
+    uint8_t physicalButtonMask = get_mouse_button_mask_from_message(message, wordParameter, bootState->mouseButtonMask);
+    uint8_t buttonMask         = physicalButtonMask;
+    int     buttonChanged      = 0;
+    int     buttonDownMessage  = mouse_button_down_message_is(message);
+
+    if (bootState->hostMouseCaptureActive == 0u)
+    {
+        bootState->mouseButtonMask = 0u;
+        if (!positionInsideDisplay || !buttonDownMessage)
+        {
+            return;
+        }
+        if (!capture_host_mouse(windowHandle, bootState))
+        {
+            return;
+        }
+        bootState->mouseButtonMask = buttonMask;
+        if (buttonMask != 0u)
+        {
+            push_host_mouse_movement(bootState, 0, 0, buttonMask, 1);
+            SetCapture(windowHandle);
+        }
+        return;
+    }
+
+    if (bootState->hostMouseCaptureActive != 0u)
+    {
+        POINT clientCenterPoint;
+        POINT screenCenterPoint;
+        int   sourceWidth            = 0;
+        int   sourceHeight           = 0;
+        int   destinationWidth       = 0;
+        int   destinationHeight      = 0;
+        int   hostHorizontalMovement = 0;
+        int   hostVerticalMovement   = 0;
+        int   horizontalMovement     = 0;
+        int   verticalMovement       = 0;
+
+        buttonMask    = physicalButtonMask;
+        buttonChanged = buttonMask != bootState->mouseButtonMask;
+        if (buttonChanged)
+        {
+            bootState->mouseCaptureLastClientPositionValid = 0u;
+        }
+
+        if (get_display_capture_geometry(windowHandle,
+                                         bootState,
+                                         &clientCenterPoint,
+                                         &screenCenterPoint,
+                                         &sourceWidth,
+                                         &sourceHeight,
+                                         &destinationWidth,
+                                         &destinationHeight))
+        {
+            if (message == WM_MOUSEMOVE && mouse_capture_message_movement_should_run(bootState))
+            {
+                (void)get_current_client_mouse_position(windowHandle,
+                                                        &clientHorizontalPosition,
+                                                        &clientVerticalPosition);
+                if (bootState->mouseCaptureLastClientPositionValid != 0u)
+                {
+                    hostHorizontalMovement = clientHorizontalPosition -
+                                             bootState->mouseCaptureLastClientHorizontalPosition;
+                    hostVerticalMovement = bootState->mouseCaptureLastClientVerticalPosition - clientVerticalPosition;
+                    horizontalMovement   = scale_mouse_capture_axis_movement(hostHorizontalMovement,
+                                                                           sourceWidth,
+                                                                           destinationWidth);
+                    verticalMovement     = scale_mouse_capture_axis_movement(hostVerticalMovement,
+                                                                         sourceHeight,
+                                                                         destinationHeight);
+                }
+                bootState->mouseCaptureLastClientHorizontalPosition = clientHorizontalPosition;
+                bootState->mouseCaptureLastClientVerticalPosition   = clientVerticalPosition;
+                bootState->mouseCaptureLastClientPositionValid      = 1u;
+            }
+            if (horizontalMovement != 0 || verticalMovement != 0 || buttonChanged)
+            {
+                push_host_mouse_movement(bootState, horizontalMovement, verticalMovement, buttonMask, buttonChanged);
+            }
+        }
+        else if (buttonChanged)
+        {
+            push_host_mouse_movement(bootState, 0, 0, buttonMask, 1);
+        }
+
+        bootState->mouseButtonMask = buttonMask;
+        if (buttonMask != 0u)
+        {
+            SetCapture(windowHandle);
+        }
+        return;
+    }
+}
+
+static void handle_host_raw_mouse_input(hyperdos_win32_boot_state* bootState, HRAWINPUT rawInputHandle)
+{
+    RAWINPUT        rawInput;
+    UINT            rawInputSize = sizeof(rawInput);
+    const RAWMOUSE* rawMouse     = NULL;
+    int             rawHorizontalMovement;
+    int             rawVerticalMovement;
+
+    if (bootState == NULL || bootState->hostMouseCaptureActive == 0u)
+    {
+        return;
+    }
+    if (GetRawInputData(rawInputHandle, RID_INPUT, &rawInput, &rawInputSize, sizeof(RAWINPUTHEADER)) == (UINT)-1)
+    {
+        return;
+    }
+    if (rawInput.header.dwType != RIM_TYPEMOUSE)
+    {
+        return;
+    }
+
+    rawMouse = &rawInput.data.mouse;
+    if ((rawMouse->usFlags & MOUSE_MOVE_ABSOLUTE) != 0u)
+    {
+        return;
+    }
+
+    rawHorizontalMovement = rawMouse->lLastX;
+    rawVerticalMovement   = -rawMouse->lLastY;
+    if (rawHorizontalMovement == 0 && rawVerticalMovement == 0)
+    {
+        return;
+    }
+
+    bootState->hostMouseRawMovementObserved        = 1u;
+    bootState->mouseCaptureLastClientPositionValid = 0u;
+    push_host_mouse_movement(bootState, rawHorizontalMovement, rawVerticalMovement, bootState->mouseButtonMask, 0);
+}
+
+static void release_host_mouse_buttons(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    if (bootState->mouseButtonMask != 0u)
+    {
+        push_host_mouse_movement(bootState, 0, 0, 0u, 1);
+    }
+    bootState->mouseButtonMask = 0u;
+    if (bootState->hostMouseCaptureActive == 0u && GetCapture() == windowHandle)
+    {
+        ReleaseCapture();
+    }
+}
+
 static void update_window_title(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
 {
-    char title[HYPERDOS_MONITOR_STATUS_TEXT_CAPACITY + 64u];
+    char title[HYPERDOS_MONITOR_STATUS_TEXT_CAPACITY + 96u];
 
     snprintf(title,
              sizeof(title),
-             "HyperDOS PC Monitor - %s",
-             bootState->statusText[0] != '\0' ? bootState->statusText : "running");
+             "HyperDOS PC Monitor - %s%s",
+             bootState->statusText[0] != '\0' ? bootState->statusText : "running",
+             bootState->hostMouseCaptureActive != 0u ? " - mouse captured, Ctrl+F10 releases" : "");
     SetWindowTextA(windowHandle, title);
 }
 
@@ -2515,6 +3569,71 @@ static int start_emulation_thread(hyperdos_win32_boot_state* bootState)
 
     bootState->emulationThreadHandle = CreateThread(NULL, 0u, emulation_thread_main, bootState, 0u, &threadIdentifier);
     return bootState->emulationThreadHandle != NULL;
+}
+
+static int initialize_emulation_pacing(LARGE_INTEGER*                   performanceCounterFrequency,
+                                       LARGE_INTEGER*                   hostPerformanceCounterBase,
+                                       uint64_t*                        guestClockBase,
+                                       const hyperdos_win32_boot_state* bootState)
+{
+    if (performanceCounterFrequency == NULL || hostPerformanceCounterBase == NULL || guestClockBase == NULL ||
+        bootState == NULL)
+    {
+        return 0;
+    }
+    if (!QueryPerformanceFrequency(performanceCounterFrequency) ||
+        !QueryPerformanceCounter(hostPerformanceCounterBase) || performanceCounterFrequency->QuadPart <= 0)
+    {
+        return 0;
+    }
+    *guestClockBase = bootState->machine.pc.clockGenerator.generatedClockCount;
+    return 1;
+}
+
+static void pace_emulation_to_guest_clock(const hyperdos_win32_boot_state* bootState,
+                                          const LARGE_INTEGER*             performanceCounterFrequency,
+                                          const LARGE_INTEGER*             hostPerformanceCounterBase,
+                                          uint64_t                         guestClockBase)
+{
+    LARGE_INTEGER hostPerformanceCounter;
+    uint64_t      guestElapsedClockCount  = 0u;
+    uint32_t      processorFrequencyHertz = 0u;
+    double        hostElapsedSeconds      = 0.0;
+    double        guestElapsedSeconds     = 0.0;
+    double        guestAheadSeconds       = 0.0;
+    DWORD         sleepMilliseconds       = 0u;
+
+    if (bootState == NULL || performanceCounterFrequency == NULL || hostPerformanceCounterBase == NULL ||
+        performanceCounterFrequency->QuadPart <= 0)
+    {
+        return;
+    }
+    processorFrequencyHertz = bootState->machine.pc.clockGenerator.processorFrequencyHertz;
+    if (processorFrequencyHertz == 0u || bootState->machine.pc.clockGenerator.generatedClockCount < guestClockBase ||
+        !QueryPerformanceCounter(&hostPerformanceCounter))
+    {
+        return;
+    }
+
+    guestElapsedClockCount = bootState->machine.pc.clockGenerator.generatedClockCount - guestClockBase;
+    hostElapsedSeconds     = (double)(hostPerformanceCounter.QuadPart - hostPerformanceCounterBase->QuadPart) /
+                         (double)performanceCounterFrequency->QuadPart;
+    guestElapsedSeconds = (double)guestElapsedClockCount / (double)processorFrequencyHertz;
+    guestAheadSeconds   = guestElapsedSeconds - hostElapsedSeconds;
+    if (guestAheadSeconds < 0.002)
+    {
+        return;
+    }
+
+    sleepMilliseconds = (DWORD)(guestAheadSeconds * 1000.0);
+    if (sleepMilliseconds > HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS)
+    {
+        sleepMilliseconds = HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS;
+    }
+    if (sleepMilliseconds != 0u)
+    {
+        Sleep(sleepMilliseconds);
+    }
 }
 
 static void render_monitor_message(hyperdos_win32_boot_state* bootState, const char* message)
@@ -2735,6 +3854,8 @@ static void handle_flush_disks_command(HWND windowHandle, hyperdos_win32_boot_st
 
 static void handle_reset_pc_command(HWND windowHandle, hyperdos_win32_boot_state* bootState)
 {
+    release_host_mouse_buttons(windowHandle, bootState);
+    release_host_mouse_capture(windowHandle, bootState);
     stop_emulation_thread(bootState);
     flush_all_disk_images(bootState);
     boot_from_selected_disk_images(windowHandle, bootState);
@@ -2830,15 +3951,51 @@ static void set_text_character_set(HWND windowHandle, hyperdos_monitor_text_char
     SetFocus(windowHandle);
 }
 
+static void update_display_resize_mode_menu(HWND windowHandle)
+{
+    HMENU menuHandle     = GetMenu(windowHandle);
+    UINT  checkedCommand = HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW;
+
+    if (menuHandle == NULL)
+    {
+        return;
+    }
+    if (globalDisplayResizeMode == HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE)
+    {
+        checkedCommand = HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE;
+    }
+    else if (globalDisplayResizeMode == HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE)
+    {
+        checkedCommand = HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_INTEGER_SCALE;
+    }
+    CheckMenuRadioItem(menuHandle,
+                       HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE,
+                       HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW,
+                       checkedCommand,
+                       MF_BYCOMMAND);
+}
+
+static void set_display_resize_mode(HWND                                 windowHandle,
+                                    hyperdos_win32_boot_state*           bootState,
+                                    hyperdos_monitor_display_resize_mode displayResizeMode)
+{
+    globalDisplayResizeMode = displayResizeMode;
+    update_display_resize_mode_menu(windowHandle);
+    (void)update_host_mouse_capture_clipping(windowHandle, bootState);
+    InvalidateRect(windowHandle, NULL, FALSE);
+    SetFocus(windowHandle);
+}
+
 static HMENU create_monitor_menu(void)
 {
-    HMENU menuHandle                 = CreateMenu();
-    HMENU machineMenuHandle          = CreatePopupMenu();
-    HMENU processorModelMenuHandle   = CreatePopupMenu();
-    HMENU pcModelMenuHandle          = CreatePopupMenu();
-    HMENU diskMenuHandle             = CreatePopupMenu();
-    HMENU viewMenuHandle             = CreatePopupMenu();
-    HMENU textCharacterSetMenuHandle = CreatePopupMenu();
+    HMENU menuHandle                  = CreateMenu();
+    HMENU machineMenuHandle           = CreatePopupMenu();
+    HMENU processorModelMenuHandle    = CreatePopupMenu();
+    HMENU pcModelMenuHandle           = CreatePopupMenu();
+    HMENU diskMenuHandle              = CreatePopupMenu();
+    HMENU viewMenuHandle              = CreatePopupMenu();
+    HMENU textCharacterSetMenuHandle  = CreatePopupMenu();
+    HMENU displayResizeModeMenuHandle = CreatePopupMenu();
 
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086, "8086 / 8088");
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186, "80186 / 80188");
@@ -2867,7 +4024,30 @@ static HMENU create_monitor_menu(void)
                 MF_STRING,
                 HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_KOREAN_CODE_PAGE_949,
                 "Korean CP949");
+    AppendMenuA(displayResizeModeMenuHandle,
+                MF_STRING,
+                HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE,
+                "Original Size");
+    AppendMenuA(displayResizeModeMenuHandle,
+                MF_STRING,
+                HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_INTEGER_SCALE,
+                "Integer Scale");
+    AppendMenuA(displayResizeModeMenuHandle,
+                MF_STRING,
+                HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW,
+                "Fit to Window");
+    AppendMenuA(viewMenuHandle, MF_POPUP, (UINT_PTR)displayResizeModeMenuHandle, "Display Resize");
     AppendMenuA(viewMenuHandle, MF_POPUP, (UINT_PTR)textCharacterSetMenuHandle, "Text Charset");
+    AppendMenuA(viewMenuHandle, MF_SEPARATOR, 0u, NULL);
+    AppendMenuA(viewMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_TOGGLE_MOUSE_CAPTURE, "Capture Mouse\tCtrl+F10");
+    AppendMenuA(viewMenuHandle,
+                MF_STRING | MF_CHECKED,
+                HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_CONFINEMENT,
+                "Confine Host Cursor");
+    AppendMenuA(viewMenuHandle,
+                MF_STRING | MF_CHECKED,
+                HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_HIDING,
+                "Hide Host Cursor");
     AppendMenuA(menuHandle, MF_POPUP, (UINT_PTR)viewMenuHandle, "View");
     return menuHandle;
 }
@@ -2881,11 +4061,14 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
     {
     case WM_CREATE:
         memset(&globalBootState, 0, sizeof(globalBootState));
-        globalBootState.windowHandle = windowHandle;
+        globalBootState.windowHandle                      = windowHandle;
+        globalBootState.hostMouseCursorConfinementEnabled = 1u;
+        globalBootState.hostMouseCursorHidingEnabled      = 1u;
         InitializeCriticalSection(&globalBootState.keyboardCriticalSection);
         InitializeCriticalSection(&globalBootState.diskCriticalSection);
-        globalBootState.keyboardEventHandle = CreateEventA(NULL, FALSE, FALSE, NULL);
-        globalTextFontHandle                = CreateFontA(HYPERDOS_MONITOR_CHARACTER_HEIGHT,
+        globalBootState.keyboardEventHandle         = CreateEventA(NULL, FALSE, FALSE, NULL);
+        globalBootState.hostMouseRawInputRegistered = (uint8_t)register_host_mouse_raw_input(windowHandle);
+        globalTextFontHandle                        = CreateFontA(HYPERDOS_MONITOR_CHARACTER_HEIGHT,
                                            HYPERDOS_MONITOR_CHARACTER_WIDTH,
                                            0,
                                            0,
@@ -2899,7 +4082,7 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
                                            NONANTIALIASED_QUALITY,
                                            FIXED_PITCH | FF_MODERN,
                                            "GulimChe");
-        globalCodePage437TextFontHandle     = CreateFontA(HYPERDOS_MONITOR_CHARACTER_HEIGHT,
+        globalCodePage437TextFontHandle             = CreateFontA(HYPERDOS_MONITOR_CHARACTER_HEIGHT,
                                                       HYPERDOS_MONITOR_CHARACTER_WIDTH,
                                                       0,
                                                       0,
@@ -2955,7 +4138,9 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
                  HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS,
                  NULL);
         update_machine_model_menu(windowHandle);
+        update_display_resize_mode_menu(windowHandle);
         update_text_character_set_menu(windowHandle);
+        update_mouse_capture_menu(windowHandle, &globalBootState);
         update_window_title(windowHandle, &globalBootState);
         SetFocus(windowHandle);
         return 0;
@@ -2987,6 +4172,28 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         case HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_KOREAN_CODE_PAGE_949:
             set_text_character_set(windowHandle, HYPERDOS_MONITOR_TEXT_CHARACTER_SET_KOREAN_CODE_PAGE_949);
             return 0;
+        case HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE:
+            set_display_resize_mode(windowHandle, &globalBootState, HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_ORIGINAL_SIZE);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_INTEGER_SCALE:
+            set_display_resize_mode(windowHandle, &globalBootState, HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW:
+            set_display_resize_mode(windowHandle, &globalBootState, HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_TOGGLE_MOUSE_CAPTURE:
+            toggle_host_mouse_capture(windowHandle, &globalBootState);
+            update_window_title(windowHandle, &globalBootState);
+            SetFocus(windowHandle);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_CONFINEMENT:
+            toggle_host_mouse_cursor_confinement(windowHandle, &globalBootState);
+            SetFocus(windowHandle);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_TOGGLE_HOST_MOUSE_CURSOR_HIDING:
+            toggle_host_mouse_cursor_hiding(windowHandle, &globalBootState);
+            SetFocus(windowHandle);
+            return 0;
         case HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY:
             handle_insert_floppy_command(windowHandle, &globalBootState);
             return 0;
@@ -3011,15 +4218,59 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         }
         break;
 
+    case WM_MOVE:
+    case WM_SIZE:
+    case WM_DISPLAYCHANGE:
+        update_host_mouse_capture_clipping(windowHandle, &globalBootState);
+        if (host_mouse_capture_uses_message_movement(&globalBootState))
+        {
+            center_host_mouse_capture_cursor(windowHandle, &globalBootState);
+        }
+        InvalidateRect(windowHandle, NULL, FALSE);
+        break;
+
+    case WM_SETCURSOR:
+        if (globalBootState.hostMouseCaptureActive != 0u && LOWORD(longParameter) == HTCLIENT)
+        {
+            set_host_mouse_capture_cursor(&globalBootState);
+            return TRUE;
+        }
+        break;
+
+    case WM_CAPTURECHANGED:
+        if (globalBootState.hostMouseCaptureActive != 0u && (HWND)longParameter != windowHandle)
+        {
+            if (GetForegroundWindow() == windowHandle)
+            {
+                SetCapture(windowHandle);
+                (void)update_host_mouse_capture_clipping(windowHandle, &globalBootState);
+                set_host_mouse_capture_cursor(&globalBootState);
+            }
+            else
+            {
+                release_host_mouse_capture(windowHandle, &globalBootState);
+            }
+            update_window_title(windowHandle, &globalBootState);
+        }
+        break;
+
     case WM_ACTIVATEAPP:
         if (wordParameter == FALSE)
         {
+            globalBootState.hostMouseCaptureToggleKeyDown = 0u;
             release_pressed_host_keys(&globalBootState);
+            release_host_mouse_buttons(windowHandle, &globalBootState);
+            release_host_mouse_capture(windowHandle, &globalBootState);
+            update_window_title(windowHandle, &globalBootState);
         }
         break;
 
     case WM_KILLFOCUS:
+        globalBootState.hostMouseCaptureToggleKeyDown = 0u;
         release_pressed_host_keys(&globalBootState);
+        release_host_mouse_buttons(windowHandle, &globalBootState);
+        release_host_mouse_capture(windowHandle, &globalBootState);
+        update_window_title(windowHandle, &globalBootState);
         break;
 
     case WM_TIMER:
@@ -3037,6 +4288,8 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         return 0;
 
     case HYPERDOS_MONITOR_USER_RESET_MESSAGE:
+        release_host_mouse_buttons(windowHandle, &globalBootState);
+        release_host_mouse_capture(windowHandle, &globalBootState);
         if (globalBootState.emulationThreadHandle != NULL)
         {
             WaitForSingleObject(globalBootState.emulationThreadHandle, 2000u);
@@ -3056,6 +4309,19 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         size_t   scanCodeByteCount  = 0u;
         uint16_t hostKeyStateIndex  = HYPERDOS_MONITOR_HOST_KEY_STATE_NONE;
         int      previousKeyWasDown = (((uint32_t)longParameter & 0x40000000u) != 0u);
+
+        if (host_mouse_capture_toggle_shortcut_is_down(wordParameter))
+        {
+            globalBootState.hostMouseCaptureToggleKeyDown = 1u;
+            if (!previousKeyWasDown)
+            {
+                release_pressed_host_keys(&globalBootState);
+                release_host_mouse_buttons(windowHandle, &globalBootState);
+                toggle_host_mouse_capture(windowHandle, &globalBootState);
+                update_window_title(windowHandle, &globalBootState);
+            }
+            return 0;
+        }
 
         scanCodeByteCount = make_keyboard_scan_code_sequence_from_window_key_message(wordParameter,
                                                                                      longParameter,
@@ -3088,6 +4354,12 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
         size_t   scanCodeByteCount = 0u;
         uint16_t hostKeyStateIndex = HYPERDOS_MONITOR_HOST_KEY_STATE_NONE;
 
+        if (wordParameter == VK_F10 && globalBootState.hostMouseCaptureToggleKeyDown != 0u)
+        {
+            globalBootState.hostMouseCaptureToggleKeyDown = 0u;
+            return 0;
+        }
+
         scanCodeByteCount = make_keyboard_scan_code_sequence_from_window_key_message(wordParameter,
                                                                                      longParameter,
                                                                                      1,
@@ -3115,8 +4387,22 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
     case WM_ERASEBKGND:
         return 1;
 
+    case WM_INPUT:
+        handle_host_raw_mouse_input(&globalBootState, (HRAWINPUT)longParameter);
+        return 0;
+
+    case WM_MOUSEMOVE:
     case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
+    case WM_LBUTTONUP:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONDBLCLK:
+    case WM_RBUTTONUP:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONDBLCLK:
+    case WM_MBUTTONUP:
         SetFocus(windowHandle);
+        handle_host_mouse_input(windowHandle, &globalBootState, message, wordParameter, longParameter);
         return 0;
 
     case WM_PAINT:
@@ -3132,6 +4418,8 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
 
     case WM_DESTROY:
         KillTimer(windowHandle, HYPERDOS_MONITOR_RENDER_TIMER_IDENTIFIER);
+        release_host_mouse_buttons(windowHandle, &globalBootState);
+        release_host_mouse_capture(windowHandle, &globalBootState);
         shutdown_boot_state(&globalBootState);
         if (globalTextFontHandle != NULL)
         {
@@ -3423,6 +4711,55 @@ static void parse_command_line_disk_paths(const char* commandLine)
     }
 }
 
+static void configure_process_display_scale_awareness(void)
+{
+    typedef BOOL(WINAPI * hyperdos_monitor_set_process_display_scale_awareness_context_function)(HANDLE);
+    typedef HRESULT(WINAPI * hyperdos_monitor_set_process_display_scale_awareness_function)(int);
+    typedef BOOL(WINAPI * hyperdos_monitor_set_process_display_scale_aware_function)(void);
+
+    HMODULE userInterfaceLibrary = LoadLibraryA("user32.dll");
+    HMODULE shellScalingLibrary  = NULL;
+
+    if (userInterfaceLibrary == NULL)
+    {
+        return;
+    }
+
+    hyperdos_monitor_set_process_display_scale_awareness_context_function setProcessDisplayScaleAwarenessContext =
+            (hyperdos_monitor_set_process_display_scale_awareness_context_function)
+                    GetProcAddress(userInterfaceLibrary, "SetProcessDpiAwarenessContext");
+    if (setProcessDisplayScaleAwarenessContext != NULL &&
+        setProcessDisplayScaleAwarenessContext((HANDLE)(intptr_t)-4) != FALSE)
+    {
+        FreeLibrary(userInterfaceLibrary);
+        return;
+    }
+
+    shellScalingLibrary = LoadLibraryA("shcore.dll");
+    if (shellScalingLibrary != NULL)
+    {
+        hyperdos_monitor_set_process_display_scale_awareness_function
+                setProcessDisplayScaleAwareness = (hyperdos_monitor_set_process_display_scale_awareness_function)
+                        GetProcAddress(shellScalingLibrary, "SetProcessDpiAwareness");
+        if (setProcessDisplayScaleAwareness != NULL && setProcessDisplayScaleAwareness(2) >= 0)
+        {
+            FreeLibrary(shellScalingLibrary);
+            FreeLibrary(userInterfaceLibrary);
+            return;
+        }
+        FreeLibrary(shellScalingLibrary);
+    }
+
+    hyperdos_monitor_set_process_display_scale_aware_function
+            setProcessDisplayScaleAware = (hyperdos_monitor_set_process_display_scale_aware_function)
+                    GetProcAddress(userInterfaceLibrary, "SetProcessDPIAware");
+    if (setProcessDisplayScaleAware != NULL)
+    {
+        (void)setProcessDisplayScaleAware();
+    }
+    FreeLibrary(userInterfaceLibrary);
+}
+
 int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, LPSTR commandLine, int showCommand)
 {
     WNDCLASSA windowClass;
@@ -3435,6 +4772,7 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
     int       windowHeight = 0;
 
     (void)previousInstanceHandle;
+    configure_process_display_scale_awareness();
     parse_command_line_disk_paths(commandLine);
     InitializeCriticalSection(&globalDiskTraceCriticalSection);
     globalDiskTraceCriticalSectionInitialized = 1;
@@ -3465,6 +4803,7 @@ int WINAPI WinMain(HINSTANCE instanceHandle, HINSTANCE previousInstanceHandle, L
     windowWidth  = requestedClientRectangle.right - requestedClientRectangle.left;
     windowHeight = requestedClientRectangle.bottom - requestedClientRectangle.top;
     memset(&windowClass, 0, sizeof(windowClass));
+    windowClass.style         = CS_DBLCLKS;
     windowClass.lpfnWndProc   = monitor_window_procedure;
     windowClass.hInstance     = instanceHandle;
     windowClass.lpszClassName = "HyperDOSMonitorWindow";

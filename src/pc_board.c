@@ -13,6 +13,9 @@ enum
     HYPERDOS_PC_MEMORY_BASE                                 = 0x00000u,
     HYPERDOS_PC_TIMER_INTERRUPT_REQUEST_LINE                = 0u,
     HYPERDOS_PC_KEYBOARD_INTERRUPT_REQUEST_LINE             = 1u,
+    HYPERDOS_PC_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE        = 2u,
+    HYPERDOS_PC_AUXILIARY_DEVICE_INTERRUPT_REQUEST_LINE     = 4u,
+    HYPERDOS_PC_SLAVE_INTERRUPT_VECTOR_BASE                 = 0x70u,
     HYPERDOS_PC_SPEAKER_TIMER_CHANNEL                       = 2u,
     HYPERDOS_PC_INTERVAL_TIMER_INPUT_DIVISOR                = 4u,
     HYPERDOS_PC_INTERVAL_TIMER_CHANNEL_ZERO                 = HYPERDOS_PC_PROGRAMMABLE_INTERVAL_TIMER_PORT,
@@ -205,6 +208,8 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
     hyperdos_programmable_interrupt_controller_initialize(&pc->programmableInterruptController,
                                                           HYPERDOS_PC_DEFAULT_INTERRUPT_VECTOR_BASE);
     pc->programmableInterruptController.interruptMaskRegister = HYPERDOS_PC_DEFAULT_INTERRUPT_MASK;
+    hyperdos_programmable_interrupt_controller_initialize(&pc->slaveProgrammableInterruptController,
+                                                          HYPERDOS_PC_SLAVE_INTERRUPT_VECTOR_BASE);
     hyperdos_direct_memory_access_controller_initialize(&pc->directMemoryAccessController);
     hyperdos_pc_initialize_programmable_interval_timer(pc);
     hyperdos_programmable_peripheral_interface_initialize(&pc->programmablePeripheralInterface);
@@ -449,6 +454,50 @@ void hyperdos_pc_raise_keyboard_controller_interrupt_request(hyperdos_pc*       
     hyperdos_intel_8042_keyboard_controller_clear_interrupt_request(&pc->keyboardController);
 }
 
+void hyperdos_pc_raise_auxiliary_device_interrupt_request(hyperdos_pc*                     pc,
+                                                          hyperdos_pc_board_trace_function traceFunction,
+                                                          void*                            traceUserContext)
+{
+    (void)traceFunction;
+    (void)traceUserContext;
+
+    if (pc == NULL || pc->slaveProgrammableInterruptControllerEnabled == 0u ||
+        !hyperdos_intel_8042_keyboard_controller_has_auxiliary_device_interrupt_request(&pc->keyboardController))
+    {
+        return;
+    }
+
+    hyperdos_programmable_interrupt_controller_raise_request(&pc->slaveProgrammableInterruptController,
+                                                             HYPERDOS_PC_AUXILIARY_DEVICE_INTERRUPT_REQUEST_LINE);
+    hyperdos_intel_8042_keyboard_controller_clear_auxiliary_device_interrupt_request(&pc->keyboardController);
+}
+
+void hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(hyperdos_pc* pc, uint8_t enabled)
+{
+    uint8_t cascadeInterruptMask         = (uint8_t)(1u << HYPERDOS_PC_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE);
+    uint8_t auxiliaryDeviceInterruptMask = (uint8_t)(1u << HYPERDOS_PC_AUXILIARY_DEVICE_INTERRUPT_REQUEST_LINE);
+
+    if (pc == NULL || pc->slaveProgrammableInterruptControllerEnabled == 0u)
+    {
+        return;
+    }
+
+    if (enabled != 0u)
+    {
+        pc->programmableInterruptController.interruptMaskRegister =
+                (uint8_t)(pc->programmableInterruptController.interruptMaskRegister & ~cascadeInterruptMask);
+        pc->slaveProgrammableInterruptController.interruptMaskRegister =
+                (uint8_t)(pc->slaveProgrammableInterruptController.interruptMaskRegister &
+                          ~auxiliaryDeviceInterruptMask);
+    }
+    else
+    {
+        pc->slaveProgrammableInterruptController.interruptMaskRegister =
+                (uint8_t)(pc->slaveProgrammableInterruptController.interruptMaskRegister |
+                          auxiliaryDeviceInterruptMask);
+    }
+}
+
 void hyperdos_pc_raise_interval_timer_interrupt_request(hyperdos_pc*                     pc,
                                                         hyperdos_pc_board_trace_function traceFunction,
                                                         void*                            traceUserContext)
@@ -472,6 +521,53 @@ void hyperdos_pc_raise_interval_timer_interrupt_request(hyperdos_pc*            
                       pc->programmableIntervalTimer.channels[HYPERDOS_PC_TIMER_INTERRUPT_REQUEST_LINE].reloadValue);
     hyperdos_programmable_interrupt_controller_raise_request(&pc->programmableInterruptController,
                                                              HYPERDOS_PC_TIMER_INTERRUPT_REQUEST_LINE);
+}
+
+static void hyperdos_pc_raise_slave_interrupt_cascade_request_if_needed(hyperdos_pc* pc)
+{
+    if (pc == NULL || pc->slaveProgrammableInterruptControllerEnabled == 0u ||
+        !hyperdos_programmable_interrupt_controller_has_pending_unmasked_request(
+                &pc->slaveProgrammableInterruptController))
+    {
+        return;
+    }
+
+    hyperdos_programmable_interrupt_controller_raise_request(&pc->programmableInterruptController,
+                                                             HYPERDOS_PC_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE);
+}
+
+int hyperdos_pc_acknowledge_interrupt_request(hyperdos_pc* pc, uint8_t* interruptNumber)
+{
+    uint8_t masterRequestLine     = 0u;
+    uint8_t masterInterruptNumber = 0u;
+    uint8_t slaveInterruptNumber  = 0u;
+    uint8_t slaveRequestLine      = 0u;
+
+    if (pc == NULL || interruptNumber == NULL)
+    {
+        return 0;
+    }
+
+    hyperdos_pc_raise_slave_interrupt_cascade_request_if_needed(pc);
+    if (!hyperdos_programmable_interrupt_controller_acknowledge_request(&pc->programmableInterruptController,
+                                                                        &masterRequestLine,
+                                                                        &masterInterruptNumber))
+    {
+        return 0;
+    }
+    if (pc->slaveProgrammableInterruptControllerEnabled != 0u &&
+        masterRequestLine == HYPERDOS_PC_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE &&
+        hyperdos_programmable_interrupt_controller_acknowledge_request(&pc->slaveProgrammableInterruptController,
+                                                                       &slaveRequestLine,
+                                                                       &slaveInterruptNumber))
+    {
+        (void)slaveRequestLine;
+        *interruptNumber = slaveInterruptNumber;
+        return 1;
+    }
+
+    *interruptNumber = masterInterruptNumber;
+    return 1;
 }
 
 uint64_t hyperdos_pc_step_halted_processor_clock(hyperdos_pc*                     pc,

@@ -6,62 +6,65 @@
 
 enum
 {
-    HYPERDOS_OPEN_BUS_BYTE                                       = 0xFFu,
-    HYPERDOS_X86_16_TWO_BIT_COUNT                                = 2u,
-    HYPERDOS_X86_16_LOW_TWO_BITS_MASK                            = 0x03u,
-    HYPERDOS_X86_16_LOW_THREE_BITS_MASK                          = 0x07u,
-    HYPERDOS_INTERRUPT_CONTROLLER_COMMAND_PORT_OFFSET            = 0u,
-    HYPERDOS_INTERRUPT_CONTROLLER_DATA_PORT_OFFSET               = 1u,
-    HYPERDOS_INTERRUPT_CONTROLLER_INITIALIZATION_COMMAND         = 0x10u,
-    HYPERDOS_INTERRUPT_CONTROLLER_INITIALIZATION_NEEDS_WORD_FOUR = 0x01u,
-    HYPERDOS_INTERRUPT_CONTROLLER_OPERATION_COMMAND_THREE        = 0x08u,
-    HYPERDOS_INTERRUPT_CONTROLLER_READ_IN_SERVICE_REGISTER       = 0x03u,
-    HYPERDOS_INTERRUPT_CONTROLLER_END_OF_INTERRUPT               = 0x20u,
-    HYPERDOS_INTERRUPT_CONTROLLER_SPECIFIC_END_OF_INTERRUPT      = 0x40u,
-    HYPERDOS_INTERRUPT_CONTROLLER_AUTO_END_OF_INTERRUPT          = 0x02u,
-    HYPERDOS_INTERRUPT_CONTROLLER_OPERATION_LEVEL_MASK           = 0x07u,
-    HYPERDOS_INTERRUPT_CONTROLLER_REQUEST_LINE_COUNT             = 8u,
-    HYPERDOS_INTERRUPT_CONTROLLER_VECTOR_BASE_MASK               = 0xF8u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_CHANNEL_COUNT                  = 4u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_CHANNEL_MASK                   = 0x03u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_SINGLE_MASK_SET_BIT            = 0x04u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_ADDRESS_COUNT_PORT_LAST        = 0x07u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_COMMAND_PORT                   = 0x08u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_REQUEST_PORT                   = 0x09u,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_SINGLE_MASK_PORT               = 0x0Au,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_MODE_PORT                      = 0x0Bu,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_FLIP_FLOP_RESET_PORT           = 0x0Cu,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_MASTER_RESET_PORT              = 0x0Du,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_MASK_RESET_PORT                = 0x0Eu,
-    HYPERDOS_DIRECT_MEMORY_ACCESS_ALL_MASK_PORT                  = 0x0Fu,
-    HYPERDOS_INTERVAL_TIMER_CHANNEL_COUNT                        = 3u,
-    HYPERDOS_INTERVAL_TIMER_CONTROL_PORT_OFFSET                  = 3u,
-    HYPERDOS_INTERVAL_TIMER_SELECT_CHANNEL_SHIFT                 = 6u,
-    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_SHIFT                    = 4u,
-    HYPERDOS_INTERVAL_TIMER_OPERATING_MODE_SHIFT                 = 1u,
-    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LATCH_COUNT              = 0u,
-    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LOW_BYTE                 = 1u,
-    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_HIGH_BYTE                = 2u,
-    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LOW_HIGH_BYTE            = 3u,
-    HYPERDOS_INTERVAL_TIMER_MODE_INTERRUPT_ON_TERMINAL_COUNT     = 0u,
-    HYPERDOS_INTERVAL_TIMER_MODE_RATE_GENERATOR                  = 2u,
-    HYPERDOS_INTERVAL_TIMER_MODE_SQUARE_WAVE                     = 3u,
-    HYPERDOS_INTERVAL_TIMER_MODE_SOFTWARE_TRIGGERED_STROBE       = 4u,
-    HYPERDOS_INTERVAL_TIMER_MODE_HARDWARE_TRIGGERED_STROBE       = 5u,
-    HYPERDOS_INTERVAL_TIMER_MAXIMUM_COUNT                        = 0x10000u,
-    HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET     = 3u,
-    HYPERDOS_X86_16_PERIPHERAL_INTERFACE_DEFAULT_CONTROL         = 0x9Bu,
-    HYPERDOS_KEYBOARD_CONTROLLER_DATA_PORT                       = 0x0060u,
-    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT             = 0x0064u,
-    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL       = 0x01u,
-    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_INPUT_BUFFER_FULL        = 0x02u,
-    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_SYSTEM_FLAG              = 0x04u,
-    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_DATA             = 0x08u,
-    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_UNLOCKED                 = 0x10u,
-    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_INTERRUPT_ENABLE   = 0x01u,
-    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_SYSTEM_FLAG        = 0x04u,
-    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_KEYBOARD_DISABLED  = 0x10u,
-    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_TRANSLATION        = 0x40u,
+    HYPERDOS_OPEN_BUS_BYTE                                               = 0xFFu,
+    HYPERDOS_X86_16_TWO_BIT_COUNT                                        = 2u,
+    HYPERDOS_X86_16_LOW_TWO_BITS_MASK                                    = 0x03u,
+    HYPERDOS_X86_16_LOW_THREE_BITS_MASK                                  = 0x07u,
+    HYPERDOS_INTERRUPT_CONTROLLER_COMMAND_PORT_OFFSET                    = 0u,
+    HYPERDOS_INTERRUPT_CONTROLLER_DATA_PORT_OFFSET                       = 1u,
+    HYPERDOS_INTERRUPT_CONTROLLER_INITIALIZATION_COMMAND                 = 0x10u,
+    HYPERDOS_INTERRUPT_CONTROLLER_INITIALIZATION_NEEDS_WORD_FOUR         = 0x01u,
+    HYPERDOS_INTERRUPT_CONTROLLER_OPERATION_COMMAND_THREE                = 0x08u,
+    HYPERDOS_INTERRUPT_CONTROLLER_READ_IN_SERVICE_REGISTER               = 0x03u,
+    HYPERDOS_INTERRUPT_CONTROLLER_END_OF_INTERRUPT                       = 0x20u,
+    HYPERDOS_INTERRUPT_CONTROLLER_SPECIFIC_END_OF_INTERRUPT              = 0x40u,
+    HYPERDOS_INTERRUPT_CONTROLLER_AUTO_END_OF_INTERRUPT                  = 0x02u,
+    HYPERDOS_INTERRUPT_CONTROLLER_OPERATION_LEVEL_MASK                   = 0x07u,
+    HYPERDOS_INTERRUPT_CONTROLLER_REQUEST_LINE_COUNT                     = 8u,
+    HYPERDOS_INTERRUPT_CONTROLLER_VECTOR_BASE_MASK                       = 0xF8u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_CHANNEL_COUNT                          = 4u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_CHANNEL_MASK                           = 0x03u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_SINGLE_MASK_SET_BIT                    = 0x04u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_ADDRESS_COUNT_PORT_LAST                = 0x07u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_COMMAND_PORT                           = 0x08u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_REQUEST_PORT                           = 0x09u,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_SINGLE_MASK_PORT                       = 0x0Au,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_MODE_PORT                              = 0x0Bu,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_FLIP_FLOP_RESET_PORT                   = 0x0Cu,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_MASTER_RESET_PORT                      = 0x0Du,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_MASK_RESET_PORT                        = 0x0Eu,
+    HYPERDOS_DIRECT_MEMORY_ACCESS_ALL_MASK_PORT                          = 0x0Fu,
+    HYPERDOS_INTERVAL_TIMER_CHANNEL_COUNT                                = 3u,
+    HYPERDOS_INTERVAL_TIMER_CONTROL_PORT_OFFSET                          = 3u,
+    HYPERDOS_INTERVAL_TIMER_SELECT_CHANNEL_SHIFT                         = 6u,
+    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_SHIFT                            = 4u,
+    HYPERDOS_INTERVAL_TIMER_OPERATING_MODE_SHIFT                         = 1u,
+    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LATCH_COUNT                      = 0u,
+    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LOW_BYTE                         = 1u,
+    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_HIGH_BYTE                        = 2u,
+    HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LOW_HIGH_BYTE                    = 3u,
+    HYPERDOS_INTERVAL_TIMER_MODE_INTERRUPT_ON_TERMINAL_COUNT             = 0u,
+    HYPERDOS_INTERVAL_TIMER_MODE_RATE_GENERATOR                          = 2u,
+    HYPERDOS_INTERVAL_TIMER_MODE_SQUARE_WAVE                             = 3u,
+    HYPERDOS_INTERVAL_TIMER_MODE_SOFTWARE_TRIGGERED_STROBE               = 4u,
+    HYPERDOS_INTERVAL_TIMER_MODE_HARDWARE_TRIGGERED_STROBE               = 5u,
+    HYPERDOS_INTERVAL_TIMER_MAXIMUM_COUNT                                = 0x10000u,
+    HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET             = 3u,
+    HYPERDOS_X86_16_PERIPHERAL_INTERFACE_DEFAULT_CONTROL                 = 0x9Bu,
+    HYPERDOS_KEYBOARD_CONTROLLER_DATA_PORT                               = 0x0060u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT                     = 0x0064u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL               = 0x01u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_INPUT_BUFFER_FULL                = 0x02u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_SYSTEM_FLAG                      = 0x04u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_DATA                     = 0x08u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_UNLOCKED                         = 0x10u,
+    HYPERDOS_KEYBOARD_CONTROLLER_STATUS_AUXILIARY_OUTPUT_BUFFER          = 0x20u,
+    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_INTERRUPT_ENABLE           = 0x01u,
+    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_INTERRUPT_ENABLE = 0x02u,
+    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_SYSTEM_FLAG                = 0x04u,
+    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_KEYBOARD_DISABLED          = 0x10u,
+    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED         = 0x20u,
+    HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_TRANSLATION                = 0x40u,
     HYPERDOS_KEYBOARD_CONTROLLER_DEFAULT_COMMAND_BYTE = HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_INTERRUPT_ENABLE |
                                                         HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_SYSTEM_FLAG |
                                                         HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_TRANSLATION,
@@ -98,6 +101,38 @@ enum
     HYPERDOS_KEYBOARD_DEVICE_RESPONSE_INTERFACE_TEST_PASSED          = 0x00u,
     HYPERDOS_KEYBOARD_DEVICE_IDENTIFY_FIRST_BYTE                     = 0xABu,
     HYPERDOS_KEYBOARD_DEVICE_IDENTIFY_SECOND_BYTE                    = 0x83u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_ONE_TO_ONE   = 0xE6u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_TWO_TO_ONE   = 0xE7u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_RESOLUTION           = 0xE8u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_STATUS_REQUEST           = 0xE9u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_STREAM_MODE          = 0xEAu,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_READ_DATA                = 0xEBu,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_RESET_WRAP_MODE          = 0xECu,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_WRAP_MODE            = 0xEEu,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_REMOTE_MODE          = 0xF0u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_IDENTIFY                 = 0xF2u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SAMPLE_RATE          = 0xF3u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_ENABLE_REPORTING         = 0xF4u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_DISABLE_REPORTING        = 0xF5u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_DEFAULTS             = 0xF6u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_RESEND                   = 0xFEu,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_RESET                    = 0xFFu,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_IDENTIFIER_STANDARD              = 0x00u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_RIGHT_BUTTON              = 0x01u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_MIDDLE_BUTTON             = 0x02u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_LEFT_BUTTON               = 0x04u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_SCALING_TWO_TO_ONE        = 0x10u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_REPORTING_ENABLED         = 0x20u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_DEFAULT_SAMPLE_RATE              = 100u,
+    HYPERDOS_AUXILIARY_MOUSE_DEVICE_DEFAULT_RESOLUTION               = 2u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_LEFT_BUTTON                      = 0x01u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_RIGHT_BUTTON                     = 0x02u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_MIDDLE_BUTTON                    = 0x04u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE                       = 0x08u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_HORIZONTAL_SIGN                  = 0x10u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_VERTICAL_SIGN                    = 0x20u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_HORIZONTAL_OVERFLOW              = 0x40u,
+    HYPERDOS_AUXILIARY_MOUSE_PACKET_VERTICAL_OVERFLOW                = 0x80u,
     HYPERDOS_UART_RECEIVER_BUFFER_OFFSET                             = 0u,
     HYPERDOS_UART_INTERRUPT_ENABLE_OFFSET                            = 1u,
     HYPERDOS_UART_INTERRUPT_IDENTIFICATION_OFFSET                    = 2u,
@@ -1154,12 +1189,12 @@ static int hyperdos_programmable_interrupt_controller_request_can_preempt(
     return 1;
 }
 
-int hyperdos_programmable_interrupt_controller_acknowledge(hyperdos_programmable_interrupt_controller* controller,
-                                                           uint8_t*                                    interruptNumber)
+int hyperdos_programmable_interrupt_controller_has_pending_unmasked_request(
+        const hyperdos_programmable_interrupt_controller* controller)
 {
     uint8_t requestLine = 0;
 
-    if (controller == NULL || interruptNumber == NULL)
+    if (controller == NULL)
     {
         return 0;
     }
@@ -1171,16 +1206,51 @@ int hyperdos_programmable_interrupt_controller_acknowledge(hyperdos_programmable
             (controller->interruptMaskRegister & requestMask) == 0u &&
             hyperdos_programmable_interrupt_controller_request_can_preempt(controller, requestLine))
         {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int hyperdos_programmable_interrupt_controller_acknowledge_request(
+        hyperdos_programmable_interrupt_controller* controller,
+        uint8_t*                                    requestLine,
+        uint8_t*                                    interruptNumber)
+{
+    uint8_t currentRequestLine = 0;
+
+    if (controller == NULL || requestLine == NULL || interruptNumber == NULL)
+    {
+        return 0;
+    }
+
+    for (currentRequestLine = 0; currentRequestLine < HYPERDOS_INTERRUPT_CONTROLLER_REQUEST_LINE_COUNT;
+         ++currentRequestLine)
+    {
+        uint8_t requestMask = (uint8_t)(1u << currentRequestLine);
+        if ((controller->interruptRequestRegister & requestMask) != 0u &&
+            (controller->interruptMaskRegister & requestMask) == 0u &&
+            hyperdos_programmable_interrupt_controller_request_can_preempt(controller, currentRequestLine))
+        {
             controller->interruptRequestRegister &= (uint8_t)~requestMask;
             if (controller->autoEndOfInterrupt == 0u)
             {
                 controller->inServiceRegister |= requestMask;
             }
-            *interruptNumber = (uint8_t)(controller->vectorBase + requestLine);
+            *requestLine     = currentRequestLine;
+            *interruptNumber = (uint8_t)(controller->vectorBase + currentRequestLine);
             return 1;
         }
     }
     return 0;
+}
+
+int hyperdos_programmable_interrupt_controller_acknowledge(hyperdos_programmable_interrupt_controller* controller,
+                                                           uint8_t*                                    interruptNumber)
+{
+    uint8_t requestLine = 0u;
+
+    return hyperdos_programmable_interrupt_controller_acknowledge_request(controller, &requestLine, interruptNumber);
 }
 
 void hyperdos_direct_memory_access_controller_initialize(hyperdos_direct_memory_access_controller* controller)
@@ -1632,6 +1702,10 @@ static void hyperdos_intel_8042_keyboard_controller_update_status(hyperdos_intel
     if (controller->outputQueueCount != 0u)
     {
         statusRegister |= HYPERDOS_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL;
+        if (controller->outputQueueAuxiliaryDevice[controller->outputQueueReadIndex] != 0u)
+        {
+            statusRegister |= HYPERDOS_KEYBOARD_CONTROLLER_STATUS_AUXILIARY_OUTPUT_BUFFER;
+        }
     }
     if ((controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_SYSTEM_FLAG) != 0u)
     {
@@ -1645,30 +1719,164 @@ static void hyperdos_intel_8042_keyboard_controller_update_status(hyperdos_intel
 static void hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(
         hyperdos_intel_8042_keyboard_controller* controller)
 {
-    if ((controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_INTERRUPT_ENABLE) != 0u &&
-        (controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_KEYBOARD_DISABLED) == 0u &&
-        controller->outputQueueCount != 0u)
+    if (controller->outputQueueCount == 0u)
     {
-        controller->interruptRequestPending = 1u;
+        return;
+    }
+
+    if (controller->outputQueueAuxiliaryDevice[controller->outputQueueReadIndex] != 0u)
+    {
+        if ((controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_INTERRUPT_ENABLE) != 0u &&
+            controller->auxiliaryDeviceDisabled == 0u &&
+            (controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED) == 0u)
+        {
+            controller->auxiliaryDeviceInterruptRequestPending = 1u;
+        }
+        return;
+    }
+
+    if ((controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_INTERRUPT_ENABLE) != 0u &&
+        (controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_KEYBOARD_DISABLED) == 0u)
+    {
+        controller->keyboardInterruptRequestPending = 1u;
     }
 }
 
 static int hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
         hyperdos_intel_8042_keyboard_controller* controller,
-        uint8_t                                  value)
+        uint8_t                                  value,
+        uint8_t                                  auxiliaryDevice)
 {
     if (controller->outputQueueCount >= HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY)
     {
         return 0;
     }
 
-    controller->outputQueue[controller->outputQueueWriteIndex] = value;
-    controller->outputQueueWriteIndex                          = (controller->outputQueueWriteIndex + 1u) %
+    controller->outputQueue[controller->outputQueueWriteIndex]                = value;
+    controller->outputQueueAuxiliaryDevice[controller->outputQueueWriteIndex] = auxiliaryDevice != 0u ? 1u : 0u;
+    controller->outputQueueWriteIndex = (controller->outputQueueWriteIndex + 1u) %
                                         HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY;
     ++controller->outputQueueCount;
     hyperdos_intel_8042_keyboard_controller_update_status(controller);
     hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(controller);
     return 1;
+}
+
+static int hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        uint8_t                                  value)
+{
+    return hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, value, 0u);
+}
+
+static int hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        uint8_t                                  value)
+{
+    return hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, value, 1u);
+}
+
+static void hyperdos_intel_8042_keyboard_controller_set_auxiliary_defaults(
+        hyperdos_intel_8042_keyboard_controller* controller)
+{
+    controller->auxiliaryDeviceSampleRate       = HYPERDOS_AUXILIARY_MOUSE_DEVICE_DEFAULT_SAMPLE_RATE;
+    controller->auxiliaryDeviceResolution       = HYPERDOS_AUXILIARY_MOUSE_DEVICE_DEFAULT_RESOLUTION;
+    controller->auxiliaryDeviceScalingTwoToOne  = 0u;
+    controller->auxiliaryDeviceReportingEnabled = 0u;
+    controller->pendingAuxiliaryDeviceCommand   = 0u;
+}
+
+static int16_t hyperdos_intel_8042_keyboard_controller_clamp_auxiliary_mouse_movement(int32_t  movement,
+                                                                                      uint8_t* overflow)
+{
+    if (movement < -256)
+    {
+        *overflow = 1u;
+        return -256;
+    }
+    if (movement > 255)
+    {
+        *overflow = 1u;
+        return 255;
+    }
+    *overflow = movement == -256 || movement == 255 ? 1u : 0u;
+    return (int16_t)movement;
+}
+
+static uint8_t hyperdos_intel_8042_keyboard_controller_get_auxiliary_mouse_status_byte(
+        const hyperdos_intel_8042_keyboard_controller* controller)
+{
+    uint8_t statusByte = 0u;
+
+    if ((controller->auxiliaryDeviceButtonMask & HYPERDOS_AUXILIARY_MOUSE_PACKET_RIGHT_BUTTON) != 0u)
+    {
+        statusByte |= HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_RIGHT_BUTTON;
+    }
+    if ((controller->auxiliaryDeviceButtonMask & HYPERDOS_AUXILIARY_MOUSE_PACKET_MIDDLE_BUTTON) != 0u)
+    {
+        statusByte |= HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_MIDDLE_BUTTON;
+    }
+    if ((controller->auxiliaryDeviceButtonMask & HYPERDOS_AUXILIARY_MOUSE_PACKET_LEFT_BUTTON) != 0u)
+    {
+        statusByte |= HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_LEFT_BUTTON;
+    }
+    if (controller->auxiliaryDeviceScalingTwoToOne != 0u)
+    {
+        statusByte |= HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_SCALING_TWO_TO_ONE;
+    }
+    if (controller->auxiliaryDeviceReportingEnabled != 0u)
+    {
+        statusByte |= HYPERDOS_AUXILIARY_MOUSE_DEVICE_STATUS_REPORTING_ENABLED;
+    }
+    return statusByte;
+}
+
+static int hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_mouse_packet(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        int32_t                                  horizontalMovement,
+        int32_t                                  verticalMovement,
+        uint8_t                                  buttonMask)
+{
+    uint8_t horizontalOverflow = 0u;
+    uint8_t verticalOverflow   = 0u;
+    uint8_t firstByte          = HYPERDOS_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE;
+    int16_t clampedHorizontalMovement =
+            hyperdos_intel_8042_keyboard_controller_clamp_auxiliary_mouse_movement(horizontalMovement,
+                                                                                   &horizontalOverflow);
+    int16_t clampedVerticalMovement =
+            hyperdos_intel_8042_keyboard_controller_clamp_auxiliary_mouse_movement(verticalMovement, &verticalOverflow);
+
+    if (controller->outputQueueCount + 3u > HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY)
+    {
+        return 0;
+    }
+
+    controller->auxiliaryDeviceButtonMask  = buttonMask & (HYPERDOS_AUXILIARY_MOUSE_PACKET_LEFT_BUTTON |
+                                                          HYPERDOS_AUXILIARY_MOUSE_PACKET_RIGHT_BUTTON |
+                                                          HYPERDOS_AUXILIARY_MOUSE_PACKET_MIDDLE_BUTTON);
+    firstByte                             |= controller->auxiliaryDeviceButtonMask;
+    if (clampedHorizontalMovement < 0)
+    {
+        firstByte |= HYPERDOS_AUXILIARY_MOUSE_PACKET_HORIZONTAL_SIGN;
+    }
+    if (clampedVerticalMovement < 0)
+    {
+        firstByte |= HYPERDOS_AUXILIARY_MOUSE_PACKET_VERTICAL_SIGN;
+    }
+    if (horizontalOverflow != 0u)
+    {
+        firstByte |= HYPERDOS_AUXILIARY_MOUSE_PACKET_HORIZONTAL_OVERFLOW;
+    }
+    if (verticalOverflow != 0u)
+    {
+        firstByte |= HYPERDOS_AUXILIARY_MOUSE_PACKET_VERTICAL_OVERFLOW;
+    }
+
+    return hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(controller, firstByte) &&
+           hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(controller,
+                                                                                 (uint8_t)clampedHorizontalMovement) &&
+           hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(controller,
+                                                                                 (uint8_t)clampedVerticalMovement);
 }
 
 void hyperdos_intel_8042_keyboard_controller_initialize(hyperdos_intel_8042_keyboard_controller* controller)
@@ -1684,6 +1892,7 @@ void hyperdos_intel_8042_keyboard_controller_initialize(hyperdos_intel_8042_keyb
     controller->keyboardScanCodeSet     = 1u;
     controller->keyboardScanningEnabled = 1u;
     controller->auxiliaryDeviceDisabled = 1u;
+    hyperdos_intel_8042_keyboard_controller_set_auxiliary_defaults(controller);
     hyperdos_intel_8042_keyboard_controller_update_status(controller);
 }
 
@@ -1708,19 +1917,27 @@ uint8_t hyperdos_intel_8042_keyboard_controller_read_byte(void* device, uint16_t
     }
     if (controller->outputQueueCount != 0u)
     {
+        uint8_t auxiliaryDevice          = controller->outputQueueAuxiliaryDevice[controller->outputQueueReadIndex];
         value                            = controller->outputQueue[controller->outputQueueReadIndex];
         controller->outputQueueReadIndex = (controller->outputQueueReadIndex + 1u) %
                                            HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY;
         --controller->outputQueueCount;
         controller->latchedOutputByte          = value;
         controller->latchedOutputByteAvailable = 1u;
+        if (auxiliaryDevice != 0u)
+        {
+            controller->auxiliaryDeviceInterruptRequestPending = 0u;
+        }
+        else
+        {
+            controller->keyboardInterruptRequestPending = 0u;
+        }
     }
     else if (controller->latchedOutputByteAvailable != 0u)
     {
         value = controller->latchedOutputByte;
     }
-    controller->interruptRequestPending  = 0u;
-    controller->statusRegister          &= (uint8_t)~HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_DATA;
+    controller->statusRegister &= (uint8_t)~HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_DATA;
     hyperdos_intel_8042_keyboard_controller_update_status(controller);
     hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(controller);
     return value;
@@ -1735,7 +1952,7 @@ static void hyperdos_intel_8042_keyboard_controller_write_keyboard_command(
     {
         (void)value;
         controller->pendingKeyboardCommand = 0u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         return;
@@ -1747,13 +1964,13 @@ static void hyperdos_intel_8042_keyboard_controller_write_keyboard_command(
             controller->keyboardScanCodeSet = value;
         }
         controller->pendingKeyboardCommand = 0u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         if (value == 0u)
         {
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller,
-                                                                              controller->keyboardScanCodeSet);
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller,
+                                                                                       controller->keyboardScanCodeSet);
         }
         return;
     }
@@ -1763,38 +1980,39 @@ static void hyperdos_intel_8042_keyboard_controller_write_keyboard_command(
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_SET_LEDS:
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_SET_TYPEMATIC:
         controller->pendingKeyboardCommand = value;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_SET_SCAN_CODE_SET:
         controller->pendingKeyboardCommand = value;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_ECHO:
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, value);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller, value);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_IDENTIFY:
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller,
-                                                                          HYPERDOS_KEYBOARD_DEVICE_IDENTIFY_FIRST_BYTE);
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
+                controller,
+                HYPERDOS_KEYBOARD_DEVICE_IDENTIFY_FIRST_BYTE);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_IDENTIFY_SECOND_BYTE);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_ENABLE_SCANNING:
         controller->keyboardScanningEnabled = 1u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_DISABLE_SCANNING:
         controller->keyboardScanningEnabled = 0u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         break;
@@ -1802,28 +2020,140 @@ static void hyperdos_intel_8042_keyboard_controller_write_keyboard_command(
         controller->keyboardScanCodeSet     = 1u;
         controller->keyboardScanningEnabled = 1u;
         controller->pendingKeyboardCommand  = 0u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_RESEND:
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller,
-                                                                          HYPERDOS_KEYBOARD_DEVICE_RESPONSE_RESEND);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
+                controller,
+                HYPERDOS_KEYBOARD_DEVICE_RESPONSE_RESEND);
         break;
     case HYPERDOS_KEYBOARD_DEVICE_COMMAND_RESET:
         controller->keyboardScanningEnabled = 1u;
         controller->pendingKeyboardCommand  = 0u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_SELF_TEST_PASSED);
         break;
     default:
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                 controller,
                 HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+        break;
+    }
+}
+
+static void hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(
+        hyperdos_intel_8042_keyboard_controller* controller)
+{
+    (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+            controller,
+            HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+}
+
+static void hyperdos_intel_8042_keyboard_controller_write_auxiliary_device_command(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        uint8_t                                  value)
+{
+    if (controller->pendingAuxiliaryDeviceCommand == HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SAMPLE_RATE)
+    {
+        controller->auxiliaryDeviceSampleRate     = value;
+        controller->pendingAuxiliaryDeviceCommand = 0u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        return;
+    }
+    if (controller->pendingAuxiliaryDeviceCommand == HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_RESOLUTION)
+    {
+        controller->auxiliaryDeviceResolution     = (uint8_t)(value & HYPERDOS_X86_16_LOW_TWO_BITS_MASK);
+        controller->pendingAuxiliaryDeviceCommand = 0u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        return;
+    }
+
+    switch (value)
+    {
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_ONE_TO_ONE:
+        controller->auxiliaryDeviceScalingTwoToOne = 0u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_TWO_TO_ONE:
+        controller->auxiliaryDeviceScalingTwoToOne = 1u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_RESOLUTION:
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SAMPLE_RATE:
+        controller->pendingAuxiliaryDeviceCommand = value;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_STATUS_REQUEST:
+    {
+        uint8_t statusByte = hyperdos_intel_8042_keyboard_controller_get_auxiliary_mouse_status_byte(controller);
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(controller, statusByte);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+                controller,
+                controller->auxiliaryDeviceResolution);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+                controller,
+                controller->auxiliaryDeviceSampleRate);
+        break;
+    }
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_STREAM_MODE:
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_RESET_WRAP_MODE:
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_READ_DATA:
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_mouse_packet(
+                controller,
+                0,
+                0,
+                controller->auxiliaryDeviceButtonMask);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_WRAP_MODE:
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_REMOTE_MODE:
+        controller->auxiliaryDeviceReportingEnabled = 0u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_IDENTIFY:
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+                controller,
+                HYPERDOS_AUXILIARY_MOUSE_DEVICE_IDENTIFIER_STANDARD);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_ENABLE_REPORTING:
+        controller->auxiliaryDeviceReportingEnabled = 1u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_DISABLE_REPORTING:
+        controller->auxiliaryDeviceReportingEnabled = 0u;
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_DEFAULTS:
+        hyperdos_intel_8042_keyboard_controller_set_auxiliary_defaults(controller);
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_RESEND:
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+                controller,
+                HYPERDOS_KEYBOARD_DEVICE_RESPONSE_RESEND);
+        break;
+    case HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_RESET:
+        hyperdos_intel_8042_keyboard_controller_set_auxiliary_defaults(controller);
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+                controller,
+                HYPERDOS_KEYBOARD_DEVICE_RESPONSE_SELF_TEST_PASSED);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(
+                controller,
+                HYPERDOS_AUXILIARY_MOUSE_DEVICE_IDENTIFIER_STANDARD);
+        break;
+    default:
+        hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
         break;
     }
 }
@@ -1844,7 +2174,8 @@ void hyperdos_intel_8042_keyboard_controller_write_byte(void* device, uint16_t p
         switch (value)
         {
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_READ_COMMAND_BYTE:
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, controller->commandByte);
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller,
+                                                                                       controller->commandByte);
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_COMMAND_BYTE:
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_OUTPUT_PORT:
@@ -1855,23 +2186,26 @@ void hyperdos_intel_8042_keyboard_controller_write_byte(void* device, uint16_t p
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_SELF_TEST:
             controller->commandByte |= HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_SYSTEM_FLAG;
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                     controller,
                     HYPERDOS_KEYBOARD_DEVICE_RESPONSE_CONTROLLER_TEST_PASSED);
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_TEST_KEYBOARD_INTERFACE:
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                     controller,
                     HYPERDOS_KEYBOARD_DEVICE_RESPONSE_INTERFACE_TEST_PASSED);
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_DISABLE_AUXILIARY:
-            controller->auxiliaryDeviceDisabled = 1u;
+            controller->auxiliaryDeviceDisabled  = 1u;
+            controller->commandByte             |= HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED;
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_ENABLE_AUXILIARY:
             controller->auxiliaryDeviceDisabled = 0u;
+            controller->commandByte &= (uint8_t)~HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED;
+            hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(controller);
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_TEST_AUXILIARY:
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(
                     controller,
                     HYPERDOS_KEYBOARD_DEVICE_RESPONSE_INTERFACE_TEST_PASSED);
             break;
@@ -1883,10 +2217,12 @@ void hyperdos_intel_8042_keyboard_controller_write_byte(void* device, uint16_t p
             hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(controller);
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_READ_INPUT_PORT:
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, controller->inputPort);
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller,
+                                                                                       controller->inputPort);
             break;
         case HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_READ_OUTPUT_PORT:
-            (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, controller->outputPort);
+            (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller,
+                                                                                       controller->outputPort);
             break;
         default:
             break;
@@ -1901,7 +2237,9 @@ void hyperdos_intel_8042_keyboard_controller_write_byte(void* device, uint16_t p
     }
     if (controller->pendingControllerCommand == HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_COMMAND_BYTE)
     {
-        controller->commandByte              = value;
+        controller->commandByte             = value;
+        controller->auxiliaryDeviceDisabled = (value & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED) !=
+                                              0u;
         controller->pendingControllerCommand = 0u;
         hyperdos_intel_8042_keyboard_controller_update_status(controller);
         hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(controller);
@@ -1914,10 +2252,16 @@ void hyperdos_intel_8042_keyboard_controller_write_byte(void* device, uint16_t p
         hyperdos_intel_8042_keyboard_controller_update_status(controller);
         return;
     }
-    if (controller->pendingControllerCommand == HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_KEYBOARD_OUTPUT ||
-        controller->pendingControllerCommand == HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_OUTPUT)
+    if (controller->pendingControllerCommand == HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_KEYBOARD_OUTPUT)
     {
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, value);
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller, value);
+        controller->pendingControllerCommand = 0u;
+        hyperdos_intel_8042_keyboard_controller_update_status(controller);
+        return;
+    }
+    if (controller->pendingControllerCommand == HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_OUTPUT)
+    {
+        (void)hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_output_byte(controller, value);
         controller->pendingControllerCommand = 0u;
         hyperdos_intel_8042_keyboard_controller_update_status(controller);
         return;
@@ -1925,9 +2269,7 @@ void hyperdos_intel_8042_keyboard_controller_write_byte(void* device, uint16_t p
     if (controller->pendingControllerCommand == HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE)
     {
         controller->pendingControllerCommand = 0u;
-        (void)hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(
-                controller,
-                HYPERDOS_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+        hyperdos_intel_8042_keyboard_controller_write_auxiliary_device_command(controller, value);
         hyperdos_intel_8042_keyboard_controller_update_status(controller);
         return;
     }
@@ -1945,7 +2287,7 @@ int hyperdos_intel_8042_keyboard_controller_receive_scan_code(hyperdos_intel_804
     {
         return 0;
     }
-    return hyperdos_intel_8042_keyboard_controller_enqueue_output_byte(controller, scanCode);
+    return hyperdos_intel_8042_keyboard_controller_enqueue_keyboard_output_byte(controller, scanCode);
 }
 
 int hyperdos_intel_8042_keyboard_controller_can_receive_scan_code(
@@ -1962,10 +2304,75 @@ int hyperdos_intel_8042_keyboard_controller_output_queue_is_full(
     return controller != NULL && controller->outputQueueCount >= HYPERDOS_KEYBOARD_CONTROLLER_OUTPUT_QUEUE_CAPACITY;
 }
 
+int hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        int16_t                                  horizontalMovement,
+        int16_t                                  verticalMovement,
+        uint8_t                                  buttonMask)
+{
+    uint8_t previousButtonMask   = 0u;
+    uint8_t normalizedButtonMask = 0u;
+    uint8_t buttonChanged        = 0u;
+
+    if (controller == NULL)
+    {
+        return 0;
+    }
+    normalizedButtonMask = buttonMask &
+                           (HYPERDOS_AUXILIARY_MOUSE_PACKET_LEFT_BUTTON | HYPERDOS_AUXILIARY_MOUSE_PACKET_RIGHT_BUTTON |
+                            HYPERDOS_AUXILIARY_MOUSE_PACKET_MIDDLE_BUTTON);
+    previousButtonMask                    = controller->auxiliaryDeviceButtonMask;
+    buttonChanged                         = previousButtonMask != normalizedButtonMask ? 1u : 0u;
+    controller->auxiliaryDeviceButtonMask = normalizedButtonMask;
+    if (controller->auxiliaryDeviceDisabled != 0u ||
+        (controller->commandByte & HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED) != 0u ||
+        controller->auxiliaryDeviceReportingEnabled == 0u)
+    {
+        return 1;
+    }
+    if (controller->outputQueueCount != 0u)
+    {
+        return 0;
+    }
+
+    if (horizontalMovement == 0 && verticalMovement == 0 && buttonChanged == 0u)
+    {
+        return 1;
+    }
+    return hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_mouse_packet(controller,
+                                                                                  horizontalMovement,
+                                                                                  verticalMovement,
+                                                                                  normalizedButtonMask);
+}
+
+void hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(
+        hyperdos_intel_8042_keyboard_controller* controller,
+        uint8_t                                  enabled)
+{
+    if (controller == NULL)
+    {
+        return;
+    }
+    controller->auxiliaryDeviceReportingEnabled = enabled != 0u ? 1u : 0u;
+    if (enabled != 0u)
+    {
+        controller->auxiliaryDeviceDisabled  = 0u;
+        controller->commandByte             &= (uint8_t)~HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_DISABLED;
+        controller->commandByte             |= HYPERDOS_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_INTERRUPT_ENABLE;
+        hyperdos_intel_8042_keyboard_controller_request_interrupt_if_needed(controller);
+    }
+}
+
 int hyperdos_intel_8042_keyboard_controller_has_interrupt_request(
         const hyperdos_intel_8042_keyboard_controller* controller)
 {
-    return controller != NULL && controller->interruptRequestPending != 0u;
+    return controller != NULL && controller->keyboardInterruptRequestPending != 0u;
+}
+
+int hyperdos_intel_8042_keyboard_controller_has_auxiliary_device_interrupt_request(
+        const hyperdos_intel_8042_keyboard_controller* controller)
+{
+    return controller != NULL && controller->auxiliaryDeviceInterruptRequestPending != 0u;
 }
 
 void hyperdos_intel_8042_keyboard_controller_clear_interrupt_request(
@@ -1973,7 +2380,16 @@ void hyperdos_intel_8042_keyboard_controller_clear_interrupt_request(
 {
     if (controller != NULL)
     {
-        controller->interruptRequestPending = 0u;
+        controller->keyboardInterruptRequestPending = 0u;
+    }
+}
+
+void hyperdos_intel_8042_keyboard_controller_clear_auxiliary_device_interrupt_request(
+        hyperdos_intel_8042_keyboard_controller* controller)
+{
+    if (controller != NULL)
+    {
+        controller->auxiliaryDeviceInterruptRequestPending = 0u;
     }
 }
 

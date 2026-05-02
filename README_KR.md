@@ -19,6 +19,7 @@ ctest --test-dir cmake-build-debug --output-on-failure
 ```
 
 Visual Studio 사용자는 [hyperdos.vcxproj](hyperdos.vcxproj)를 열어 `Debug|x64` 구성으로 빌드할 수 있습니다.
+
 ## 빈 하드 디스크 이미지 만들기
 
 HyperDOS는 raw 디스크 이미지 파일을 사용합니다. Windows에서는 다음 명령어로 32 MiB 빈 하드 디스크 이미지를 만들 수 있습니다.

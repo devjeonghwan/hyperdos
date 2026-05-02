@@ -21,9 +21,12 @@ enum
     HYPERDOS_PC_BIOS_OPERATION_CODE_MOVE_LOW_ACCUMULATOR_IMMEDIATE      = 0xB0u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_SET_CARRY_FLAG                      = 0xF9u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_CLEAR_INTERRUPT_FLAG                = 0xFAu,
+    HYPERDOS_PC_BIOS_OPERATION_CODE_ADD_STACK_POINTER_IMMEDIATE         = 0x83u,
+    HYPERDOS_PC_BIOS_OPERATION_CODE_ADD_STACK_POINTER_REGISTER_BYTE     = 0xC4u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_IMMEDIATE                 = 0xCDu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_JUMP_IF_NOT_CARRY_SHORT             = 0x73u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_OUTPUT_IMMEDIATE_ACCUMULATOR        = 0xE6u,
+    HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR                          = 0xCBu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN                    = 0xCFu
 };
 
@@ -187,11 +190,58 @@ static void hyperdos_pc_bios_install_keyboard_hardware_interrupt_vector_stub(hyp
                                               HYPERDOS_PC_BIOS_KEYBOARD_HARDWARE_STUB_OFFSET);
 }
 
+static void hyperdos_pc_bios_install_auxiliary_device_hardware_interrupt_vector_stub(hyperdos_pc* pc)
+{
+    static const uint8_t auxiliaryDeviceHardwareInterruptStubBytes[] =
+            {HYPERDOS_PC_BIOS_OPERATION_CODE_PUSH_ACCUMULATOR,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_IMMEDIATE,
+             HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_SERVICE_INTERRUPT,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_CLEAR_INTERRUPT_FLAG,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_MOVE_LOW_ACCUMULATOR_IMMEDIATE,
+             HYPERDOS_PC_BIOS_PROGRAMMABLE_INTERRUPT_CONTROLLER_END_OF_INTERRUPT,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_OUTPUT_IMMEDIATE_ACCUMULATOR,
+             HYPERDOS_PC_SLAVE_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_OUTPUT_IMMEDIATE_ACCUMULATOR,
+             HYPERDOS_PC_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_POP_ACCUMULATOR,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN};
+    static const uint8_t auxiliaryDeviceCallbackCleanupStubBytes[] =
+            {HYPERDOS_PC_BIOS_OPERATION_CODE_ADD_STACK_POINTER_IMMEDIATE,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_ADD_STACK_POINTER_REGISTER_BYTE,
+             0x08u,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR};
+    uint32_t stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_SEGMENT
+                                    << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                   HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_OFFSET;
+    uint32_t cleanupStubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_CALLBACK_CLEANUP_STUB_SEGMENT
+                                           << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                          HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_CALLBACK_CLEANUP_STUB_OFFSET;
+    size_t byteIndex = 0u;
+
+    for (byteIndex = 0u; byteIndex < sizeof(auxiliaryDeviceHardwareInterruptStubBytes); ++byteIndex)
+    {
+        hyperdos_pc_firmware_write_byte(pc,
+                                        stubPhysicalAddress + (uint32_t)byteIndex,
+                                        auxiliaryDeviceHardwareInterruptStubBytes[byteIndex]);
+    }
+    for (byteIndex = 0u; byteIndex < sizeof(auxiliaryDeviceCallbackCleanupStubBytes); ++byteIndex)
+    {
+        hyperdos_pc_firmware_write_byte(pc,
+                                        cleanupStubPhysicalAddress + (uint32_t)byteIndex,
+                                        auxiliaryDeviceCallbackCleanupStubBytes[byteIndex]);
+    }
+    hyperdos_pc_bios_install_interrupt_vector(pc,
+                                              HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_INTERRUPT,
+                                              HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_SEGMENT,
+                                              HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_OFFSET);
+}
+
 void hyperdos_pc_bios_install_interrupt_vector_stubs(hyperdos_pc* pc)
 {
     hyperdos_pc_bios_install_timer_hardware_interrupt_vector_stub(pc);
     hyperdos_pc_bios_install_user_timer_tick_interrupt_vector_stub(pc);
     hyperdos_pc_bios_install_keyboard_hardware_interrupt_vector_stub(pc);
+    hyperdos_pc_bios_install_auxiliary_device_hardware_interrupt_vector_stub(pc);
     hyperdos_pc_firmware_install_interrupt_vector_stub(pc,
                                                        HYPERDOS_PC_BIOS_VIDEO_INTERRUPT,
                                                        HYPERDOS_PC_BIOS_VIDEO_SERVICE_INTERRUPT,

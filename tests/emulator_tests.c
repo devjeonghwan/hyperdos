@@ -16,70 +16,91 @@
 
 enum
 {
-    TEST_DOS_SERVICE_REGISTER_SHIFT                         = 8u,
-    TEST_DOS_EXIT_CODE_MASK                                 = 0x00FFu,
-    TEST_BYTE_MASK                                          = 0x00FFu,
-    TEST_WORD_BYTE_COUNT                                    = 2u,
-    TEST_DEFAULT_INSTRUCTION_LIMIT                          = 1000u,
-    TEST_PERIPHERAL_INTERFACE_PORT                          = 0x0060u,
-    TEST_PERIPHERAL_INTERFACE_PORT_COUNT                    = 4u,
-    TEST_PERIPHERAL_INTERFACE_VALUE                         = 0x5Au,
-    TEST_KEYBOARD_CONTROLLER_DATA_PORT                      = 0x0060u,
-    TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT            = 0x0064u,
-    TEST_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL      = 0x01u,
-    TEST_KEYBOARD_CONTROLLER_COMMAND_READ_COMMAND_BYTE      = 0x20u,
-    TEST_KEYBOARD_CONTROLLER_COMMAND_DISABLE_KEYBOARD       = 0xADu,
-    TEST_KEYBOARD_CONTROLLER_COMMAND_ENABLE_KEYBOARD        = 0xAEu,
-    TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_KEYBOARD_OUTPUT  = 0xD2u,
-    TEST_KEYBOARD_CONTROLLER_COMMAND_BYTE_DEFAULT           = 0x45u,
-    TEST_KEYBOARD_DEVICE_COMMAND_SET_SCAN_CODE_SET          = 0xF0u,
-    TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE               = 0xFAu,
-    TEST_KEYBOARD_SCAN_CODE_A                               = 0x1Eu,
-    TEST_KEYBOARD_SCAN_CODE_B                               = 0x30u,
-    TEST_KEYBOARD_FUNCTION_KEY_SIX_WORD                     = 0x4000u,
-    TEST_PC_INTERVAL_TIMER_CONTROL_PORT                     = 0x0043u,
-    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_PORT                 = 0x0042u,
-    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_SQUARE_WAVE_LOW_HIGH = 0xB6u,
-    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_RELOAD_LOW_BYTE      = 0x33u,
-    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_RELOAD_HIGH_BYTE     = 0x05u,
-    TEST_PC_PERIPHERAL_INTERFACE_PORT_B                     = 0x0061u,
-    TEST_PC_SPEAKER_ENABLE_BITS                             = 0x03u,
-    TEST_PC_DEFAULT_TIMER_INTERRUPT_CLOCK_COUNT             = 262144u,
-    TEST_PC_TIMER_TICKS_PER_DAY                             = 0x001800B0u,
-    TEST_INTERRUPT_RETURN_STACK_POINTER                     = 0x0100u,
-    TEST_INTERRUPT_RETURN_FLAGS_STACK_OFFSET                = 4u,
-    TEST_EXTERNAL_INTERRUPT_NUMBER                          = 0x30u,
-    TEST_EXTERNAL_INTERRUPT_VECTOR_OFFSET                   = 0x0123u,
-    TEST_EXTERNAL_INTERRUPT_VECTOR_SEGMENT                  = 0x2345u,
-    TEST_SINGLE_STEP_INTERRUPT_VECTOR_OFFSET                = 0x0234u,
-    TEST_SINGLE_STEP_INTERRUPT_VECTOR_SEGMENT               = 0x3456u,
-    TEST_SINGLE_STEP_EXPECTED_ACCUMULATOR                   = 0x1234u,
-    TEST_DIVIDE_ERROR_INTERRUPT_VECTOR_OFFSET               = 0x0123u,
-    TEST_DIVIDE_ERROR_INTERRUPT_VECTOR_SEGMENT              = 0x2345u,
-    TEST_DIVIDE_ERROR_RETURN_OFFSET                         = 0x010Bu,
-    TEST_DIVIDE_ERROR_FAULT_OFFSET                          = 0x0109u,
-    TEST_REPEATED_MOVE_SOURCE_OFFSET                        = 0x0120u,
-    TEST_REPEATED_MOVE_DESTINATION_OFFSET                   = 0x0130u,
-    TEST_SHIFT_ROTATE_MEMORY_OFFSET                         = 0x0200u,
-    TEST_SHIFT_ROTATE_BYTE_RESULT                           = 0x0Cu,
-    TEST_SHIFT_ROTATE_WORD_RESULT                           = 0x0010u,
-    TEST_LOAD_SEGMENT_POINTER_MEMORY_OFFSET                 = 0x0220u,
-    TEST_LOAD_SEGMENT_POINTER_OFFSET_VALUE                  = 0x3456u,
-    TEST_LOAD_SEGMENT_POINTER_SEGMENT_VALUE                 = 0x789Au,
-    TEST_FAR_POINTER_OFFSET                                 = 0x0200u,
-    TEST_FAR_CALL_TARGET_OFFSET                             = 0x0100u,
-    TEST_FAR_CALL_INCORRECT_OFFSET                          = 0x0300u,
-    TEST_FAR_CALL_INITIAL_SEGMENT                           = 0x1000u,
-    TEST_FAR_CALL_TARGET_SEGMENT                            = 0x1234u,
-    TEST_FAR_CALL_STACK_POINTER                             = 0xFFEEu,
-    TEST_FAR_CALL_EXPECTED_ACCUMULATOR                      = 0xABCDu,
-    TEST_FAR_CALL_INCORRECT_ACCUMULATOR                     = 0x1234u,
-    TEST_8087_CONTROL_WORD_OFFSET                           = 0x0200u,
-    TEST_8087_STORED_CONTROL_WORD_OFFSET                    = 0x0204u,
-    TEST_8087_FIRST_REAL_OFFSET                             = 0x0210u,
-    TEST_8087_SECOND_REAL_OFFSET                            = 0x0214u,
-    TEST_8087_RESULT_REAL_OFFSET                            = 0x0218u,
-    TEST_VIDEO_WRITE_BYTE_COUNT                             = 5u
+    TEST_DOS_SERVICE_REGISTER_SHIFT                                  = 8u,
+    TEST_DOS_EXIT_CODE_MASK                                          = 0x00FFu,
+    TEST_BYTE_MASK                                                   = 0x00FFu,
+    TEST_WORD_BYTE_COUNT                                             = 2u,
+    TEST_DEFAULT_INSTRUCTION_LIMIT                                   = 1000u,
+    TEST_PERIPHERAL_INTERFACE_PORT                                   = 0x0060u,
+    TEST_PERIPHERAL_INTERFACE_PORT_COUNT                             = 4u,
+    TEST_PERIPHERAL_INTERFACE_VALUE                                  = 0x5Au,
+    TEST_KEYBOARD_CONTROLLER_DATA_PORT                               = 0x0060u,
+    TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT                     = 0x0064u,
+    TEST_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL               = 0x01u,
+    TEST_KEYBOARD_CONTROLLER_STATUS_AUXILIARY_OUTPUT_BUFFER          = 0x20u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_READ_COMMAND_BYTE               = 0x20u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_COMMAND_BYTE              = 0x60u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_DISABLE_KEYBOARD                = 0xADu,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_ENABLE_KEYBOARD                 = 0xAEu,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_ENABLE_AUXILIARY                = 0xA8u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_KEYBOARD_OUTPUT           = 0xD2u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE          = 0xD4u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_BYTE_DEFAULT                    = 0x45u,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_INTERRUPT_ENABLE = 0x02u,
+    TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_ONE_TO_ONE       = 0xE6u,
+    TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_TWO_TO_ONE       = 0xE7u,
+    TEST_KEYBOARD_DEVICE_COMMAND_SET_SCAN_CODE_SET                   = 0xF0u,
+    TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_STATUS_REQUEST               = 0xE9u,
+    TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_ENABLE_REPORTING             = 0xF4u,
+    TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE                        = 0xFAu,
+    TEST_KEYBOARD_SCAN_CODE_A                                        = 0x1Eu,
+    TEST_KEYBOARD_SCAN_CODE_B                                        = 0x30u,
+    TEST_AUXILIARY_MOUSE_LEFT_BUTTON                                 = 0x01u,
+    TEST_AUXILIARY_MOUSE_STATUS_LEFT_BUTTON                          = 0x04u,
+    TEST_AUXILIARY_MOUSE_STATUS_SCALING_TWO_TO_ONE                   = 0x10u,
+    TEST_AUXILIARY_MOUSE_STATUS_REPORTING_ENABLED                    = 0x20u,
+    TEST_AUXILIARY_MOUSE_DEFAULT_RESOLUTION                          = 2u,
+    TEST_AUXILIARY_MOUSE_DEFAULT_SAMPLE_RATE                         = 100u,
+    TEST_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE                           = 0x08u,
+    TEST_AUXILIARY_MOUSE_PACKET_HORIZONTAL_SIGN                      = 0x10u,
+    TEST_AUXILIARY_MOUSE_PACKET_VERTICAL_SIGN                        = 0x20u,
+    TEST_PC_EQUIPMENT_FLAGS_POINTING_DEVICE_PRESENT                  = 0x0004u,
+    TEST_MASTER_CASCADE_INTERRUPT_MASK                               = 0x04u,
+    TEST_AUXILIARY_DEVICE_INTERRUPT_MASK                             = 0x10u,
+    TEST_KEYBOARD_FUNCTION_KEY_SIX_WORD                              = 0x4000u,
+    TEST_PC_INTERVAL_TIMER_CONTROL_PORT                              = 0x0043u,
+    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_PORT                          = 0x0042u,
+    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_SQUARE_WAVE_LOW_HIGH          = 0xB6u,
+    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_RELOAD_LOW_BYTE               = 0x33u,
+    TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_RELOAD_HIGH_BYTE              = 0x05u,
+    TEST_PC_PERIPHERAL_INTERFACE_PORT_B                              = 0x0061u,
+    TEST_PC_SPEAKER_ENABLE_BITS                                      = 0x03u,
+    TEST_PC_DEFAULT_TIMER_INTERRUPT_CLOCK_COUNT                      = 262144u,
+    TEST_PC_TIMER_TICKS_PER_DAY                                      = 0x001800B0u,
+    TEST_INTERRUPT_RETURN_STACK_POINTER                              = 0x0100u,
+    TEST_INTERRUPT_RETURN_FLAGS_STACK_OFFSET                         = 4u,
+    TEST_EXTERNAL_INTERRUPT_NUMBER                                   = 0x30u,
+    TEST_EXTERNAL_INTERRUPT_VECTOR_OFFSET                            = 0x0123u,
+    TEST_EXTERNAL_INTERRUPT_VECTOR_SEGMENT                           = 0x2345u,
+    TEST_SINGLE_STEP_INTERRUPT_VECTOR_OFFSET                         = 0x0234u,
+    TEST_SINGLE_STEP_INTERRUPT_VECTOR_SEGMENT                        = 0x3456u,
+    TEST_SINGLE_STEP_EXPECTED_ACCUMULATOR                            = 0x1234u,
+    TEST_DIVIDE_ERROR_INTERRUPT_VECTOR_OFFSET                        = 0x0123u,
+    TEST_DIVIDE_ERROR_INTERRUPT_VECTOR_SEGMENT                       = 0x2345u,
+    TEST_DIVIDE_ERROR_RETURN_OFFSET                                  = 0x010Bu,
+    TEST_DIVIDE_ERROR_FAULT_OFFSET                                   = 0x0109u,
+    TEST_REPEATED_MOVE_SOURCE_OFFSET                                 = 0x0120u,
+    TEST_REPEATED_MOVE_DESTINATION_OFFSET                            = 0x0130u,
+    TEST_SHIFT_ROTATE_MEMORY_OFFSET                                  = 0x0200u,
+    TEST_SHIFT_ROTATE_BYTE_RESULT                                    = 0x0Cu,
+    TEST_SHIFT_ROTATE_WORD_RESULT                                    = 0x0010u,
+    TEST_LOAD_SEGMENT_POINTER_MEMORY_OFFSET                          = 0x0220u,
+    TEST_LOAD_SEGMENT_POINTER_OFFSET_VALUE                           = 0x3456u,
+    TEST_LOAD_SEGMENT_POINTER_SEGMENT_VALUE                          = 0x789Au,
+    TEST_FAR_POINTER_OFFSET                                          = 0x0200u,
+    TEST_FAR_CALL_TARGET_OFFSET                                      = 0x0100u,
+    TEST_FAR_CALL_INCORRECT_OFFSET                                   = 0x0300u,
+    TEST_FAR_CALL_INITIAL_SEGMENT                                    = 0x1000u,
+    TEST_FAR_CALL_TARGET_SEGMENT                                     = 0x1234u,
+    TEST_FAR_CALL_STACK_POINTER                                      = 0xFFEEu,
+    TEST_FAR_CALL_EXPECTED_ACCUMULATOR                               = 0xABCDu,
+    TEST_FAR_CALL_INCORRECT_ACCUMULATOR                              = 0x1234u,
+    TEST_8087_CONTROL_WORD_OFFSET                                    = 0x0200u,
+    TEST_8087_STORED_CONTROL_WORD_OFFSET                             = 0x0204u,
+    TEST_8087_FIRST_REAL_OFFSET                                      = 0x0210u,
+    TEST_8087_SECOND_REAL_OFFSET                                     = 0x0214u,
+    TEST_8087_RESULT_REAL_OFFSET                                     = 0x0218u,
+    TEST_VIDEO_WRITE_BYTE_COUNT                                      = 5u
 };
 
 typedef struct test_dos_context
@@ -599,6 +620,344 @@ static void test_intel_8042_keyboard_controller(void)
     assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
     value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
     assert(value == 1u);
+}
+
+static void test_intel_8042_auxiliary_mouse(void)
+{
+    hyperdos_intel_8042_keyboard_controller controller;
+    uint8_t                                 commandByte    = 0u;
+    uint8_t                                 statusRegister = 0u;
+    uint8_t                                 value          = 0u;
+
+    hyperdos_intel_8042_keyboard_controller_initialize(&controller);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_ENABLE_AUXILIARY);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_READ_COMMAND_BYTE);
+    commandByte = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_COMMAND_BYTE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(
+            &controller,
+            TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+            (uint8_t)(commandByte | TEST_KEYBOARD_CONTROLLER_COMMAND_BYTE_AUXILIARY_INTERRUPT_ENABLE));
+
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                                       TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_ENABLE_REPORTING);
+    assert(hyperdos_intel_8042_keyboard_controller_has_auxiliary_device_interrupt_request(&controller));
+    statusRegister = hyperdos_intel_8042_keyboard_controller_read_byte(&controller,
+                                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT);
+    assert((statusRegister & TEST_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL) != 0u);
+    assert((statusRegister & TEST_KEYBOARD_CONTROLLER_STATUS_AUXILIARY_OUTPUT_BUFFER) != 0u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+
+    assert(hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(&controller,
+                                                                                  5,
+                                                                                  -3,
+                                                                                  TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    assert(!hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(&controller,
+                                                                                   12,
+                                                                                   7,
+                                                                                   TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    statusRegister = hyperdos_intel_8042_keyboard_controller_read_byte(&controller,
+                                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT);
+    assert((statusRegister & TEST_KEYBOARD_CONTROLLER_STATUS_AUXILIARY_OUTPUT_BUFFER) != 0u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == (TEST_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE | TEST_AUXILIARY_MOUSE_PACKET_VERTICAL_SIGN |
+                     TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == 5u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == 0xFDu);
+
+    assert(hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(&controller,
+                                                                                  -3,
+                                                                                  0,
+                                                                                  TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == (TEST_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE | TEST_AUXILIARY_MOUSE_PACKET_HORIZONTAL_SIGN |
+                     TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == 0xFDu);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == 0u);
+    assert(hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(&controller,
+                                                                                  4,
+                                                                                  0,
+                                                                                  TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == (TEST_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE | TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == 4u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == 0u);
+
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                                       TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_STATUS_REQUEST);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert((value & TEST_AUXILIARY_MOUSE_STATUS_LEFT_BUTTON) != 0u);
+    assert((value & TEST_AUXILIARY_MOUSE_LEFT_BUTTON) == 0u);
+    assert((value & TEST_AUXILIARY_MOUSE_STATUS_REPORTING_ENABLED) != 0u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_AUXILIARY_MOUSE_DEFAULT_RESOLUTION);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_AUXILIARY_MOUSE_DEFAULT_SAMPLE_RATE);
+
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                                       TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_TWO_TO_ONE);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                                       TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_STATUS_REQUEST);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert((value & TEST_AUXILIARY_MOUSE_STATUS_SCALING_TWO_TO_ONE) != 0u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_AUXILIARY_MOUSE_DEFAULT_RESOLUTION);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_AUXILIARY_MOUSE_DEFAULT_SAMPLE_RATE);
+
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                                       TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_SCALING_ONE_TO_ONE);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                                       TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE);
+    hyperdos_intel_8042_keyboard_controller_write_byte(&controller,
+                                                       TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                                       TEST_AUXILIARY_MOUSE_DEVICE_COMMAND_STATUS_REQUEST);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_KEYBOARD_DEVICE_RESPONSE_ACKNOWLEDGE);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert((value & TEST_AUXILIARY_MOUSE_STATUS_SCALING_TWO_TO_ONE) == 0u);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_AUXILIARY_MOUSE_DEFAULT_RESOLUTION);
+    value = hyperdos_intel_8042_keyboard_controller_read_byte(&controller, TEST_KEYBOARD_CONTROLLER_DATA_PORT);
+    assert(value == TEST_AUXILIARY_MOUSE_DEFAULT_SAMPLE_RATE);
+}
+
+static void test_cascaded_programmable_interrupt_controller(void)
+{
+    hyperdos_pc* pc              = NULL;
+    uint8_t      interruptNumber = 0u;
+
+    pc = (hyperdos_pc*)calloc(1u, sizeof(*pc));
+    assert(pc != NULL);
+    assert(hyperdos_pc_initialize(pc));
+    pc->slaveProgrammableInterruptControllerEnabled                 = 1u;
+    pc->programmableInterruptController.interruptMaskRegister      &= (uint8_t)~TEST_MASTER_CASCADE_INTERRUPT_MASK;
+    pc->slaveProgrammableInterruptController.interruptMaskRegister &= (uint8_t)~TEST_AUXILIARY_DEVICE_INTERRUPT_MASK;
+    hyperdos_programmable_interrupt_controller_raise_request(&pc->slaveProgrammableInterruptController, 4u);
+    assert(hyperdos_pc_acknowledge_interrupt_request(pc, &interruptNumber));
+    assert(interruptNumber == 0x74u);
+    free(pc);
+}
+
+static void test_pointing_device_bios_services(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_16_processor*             processor = NULL;
+    hyperdos_x86_16_execution_result       result    = HYPERDOS_X86_16_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    processor = &machine->pc.processor;
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0xC207u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0x5678u;
+    hyperdos_x86_16_set_segment_register(processor, HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA, 0x1234u);
+    result = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      0xC2u);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+    assert(machine->systemBios.pointingDeviceHandlerOffset == 0x5678u);
+    assert(machine->systemBios.pointingDeviceHandlerSegment == 0x1234u);
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0xC200u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0x0100u;
+    result = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      0xC2u);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+    assert(machine->systemBios.pointingDeviceEnabled != 0u);
+    assert(machine->pc.keyboardController.auxiliaryDeviceReportingEnabled != 0u);
+    assert((machine->pc.programmableInterruptController.interruptMaskRegister & TEST_MASTER_CASCADE_INTERRUPT_MASK) ==
+           0u);
+    assert((machine->pc.slaveProgrammableInterruptController.interruptMaskRegister &
+            TEST_AUXILIARY_DEVICE_INTERRUPT_MASK) == 0u);
+
+    machine->pc.keyboardController.auxiliaryDeviceButtonMask                  = TEST_AUXILIARY_MOUSE_LEFT_BUTTON;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0xC206u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0x0000u;
+    result = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      0xC2u);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+    assert((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] &
+            TEST_AUXILIARY_MOUSE_STATUS_LEFT_BUTTON) != 0u);
+    assert((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] & TEST_AUXILIARY_MOUSE_LEFT_BUTTON) ==
+           0u);
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0xC200u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0x0000u;
+    result = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      0xC2u);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+    assert(machine->systemBios.pointingDeviceEnabled == 0u);
+    assert(machine->pc.keyboardController.auxiliaryDeviceReportingEnabled == 0u);
+    assert((machine->pc.slaveProgrammableInterruptController.interruptMaskRegister &
+            TEST_AUXILIARY_DEVICE_INTERRUPT_MASK) != 0u);
+    hyperdos_pc_bios_runtime_initialize_data_area(&machine->biosRuntime, NULL, 1u);
+    assert((hyperdos_pc_bios_data_area_read_word(&machine->pc, HYPERDOS_PC_BIOS_DATA_AREA_EQUIPMENT_FLAGS_OFFSET) &
+            TEST_PC_EQUIPMENT_FLAGS_POINTING_DEVICE_PRESENT) != 0u);
+    free(machine);
+}
+
+static void test_pointing_device_bios_callback_from_auxiliary_interrupt(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT             = 0x2000u,
+        TEST_CALLBACK_SEGMENT            = 0x2100u,
+        TEST_DATA_SEGMENT                = 0x2200u,
+        TEST_STACK_SEGMENT               = 0x2300u,
+        TEST_PROGRAM_STACK_POINTER       = 0x0100u,
+        TEST_CALLBACK_RESULT_OFFSET      = 0x0040u,
+        TEST_CALLBACK_HORIZONTAL_OFFSET  = 0x0042u,
+        TEST_CALLBACK_VERTICAL_OFFSET    = 0x0044u,
+        TEST_CALLBACK_PADDING_OFFSET     = 0x0046u,
+        TEST_CALLBACK_MARKER_OFFSET      = 0x0048u,
+        TEST_CALLBACK_RESULT_WORD        = 0xCAFEu,
+        TEST_AUXILIARY_PACKET_BYTE_COUNT = 3u
+    };
+    static const uint8_t programBytes[]  = {0xF4u, 0xF4u, 0xF4u, 0xF4u};
+    static const uint8_t callbackBytes[] = {0x55u, 0x8Bu, 0xECu, 0x8Bu, 0x46u, 0x0Cu, 0xA3u, 0x40u, 0x00u,
+                                            0x8Bu, 0x46u, 0x0Au, 0xA3u, 0x42u, 0x00u, 0x8Bu, 0x46u, 0x08u,
+                                            0xA3u, 0x44u, 0x00u, 0x8Bu, 0x46u, 0x06u, 0xA3u, 0x46u, 0x00u,
+                                            0xB8u, 0xFEu, 0xCAu, 0xA3u, 0x48u, 0x00u, 0x5Du, 0xCBu};
+    hyperdos_pc_machine* machine         = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_16_processor*             processor = NULL;
+    hyperdos_x86_16_execution_result       result    = HYPERDOS_X86_16_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_16_SEGMENT_SHIFT;
+    uint32_t callbackPhysicalAddress                 = (uint32_t)TEST_CALLBACK_SEGMENT << HYPERDOS_X86_16_SEGMENT_SHIFT;
+    uint32_t resultPhysicalAddress                   = ((uint32_t)TEST_DATA_SEGMENT << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                     TEST_CALLBACK_RESULT_OFFSET;
+    uint8_t packetByteIndex = 0u;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_runtime_initialize_data_area(&machine->biosRuntime, NULL, 1u);
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_16_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_16_set_segment_register(processor, HYPERDOS_X86_16_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_16_set_segment_register(processor, HYPERDOS_X86_16_SEGMENT_REGISTER_DATA, TEST_DATA_SEGMENT);
+    hyperdos_x86_16_set_segment_register(processor, HYPERDOS_X86_16_SEGMENT_REGISTER_STACK, TEST_STACK_SEGMENT);
+    processor->instructionPointer                                               = 0u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER] = TEST_PROGRAM_STACK_POINTER;
+    processor->flags = HYPERDOS_X86_16_FLAG_RESERVED | HYPERDOS_X86_16_FLAG_INTERRUPT_ENABLE;
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+    memcpy(&machine->pc.processorMemory[callbackPhysicalAddress], callbackBytes, sizeof(callbackBytes));
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0xC207u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0u;
+    hyperdos_x86_16_set_segment_register(processor, HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA, TEST_CALLBACK_SEGMENT);
+    result = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      0xC2u);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0xC200u;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0x0100u;
+    result = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      0xC2u);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+    hyperdos_x86_16_set_segment_register(processor, HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA, 0u);
+
+    assert(hyperdos_intel_8042_keyboard_controller_receive_auxiliary_mouse_packet(&machine->pc.keyboardController,
+                                                                                  4,
+                                                                                  -2,
+                                                                                  TEST_AUXILIARY_MOUSE_LEFT_BUTTON));
+    for (packetByteIndex = 0u; packetByteIndex < TEST_AUXILIARY_PACKET_BYTE_COUNT; ++packetByteIndex)
+    {
+        result = hyperdos_pc_bios_runtime_service_pending_hardware_interrupts(&machine->biosRuntime);
+        assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+        result = hyperdos_x86_16_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+        assert(result == HYPERDOS_X86_16_EXECUTION_HALTED);
+    }
+
+    assert((machine->pc.processorMemory[resultPhysicalAddress] & TEST_AUXILIARY_MOUSE_LEFT_BUTTON) != 0u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + 1u] == 0u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_HORIZONTAL_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET] == 4u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_HORIZONTAL_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET + 1u] == 0u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_VERTICAL_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET] == 0xFEu);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_VERTICAL_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET + 1u] == 0u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_PADDING_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET] == 0u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_PADDING_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET + 1u] == 0u);
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_MARKER_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET] ==
+           (uint8_t)(((uint16_t)TEST_CALLBACK_RESULT_WORD) & (uint16_t)TEST_BYTE_MASK));
+    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_MARKER_OFFSET -
+                                       TEST_CALLBACK_RESULT_OFFSET + 1u] ==
+           (uint8_t)(((uint16_t)TEST_CALLBACK_RESULT_WORD) >> (unsigned)TEST_DOS_SERVICE_REGISTER_SHIFT));
+    free(machine);
 }
 
 static void test_keyboard_bios_status_return_flags(void)
@@ -2460,6 +2819,53 @@ static void test_pc_system_bios_identity_can_disable_at_services(void)
     free(machine);
 }
 
+static void test_pc_system_bios_configuration_table_survives_interrupt_vector_stubs(void)
+{
+    enum
+    {
+        TEST_SYSTEM_BIOS_CONFIGURATION_SERVICE      = 0xC0u,
+        TEST_SYSTEM_BIOS_CONFIGURATION_TABLE_LENGTH = 0x08u,
+        TEST_SYSTEM_BIOS_CONFIGURATION_MODEL_OFFSET = 0x02u
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_16_processor*             processor                         = NULL;
+    hyperdos_x86_16_execution_result       result                            = HYPERDOS_X86_16_EXECUTION_OK;
+    uint32_t                               configurationTablePhysicalAddress = 0u;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+
+    hyperdos_pc_system_bios_install_configuration_table(&machine->pc, &machine->systemBios);
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor                                                                 = &machine->pc.processor;
+    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = TEST_SYSTEM_BIOS_CONFIGURATION_SERVICE
+                                                                                << TEST_DOS_SERVICE_REGISTER_SHIFT;
+    processor->flags = HYPERDOS_X86_16_FLAG_RESERVED | HYPERDOS_X86_16_FLAG_CARRY;
+    result           = hyperdos_pc_system_bios_handle_system_services_interrupt(processor,
+                                                                      &machine->pc,
+                                                                      &machine->systemBios,
+                                                                      TEST_SYSTEM_BIOS_CONFIGURATION_SERVICE);
+    assert(result == HYPERDOS_X86_16_EXECUTION_OK);
+    assert((processor->flags & HYPERDOS_X86_16_FLAG_CARRY) == 0u);
+
+    configurationTablePhysicalAddress = (processor->segmentBases[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA] +
+                                         processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]) &
+                                        HYPERDOS_X86_16_ADDRESS_MASK;
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, configurationTablePhysicalAddress) ==
+           TEST_SYSTEM_BIOS_CONFIGURATION_TABLE_LENGTH);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus,
+                                                     configurationTablePhysicalAddress +
+                                                             TEST_SYSTEM_BIOS_CONFIGURATION_MODEL_OFFSET) ==
+           HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_AT);
+
+    free(machine);
+}
+
 static void test_pc_storage_maps_configured_bios_drive_numbers(void)
 {
     hyperdos_pc_machine*                   machine = NULL;
@@ -2597,7 +3003,7 @@ static void test_pc_storage_updates_at_cmos_drive_configuration(void)
     hyperdos_pc_bios_runtime_initialize_data_area(&machine->biosRuntime,
                                                   &floppyDrives[0].diskImage,
                                                   hyperdos_pc_storage_count_inserted_fixed_disks(&storageContext));
-    assert(test_read_cmos_register(&machine->pc, TEST_CMOS_EQUIPMENT_REGISTER) == 0x41u);
+    assert(test_read_cmos_register(&machine->pc, TEST_CMOS_EQUIPMENT_REGISTER) == 0x45u);
     free(machine);
 }
 
@@ -2920,6 +3326,10 @@ int main(void)
     test_repeated_byte_move();
     test_bus_connected_input_output();
     test_intel_8042_keyboard_controller();
+    test_intel_8042_auxiliary_mouse();
+    test_cascaded_programmable_interrupt_controller();
+    test_pointing_device_bios_services();
+    test_pointing_device_bios_callback_from_auxiliary_interrupt();
     test_keyboard_bios_status_return_flags();
     test_keyboard_bios_status_return_flags_through_firmware_stub();
     test_keyboard_bios_read_waits_with_interrupts_enabled();
@@ -2930,6 +3340,7 @@ int main(void)
     test_pc_speaker_callback_from_port_control();
     test_pc_system_bios_timer_tick_data_area();
     test_pc_system_bios_identity_can_disable_at_services();
+    test_pc_system_bios_configuration_table_survives_interrupt_vector_stubs();
     test_pc_storage_maps_configured_bios_drive_numbers();
     test_pc_storage_updates_at_cmos_drive_configuration();
     test_disk_bios_reset_preserves_floppy_media_change_until_read();
