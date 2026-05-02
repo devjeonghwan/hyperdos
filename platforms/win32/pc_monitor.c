@@ -213,7 +213,7 @@ static void update_monitor_window_title(HWND windowHandle, const hyperdos_win32_
 
     if (bootState != NULL && bootState->hostMouseCaptureActive != 0u)
     {
-        windowTitle = "HyperDOS PC Monitor  [Press Ctrl+F10 to release mouse]";
+        windowTitle = "HyperDOS PC Monitor [Press Ctrl + F10 to release mouse]";
     }
     SetWindowTextA(windowHandle, windowTitle);
 }
