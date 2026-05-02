@@ -64,6 +64,7 @@ enum
     HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MINIMUM   = -127,
     HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MAXIMUM   = 127,
     HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY             = 320u,
+    HYPERDOS_MONITOR_MEDIA_MENU_TEXT_CAPACITY             = 160u,
     HYPERDOS_MONITOR_KEYBOARD_SCAN_CODE_SEQUENCE_CAPACITY = 8u,
     HYPERDOS_MONITOR_UTF8_MAXIMUM_BYTE_COUNT              = 4u,
     HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY                = 32u,
@@ -782,25 +783,113 @@ static int parse_memory_stop_byte_argument(const char* text)
     return 1;
 }
 
-static const char* find_file_name_from_path(const char* path)
-{
-    const char* fileName  = path;
-    const char* character = path;
-
-    while (character != NULL && *character != '\0')
-    {
-        if (*character == '\\' || *character == '/')
-        {
-            fileName = character + 1;
-        }
-        ++character;
-    }
-    return fileName;
-}
-
 static uint8_t get_fixed_disk_bios_drive_number(uint8_t fixedDiskIndex)
 {
     return (uint8_t)(HYPERDOS_PC_DISK_BIOS_HARD_DISK_DRIVE_NUMBER + fixedDiskIndex);
+}
+
+static int path_character_is_separator(char character)
+{
+    return character == '\\' || character == '/';
+}
+
+static void copy_last_path_component_to_buffer(char* destination, size_t destinationSize, const char* path)
+{
+    const char* lastComponentBegin = NULL;
+    const char* lastComponentEnd   = NULL;
+    size_t      lastComponentSize  = 0u;
+
+    if (destinationSize == 0u)
+    {
+        return;
+    }
+    destination[0] = '\0';
+    if (path == NULL || path[0] == '\0')
+    {
+        return;
+    }
+
+    lastComponentEnd = path + strlen(path);
+    while (lastComponentEnd > path && path_character_is_separator(lastComponentEnd[-1]))
+    {
+        --lastComponentEnd;
+    }
+    if (lastComponentEnd == path)
+    {
+        copy_string_to_buffer(destination, destinationSize, path);
+        return;
+    }
+
+    lastComponentBegin = lastComponentEnd;
+    while (lastComponentBegin > path && !path_character_is_separator(lastComponentBegin[-1]))
+    {
+        --lastComponentBegin;
+    }
+
+    lastComponentSize = (size_t)(lastComponentEnd - lastComponentBegin);
+    if (lastComponentSize >= destinationSize)
+    {
+        lastComponentSize = destinationSize - 1u;
+    }
+    memcpy(destination, lastComponentBegin, lastComponentSize);
+    destination[lastComponentSize] = '\0';
+}
+
+static void copy_menu_text_with_mnemonic_escape(char* destination, size_t destinationSize, const char* source)
+{
+    size_t sourceIndex      = 0u;
+    size_t destinationIndex = 0u;
+
+    if (destinationSize == 0u)
+    {
+        return;
+    }
+    if (source == NULL)
+    {
+        destination[0] = '\0';
+        return;
+    }
+    while (source[sourceIndex] != '\0' && destinationIndex + 1u < destinationSize)
+    {
+        if (source[sourceIndex] == '&' && destinationIndex + 2u < destinationSize)
+        {
+            destination[destinationIndex] = '&';
+            ++destinationIndex;
+        }
+        destination[destinationIndex] = source[sourceIndex];
+        ++destinationIndex;
+        ++sourceIndex;
+    }
+    destination[destinationIndex] = '\0';
+}
+
+static void format_media_command_menu_text(char*       destination,
+                                           size_t      destinationSize,
+                                           const char* commandText,
+                                           const char* mediaPath)
+{
+    char        mediaName[HYPERDOS_MONITOR_MEDIA_MENU_TEXT_CAPACITY];
+    char        escapedMediaName[HYPERDOS_MONITOR_MEDIA_MENU_TEXT_CAPACITY];
+    const char* effectiveCommandText = commandText != NULL ? commandText : "";
+
+    if (destinationSize == 0u)
+    {
+        return;
+    }
+    if (mediaPath == NULL || mediaPath[0] == '\0')
+    {
+        copy_string_to_buffer(destination, destinationSize, effectiveCommandText);
+        return;
+    }
+
+    copy_last_path_component_to_buffer(mediaName, sizeof(mediaName), mediaPath);
+    if (mediaName[0] == '\0')
+    {
+        copy_string_to_buffer(destination, destinationSize, effectiveCommandText);
+        return;
+    }
+    copy_menu_text_with_mnemonic_escape(escapedMediaName, sizeof(escapedMediaName), mediaName);
+    snprintf(destination, destinationSize, "%s '%s'...", effectiveCommandText, escapedMediaName);
 }
 
 static void format_floppy_drive_identifier(char* destination, size_t destinationSize, uint8_t driveNumber)
@@ -4419,6 +4508,59 @@ static void enable_menu_command(HWND windowHandle, UINT commandIdentifier, int e
     EnableMenuItem(menuHandle, commandIdentifier, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
 }
 
+static int set_menu_command_text_recursive(HMENU menuHandle, UINT commandIdentifier, const char* menuText)
+{
+    int menuItemCount = 0;
+    int menuItemIndex = 0;
+
+    if (menuHandle == NULL)
+    {
+        return 0;
+    }
+    menuItemCount = GetMenuItemCount(menuHandle);
+    for (menuItemIndex = 0; menuItemIndex < menuItemCount; ++menuItemIndex)
+    {
+        MENUITEMINFOA menuItemInformation;
+
+        memset(&menuItemInformation, 0, sizeof(menuItemInformation));
+        menuItemInformation.cbSize = sizeof(menuItemInformation);
+        menuItemInformation.fMask  = MIIM_ID | MIIM_SUBMENU;
+        if (!GetMenuItemInfoA(menuHandle, (UINT)menuItemIndex, TRUE, &menuItemInformation))
+        {
+            continue;
+        }
+        if (menuItemInformation.wID == commandIdentifier)
+        {
+            MENUITEMINFOA updatedMenuItemInformation;
+            const char*   updatedMenuText = menuText != NULL ? menuText : "";
+
+            memset(&updatedMenuItemInformation, 0, sizeof(updatedMenuItemInformation));
+            updatedMenuItemInformation.cbSize     = sizeof(updatedMenuItemInformation);
+            updatedMenuItemInformation.fMask      = MIIM_STRING;
+            updatedMenuItemInformation.dwTypeData = (LPSTR)updatedMenuText;
+            updatedMenuItemInformation.cch        = (UINT)strlen(updatedMenuText);
+            return SetMenuItemInfoA(menuHandle, (UINT)menuItemIndex, TRUE, &updatedMenuItemInformation) != FALSE;
+        }
+        if (menuItemInformation.hSubMenu != NULL &&
+            set_menu_command_text_recursive(menuItemInformation.hSubMenu, commandIdentifier, menuText))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void set_menu_command_text(HWND windowHandle, UINT commandIdentifier, const char* menuText)
+{
+    HMENU menuHandle = GetMenu(windowHandle);
+
+    if (menuHandle == NULL)
+    {
+        return;
+    }
+    (void)set_menu_command_text_recursive(menuHandle, commandIdentifier, menuText);
+}
+
 static void update_disk_media_menu(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
 {
     uint8_t driveNumber    = 0u;
@@ -4426,15 +4568,31 @@ static void update_disk_media_menu(HWND windowHandle, const hyperdos_win32_boot_
 
     for (driveNumber = 0u; driveNumber < HYPERDOS_MONITOR_MAXIMUM_FLOPPY_DRIVE_COUNT; ++driveNumber)
     {
-        enable_menu_command(windowHandle,
-                            HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE + driveNumber,
-                            floppy_drive_contains_media(bootState, driveNumber));
+        char ejectMenuText[HYPERDOS_MONITOR_MEDIA_MENU_TEXT_CAPACITY];
+        int  mediaIsPresent = floppy_drive_contains_media(bootState, driveNumber);
+
+        format_media_command_menu_text(ejectMenuText,
+                                       sizeof(ejectMenuText),
+                                       "Eject",
+                                       mediaIsPresent ? globalFloppyDrivePaths[driveNumber] : NULL);
+        set_menu_command_text(windowHandle, HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE + driveNumber, ejectMenuText);
+        enable_menu_command(windowHandle, HYPERDOS_MONITOR_COMMAND_EJECT_FLOPPY_BASE + driveNumber, mediaIsPresent);
     }
     for (fixedDiskIndex = 0u; fixedDiskIndex < HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT; ++fixedDiskIndex)
     {
+        char detachMenuText[HYPERDOS_MONITOR_MEDIA_MENU_TEXT_CAPACITY];
+        int  mediaIsPresent = fixed_disk_drive_contains_media(bootState, fixedDiskIndex);
+
+        format_media_command_menu_text(detachMenuText,
+                                       sizeof(detachMenuText),
+                                       "Detach",
+                                       mediaIsPresent ? globalFixedDiskDrivePaths[fixedDiskIndex] : NULL);
+        set_menu_command_text(windowHandle,
+                              HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE + fixedDiskIndex,
+                              detachMenuText);
         enable_menu_command(windowHandle,
                             HYPERDOS_MONITOR_COMMAND_DETACH_FIXED_DISK_BASE + fixedDiskIndex,
-                            fixed_disk_drive_contains_media(bootState, fixedDiskIndex));
+                            mediaIsPresent);
     }
     update_monitor_status_bar(bootState);
     DrawMenuBar(windowHandle);
