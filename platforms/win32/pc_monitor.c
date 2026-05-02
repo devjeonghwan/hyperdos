@@ -5,11 +5,14 @@
 #include <commdlg.h>
 
 #include <shlobj.h>
+#include <shobjidl.h>
 
 #ifdef interface
 #undef interface
 #endif
 
+#include <ctype.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -76,6 +79,7 @@ enum
     HYPERDOS_MONITOR_KOREAN_WINDOWS_CODE_PAGE                        = 949u,
     HYPERDOS_MONITOR_USER_RENDER_MESSAGE                             = WM_APP + 1u,
     HYPERDOS_MONITOR_USER_RESET_MESSAGE                              = WM_APP + 2u,
+    HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE                  = WM_APP + 3u,
     HYPERDOS_MONITOR_COMMAND_FLUSH_DISKS                             = 1004u,
     HYPERDOS_MONITOR_COMMAND_INSERT_FLOPPY_IMAGE_BASE                = 1100u,
     HYPERDOS_MONITOR_COMMAND_MOUNT_FLOPPY_DIRECTORY_BASE             = 1110u,
@@ -89,6 +93,12 @@ enum
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186                   = 2102u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT                             = 2201u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT                             = 2202u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ                = 2301u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ                   = 2302u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ                  = 2303u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ                  = 2304u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ                  = 2305u,
+    HYPERDOS_MONITOR_COMMAND_TOGGLE_UNTHROTTLED_TURBO                = 2306u,
     HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_CODE_PAGE_437        = 3001u,
     HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_KOREAN_CODE_PAGE_949 = 3002u,
     HYPERDOS_MONITOR_COMMAND_TOGGLE_MOUSE_CAPTURE                    = 3003u,
@@ -140,6 +150,13 @@ typedef enum hyperdos_monitor_display_resize_mode
     HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE,
     HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_FIT_TO_WINDOW
 } hyperdos_monitor_display_resize_mode;
+
+typedef struct hyperdos_monitor_processor_clock_option
+{
+    UINT        commandIdentifier;
+    uint32_t    processorFrequencyHertz;
+    const char* menuText;
+} hyperdos_monitor_processor_clock_option;
 
 typedef struct hyperdos_monitor_memory_watch
 {
@@ -217,6 +234,8 @@ static uint8_t                         globalMemoryStopByteValue;
 static int                             globalMemoryStopByteEnabled;
 static int                             globalBootHardDiskWithoutFloppy;
 static int                             globalCoprocessorEnabled;
+static uint32_t                        globalProcessorFrequencyHertz;
+static int                             globalGuestClockThrottleEnabled;
 static hyperdos_x86_16_processor_model globalProcessorModel;
 static hyperdos_pc_model               globalPcModel;
 static int                             globalDivideErrorReturnsToFaultingInstruction;
@@ -233,6 +252,14 @@ static hyperdos_monitor_text_character_set globalTextCharacterSet = HYPERDOS_MON
 static hyperdos_monitor_display_resize_mode
                 globalDisplayResizeMode = HYPERDOS_MONITOR_DISPLAY_RESIZE_MODE_INTEGER_SCALE;
 static uint32_t globalGraphicsPixels[HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY];
+
+static const hyperdos_monitor_processor_clock_option globalProcessorClockOptions[] = {
+    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ, HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ, "4.77 MHz"},
+    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ,    8000000u,                                      "8 MHz"   },
+    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ,   10000000u,                                     "10 MHz"  },
+    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ,   12000000u,                                     "12 MHz"  },
+    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ,   16000000u,                                     "16 MHz"  }
+};
 
 static void write_text_screen_dump_file(const hyperdos_win32_boot_state* bootState);
 
@@ -1615,6 +1642,7 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     machineConfiguration.userContext                             = bootState;
     machineConfiguration.processorModel                          = globalProcessorModel;
     machineConfiguration.pcModel                                 = globalPcModel;
+    machineConfiguration.processorFrequencyHertz                 = globalProcessorFrequencyHertz;
     machineConfiguration.floppyDriveCount                        = (uint8_t)bootState->floppyDriveCount;
     machineConfiguration.fixedDiskDriveCount                     = HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT;
     machineConfiguration.coprocessorEnabled                      = (uint8_t)globalCoprocessorEnabled;
@@ -1780,10 +1808,13 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
     uint64_t                   guestClockBase         = 0u;
     int                        emulationPacingEnabled = 0;
 
-    emulationPacingEnabled = initialize_emulation_pacing(&performanceCounterFrequency,
-                                                         &hostPerformanceCounterBase,
-                                                         &guestClockBase,
-                                                         bootState);
+    if (globalGuestClockThrottleEnabled)
+    {
+        emulationPacingEnabled = initialize_emulation_pacing(&performanceCounterFrequency,
+                                                             &hostPerformanceCounterBase,
+                                                             &guestClockBase,
+                                                             bootState);
+    }
 
     while (InterlockedCompareExchange(&bootState->stopRequested, 0, 0) == 0 &&
            InterlockedCompareExchange(&bootState->isRunning, 0, 0) != 0)
@@ -1855,7 +1886,7 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
                                 thirdByte,
                                 fourthByte);
             }
-            PostMessageA(bootState->windowHandle, HYPERDOS_MONITOR_USER_RENDER_MESSAGE, 0, 0);
+            PostMessageA(bootState->windowHandle, HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE, 0, 0);
             break;
         }
         if (GetTickCount64() - lastRenderTick >= HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS)
@@ -3717,16 +3748,93 @@ static void release_host_mouse_buttons(HWND windowHandle, hyperdos_win32_boot_st
     }
 }
 
+static const char* get_processor_model_title_text(void)
+{
+    return globalProcessorModel == HYPERDOS_X86_16_PROCESSOR_MODEL_8086 ? "8086" : "80186";
+}
+
+static const char* get_pc_model_title_text(void)
+{
+    return globalPcModel == HYPERDOS_PC_MODEL_XT ? "XT" : "AT";
+}
+
+static void format_processor_frequency_text(char* text, size_t textSize, uint32_t processorFrequencyHertz)
+{
+    double processorFrequencyMegahertz = 0.0;
+
+    if (textSize == 0u)
+    {
+        return;
+    }
+    if (processorFrequencyHertz == 0u)
+    {
+        processorFrequencyHertz = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
+    }
+    processorFrequencyMegahertz = (double)processorFrequencyHertz / 1000000.0;
+    snprintf(text, textSize, "%.2f MHz", processorFrequencyMegahertz);
+}
+
 static void update_window_title(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
 {
-    char title[HYPERDOS_MONITOR_STATUS_TEXT_CAPACITY + 96u];
+    char     title[128];
+    char     processorFrequencyText[32];
+    uint32_t processorFrequencyHertz = globalProcessorFrequencyHertz;
+
+    if (bootState != NULL && bootState->machine.pc.clockGenerator.processorFrequencyHertz != 0u)
+    {
+        processorFrequencyHertz = bootState->machine.pc.clockGenerator.processorFrequencyHertz;
+    }
+    format_processor_frequency_text(processorFrequencyText, sizeof(processorFrequencyText), processorFrequencyHertz);
 
     snprintf(title,
              sizeof(title),
-             "HyperDOS PC Monitor - %s%s",
-             bootState->statusText[0] != '\0' ? bootState->statusText : "running",
-             bootState->hostMouseCaptureActive != 0u ? " - mouse captured, Ctrl+F10 releases" : "");
+             "HyperDOS PC Monitor - %s %s - %s%s%s",
+             get_processor_model_title_text(),
+             get_pc_model_title_text(),
+             processorFrequencyText,
+             globalGuestClockThrottleEnabled ? "" : " unthrottled",
+             bootState != NULL && bootState->hostMouseCaptureActive != 0u ? " - mouse captured" : "");
     SetWindowTextA(windowHandle, title);
+}
+
+static void show_unsupported_instruction_message(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
+{
+    char                             message[256];
+    hyperdos_win32_boot_state*       writableBootState  = NULL;
+    const hyperdos_x86_16_processor* processor          = NULL;
+    uint16_t                         instructionSegment = 0u;
+    uint16_t                         instructionOffset  = 0u;
+    uint8_t                          firstByte          = 0u;
+    uint8_t                          secondByte         = 0u;
+    uint8_t                          thirdByte          = 0u;
+    uint8_t                          fourthByte         = 0u;
+
+    if (bootState == NULL || bootState->executionResult != HYPERDOS_X86_16_EXECUTION_UNSUPPORTED_INSTRUCTION)
+    {
+        return;
+    }
+
+    writableBootState  = (hyperdos_win32_boot_state*)bootState;
+    processor          = &bootState->machine.pc.processor;
+    instructionSegment = processor->lastInstructionSegment;
+    instructionOffset  = processor->lastInstructionOffset;
+    firstByte          = read_guest_instruction_byte(writableBootState, instructionSegment, instructionOffset);
+    secondByte = read_guest_instruction_byte(writableBootState, instructionSegment, (uint16_t)(instructionOffset + 1u));
+    thirdByte  = read_guest_instruction_byte(writableBootState, instructionSegment, (uint16_t)(instructionOffset + 2u));
+    fourthByte = read_guest_instruction_byte(writableBootState, instructionSegment, (uint16_t)(instructionOffset + 3u));
+    snprintf(message,
+             sizeof(message),
+             "Unsupported instruction at %04X:%04X\n"
+             "Opcode: %02X\n"
+             "Bytes: %02X %02X %02X %02X",
+             instructionSegment,
+             instructionOffset,
+             processor->lastOperationCode,
+             firstByte,
+             secondByte,
+             thirdByte,
+             fourthByte);
+    MessageBoxA(windowHandle, message, "HyperDOS PC Monitor", MB_OK | MB_ICONERROR);
 }
 
 static int start_emulation_thread(hyperdos_win32_boot_state* bootState)
@@ -3807,9 +3915,10 @@ static void render_monitor_message(hyperdos_win32_boot_state* bootState, const c
     hyperdos_pc_machine_boot_configuration machineConfiguration;
 
     memset(&machineConfiguration, 0, sizeof(machineConfiguration));
-    machineConfiguration.userContext    = bootState;
-    machineConfiguration.processorModel = globalProcessorModel;
-    machineConfiguration.pcModel        = globalPcModel;
+    machineConfiguration.userContext             = bootState;
+    machineConfiguration.processorModel          = globalProcessorModel;
+    machineConfiguration.pcModel                 = globalPcModel;
+    machineConfiguration.processorFrequencyHertz = globalProcessorFrequencyHertz;
     if (hyperdos_pc_machine_initialize_for_boot(&bootState->machine, &machineConfiguration))
     {
         hyperdos_pc_render_text_message(&bootState->machine.pc, message);
@@ -3842,10 +3951,76 @@ static int select_disk_image_file_path(HWND        windowHandle,
     return GetOpenFileNameA(&openFileName) != 0;
 }
 
+static int copy_shell_item_file_system_path(IShellItem* shellItem, char* selectedPath, size_t selectedPathSize)
+{
+    PWSTR fileSystemPathWide   = NULL;
+    int   requiredByteCount    = 0;
+    int   convertedByteCount   = 0;
+    BOOL  usedDefaultCharacter = FALSE;
+    int   copiedFileSystemPath = 0;
+
+    if (shellItem == NULL || selectedPath == NULL || selectedPathSize == 0u || selectedPathSize > INT_MAX)
+    {
+        return 0;
+    }
+    selectedPath[0] = '\0';
+    if (FAILED(shellItem->lpVtbl->GetDisplayName(shellItem, SIGDN_FILESYSPATH, &fileSystemPathWide)) ||
+        fileSystemPathWide == NULL)
+    {
+        return 0;
+    }
+
+    requiredByteCount = WideCharToMultiByte(CP_ACP,
+                                            WC_NO_BEST_FIT_CHARS,
+                                            fileSystemPathWide,
+                                            -1,
+                                            NULL,
+                                            0,
+                                            NULL,
+                                            &usedDefaultCharacter);
+    if (requiredByteCount > 0 && (size_t)requiredByteCount <= selectedPathSize)
+    {
+        usedDefaultCharacter = FALSE;
+        convertedByteCount   = WideCharToMultiByte(CP_ACP,
+                                                 WC_NO_BEST_FIT_CHARS,
+                                                 fileSystemPathWide,
+                                                 -1,
+                                                 selectedPath,
+                                                 (int)selectedPathSize,
+                                                 NULL,
+                                                 &usedDefaultCharacter);
+        copiedFileSystemPath = convertedByteCount > 0 && usedDefaultCharacter == FALSE && selectedPath[0] != '\0';
+    }
+    CoTaskMemFree(fileSystemPathWide);
+    if (!copiedFileSystemPath)
+    {
+        selectedPath[0] = '\0';
+    }
+    return copiedFileSystemPath;
+}
+
+static void set_file_dialog_title(IFileOpenDialog* fileOpenDialog, const char* title)
+{
+    wchar_t titleWide[128];
+
+    if (fileOpenDialog == NULL || title == NULL)
+    {
+        return;
+    }
+    if (MultiByteToWideChar(CP_ACP, 0, title, -1, titleWide, (int)(sizeof(titleWide) / sizeof(titleWide[0]))) <= 0)
+    {
+        return;
+    }
+    (void)fileOpenDialog->lpVtbl->SetTitle(fileOpenDialog, titleWide);
+}
+
 static int select_directory_path(HWND windowHandle, const char* title, char* selectedPath, size_t selectedPathSize)
 {
-    BROWSEINFOA      browseInfo;
-    PIDLIST_ABSOLUTE selectedIdentifierList = NULL;
+    IFileOpenDialog* fileOpenDialog         = NULL;
+    IShellItem*      selectedShellItem      = NULL;
+    DWORD            fileOpenDialogOptions  = 0u;
+    DWORD            directoryDialogOptions = 0u;
+    HRESULT          result                 = S_OK;
     int              selected               = 0;
 
     if (selectedPathSize == 0u)
@@ -3853,17 +4028,44 @@ static int select_directory_path(HWND windowHandle, const char* title, char* sel
         return 0;
     }
     selectedPath[0] = '\0';
-    memset(&browseInfo, 0, sizeof(browseInfo));
-    browseInfo.hwndOwner   = windowHandle;
-    browseInfo.lpszTitle   = title;
-    browseInfo.ulFlags     = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-    selectedIdentifierList = SHBrowseForFolderA(&browseInfo);
-    if (selectedIdentifierList != NULL)
+
+    result = CoCreateInstance(&CLSID_FileOpenDialog,
+                              NULL,
+                              CLSCTX_INPROC_SERVER,
+                              &IID_IFileOpenDialog,
+                              (void**)&fileOpenDialog);
+    if (FAILED(result) || fileOpenDialog == NULL)
     {
-        selected = SHGetPathFromIDListA(selectedIdentifierList, selectedPath) != FALSE;
-        CoTaskMemFree(selectedIdentifierList);
+        return 0;
     }
-    return selected && selectedPath[0] != '\0';
+
+    result = fileOpenDialog->lpVtbl->GetOptions(fileOpenDialog, &fileOpenDialogOptions);
+    if (SUCCEEDED(result))
+    {
+        directoryDialogOptions = fileOpenDialogOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST |
+                                 FOS_NOCHANGEDIR;
+        result = fileOpenDialog->lpVtbl->SetOptions(fileOpenDialog, directoryDialogOptions);
+    }
+    if (SUCCEEDED(result))
+    {
+        set_file_dialog_title(fileOpenDialog, title);
+        result = fileOpenDialog->lpVtbl->Show(fileOpenDialog, windowHandle);
+    }
+    if (SUCCEEDED(result))
+    {
+        result = fileOpenDialog->lpVtbl->GetResult(fileOpenDialog, &selectedShellItem);
+    }
+    if (SUCCEEDED(result) && selectedShellItem != NULL)
+    {
+        selected = copy_shell_item_file_system_path(selectedShellItem, selectedPath, selectedPathSize);
+    }
+
+    if (selectedShellItem != NULL)
+    {
+        selectedShellItem->lpVtbl->Release(selectedShellItem);
+    }
+    fileOpenDialog->lpVtbl->Release(fileOpenDialog);
+    return selected;
 }
 
 static void restore_monitor_window_keyboard_focus(HWND windowHandle)
@@ -4258,6 +4460,137 @@ static void set_pc_model(HWND windowHandle, hyperdos_win32_boot_state* bootState
     SetFocus(windowHandle);
 }
 
+static int boot_state_processor_is_initialized(const hyperdos_win32_boot_state* bootState)
+{
+    return bootState != NULL && bootState->machine.pc.processor.memory != NULL;
+}
+
+static int stop_emulation_thread_for_live_configuration_change(hyperdos_win32_boot_state* bootState)
+{
+    int wasRunning = 0;
+
+    if (bootState == NULL)
+    {
+        return 0;
+    }
+    wasRunning = InterlockedCompareExchange(&bootState->isRunning, 0, 0) != 0;
+    if (bootState->emulationThreadHandle != NULL)
+    {
+        stop_emulation_thread(bootState);
+    }
+    return wasRunning;
+}
+
+static void resume_emulation_thread_after_live_configuration_change(HWND                       windowHandle,
+                                                                    hyperdos_win32_boot_state* bootState,
+                                                                    int                        wasRunning)
+{
+    if (bootState == NULL || wasRunning == 0)
+    {
+        return;
+    }
+
+    InterlockedExchange(&bootState->stopRequested, 0);
+    InterlockedExchange(&bootState->isRunning, 1);
+    if (!start_emulation_thread(bootState))
+    {
+        InterlockedExchange(&bootState->isRunning, 0);
+        set_status_text(bootState, "failed to restart emulation thread");
+    }
+    update_window_title(windowHandle, bootState);
+}
+
+static uint32_t get_processor_frequency_hertz_from_command(UINT commandIdentifier)
+{
+    size_t optionIndex = 0u;
+
+    for (optionIndex = 0u; optionIndex < sizeof(globalProcessorClockOptions) / sizeof(globalProcessorClockOptions[0]);
+         ++optionIndex)
+    {
+        if (globalProcessorClockOptions[optionIndex].commandIdentifier == commandIdentifier)
+        {
+            return globalProcessorClockOptions[optionIndex].processorFrequencyHertz;
+        }
+    }
+    return 0u;
+}
+
+static void update_processor_clock_menu(HWND windowHandle)
+{
+    HMENU  menuHandle  = GetMenu(windowHandle);
+    size_t optionIndex = 0u;
+
+    if (menuHandle == NULL)
+    {
+        return;
+    }
+    for (optionIndex = 0u; optionIndex < sizeof(globalProcessorClockOptions) / sizeof(globalProcessorClockOptions[0]);
+         ++optionIndex)
+    {
+        UINT menuFlags = MF_BYCOMMAND;
+
+        if (globalProcessorClockOptions[optionIndex].processorFrequencyHertz == globalProcessorFrequencyHertz)
+        {
+            menuFlags |= MF_CHECKED;
+        }
+        else
+        {
+            menuFlags |= MF_UNCHECKED;
+        }
+        CheckMenuItem(menuHandle, globalProcessorClockOptions[optionIndex].commandIdentifier, menuFlags);
+    }
+    CheckMenuItem(menuHandle,
+                  HYPERDOS_MONITOR_COMMAND_TOGGLE_UNTHROTTLED_TURBO,
+                  MF_BYCOMMAND | (globalGuestClockThrottleEnabled ? MF_UNCHECKED : MF_CHECKED));
+}
+
+static void set_processor_frequency_hertz(HWND                       windowHandle,
+                                          hyperdos_win32_boot_state* bootState,
+                                          uint32_t                   processorFrequencyHertz)
+{
+    int  wasRunning = 0;
+    char processorFrequencyText[32];
+
+    if (processorFrequencyHertz == 0u)
+    {
+        SetFocus(windowHandle);
+        return;
+    }
+    if (globalProcessorFrequencyHertz == processorFrequencyHertz)
+    {
+        SetFocus(windowHandle);
+        return;
+    }
+
+    wasRunning                    = stop_emulation_thread_for_live_configuration_change(bootState);
+    globalProcessorFrequencyHertz = processorFrequencyHertz;
+    if (boot_state_processor_is_initialized(bootState))
+    {
+        hyperdos_pc_set_processor_frequency_hertz(&bootState->machine.pc, processorFrequencyHertz);
+    }
+    format_processor_frequency_text(processorFrequencyText, sizeof(processorFrequencyText), processorFrequencyHertz);
+    set_status_text(bootState, "processor clock set to %s", processorFrequencyText);
+    update_processor_clock_menu(windowHandle);
+    resume_emulation_thread_after_live_configuration_change(windowHandle, bootState, wasRunning);
+    update_window_title(windowHandle, bootState);
+    SetFocus(windowHandle);
+}
+
+static void toggle_unthrottled_turbo(HWND windowHandle, hyperdos_win32_boot_state* bootState)
+{
+    int wasRunning = 0;
+
+    wasRunning                      = stop_emulation_thread_for_live_configuration_change(bootState);
+    globalGuestClockThrottleEnabled = globalGuestClockThrottleEnabled == 0;
+    set_status_text(bootState,
+                    "%s",
+                    globalGuestClockThrottleEnabled ? "guest clock throttle enabled" : "unthrottled turbo enabled");
+    update_processor_clock_menu(windowHandle);
+    resume_emulation_thread_after_live_configuration_change(windowHandle, bootState, wasRunning);
+    update_window_title(windowHandle, bootState);
+    SetFocus(windowHandle);
+}
+
 static void update_text_character_set_menu(HWND windowHandle)
 {
     HMENU menuHandle = GetMenu(windowHandle);
@@ -4324,12 +4657,14 @@ static HMENU create_monitor_menu(void)
     HMENU  machineMenuHandle           = CreatePopupMenu();
     HMENU  processorModelMenuHandle    = CreatePopupMenu();
     HMENU  pcModelMenuHandle           = CreatePopupMenu();
+    HMENU  processorClockMenuHandle    = CreatePopupMenu();
     HMENU  diskMenuHandle              = CreatePopupMenu();
     HMENU  viewMenuHandle              = CreatePopupMenu();
     HMENU  textCharacterSetMenuHandle  = CreatePopupMenu();
     HMENU  displayResizeModeMenuHandle = CreatePopupMenu();
     size_t floppyDriveIndex            = 0u;
     size_t fixedDiskIndex              = 0u;
+    size_t processorClockOptionIndex   = 0u;
 
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086, "8086 / 8088");
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186, "80186 / 80188");
@@ -4337,6 +4672,17 @@ static HMENU create_monitor_menu(void)
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT, "XT");
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT, "AT");
     AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)pcModelMenuHandle, "PC Model");
+    for (processorClockOptionIndex = 0u;
+         processorClockOptionIndex < sizeof(globalProcessorClockOptions) / sizeof(globalProcessorClockOptions[0]);
+         ++processorClockOptionIndex)
+    {
+        AppendMenuA(processorClockMenuHandle,
+                    MF_STRING,
+                    globalProcessorClockOptions[processorClockOptionIndex].commandIdentifier,
+                    globalProcessorClockOptions[processorClockOptionIndex].menuText);
+    }
+    AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)processorClockMenuHandle, "Processor Clock");
+    AppendMenuA(machineMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_TOGGLE_UNTHROTTLED_TURBO, "Unthrottled Turbo");
     AppendMenuA(machineMenuHandle, MF_SEPARATOR, 0u, NULL);
     AppendMenuA(machineMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_RESET_PC, "Reset PC");
     AppendMenuA(machineMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_START_CPU_TRACE, "Start CPU Trace");
@@ -4511,6 +4857,7 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
                  HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS,
                  NULL);
         update_machine_model_menu(windowHandle);
+        update_processor_clock_menu(windowHandle);
         update_display_resize_mode_menu(windowHandle);
         update_text_character_set_menu(windowHandle);
         update_mouse_capture_menu(windowHandle, &globalBootState);
@@ -4538,6 +4885,18 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
             return 0;
         case HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT:
             set_pc_model(windowHandle, &globalBootState, HYPERDOS_PC_MODEL_AT);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ:
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ:
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ:
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ:
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ:
+            set_processor_frequency_hertz(windowHandle,
+                                          &globalBootState,
+                                          get_processor_frequency_hertz_from_command(LOWORD(wordParameter)));
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_TOGGLE_UNTHROTTLED_TURBO:
+            toggle_unthrottled_turbo(windowHandle, &globalBootState);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_TEXT_CHARACTER_SET_CODE_PAGE_437:
             set_text_character_set(windowHandle, HYPERDOS_MONITOR_TEXT_CHARACTER_SET_CODE_PAGE_437);
@@ -4709,6 +5068,12 @@ static LRESULT CALLBACK monitor_window_procedure(HWND   windowHandle,
     case HYPERDOS_MONITOR_USER_RENDER_MESSAGE:
         InvalidateRect(windowHandle, NULL, FALSE);
         update_window_title(windowHandle, &globalBootState);
+        return 0;
+
+    case HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE:
+        InvalidateRect(windowHandle, NULL, FALSE);
+        update_window_title(windowHandle, &globalBootState);
+        show_unsupported_instruction_message(windowHandle, &globalBootState);
         return 0;
 
     case HYPERDOS_MONITOR_USER_RESET_MESSAGE:
@@ -5047,6 +5412,56 @@ static void clear_all_fixed_disk_drive_paths(void)
     }
 }
 
+static int parse_processor_frequency_hertz(const char* text, uint32_t* processorFrequencyHertz)
+{
+    char*  endPointer     = NULL;
+    double parsedValue    = 0.0;
+    double frequencyHertz = 0.0;
+
+    if (text == NULL || processorFrequencyHertz == NULL)
+    {
+        return 0;
+    }
+    if (_stricmp(text, "default") == 0 || _stricmp(text, "pc") == 0 || _stricmp(text, "xt") == 0)
+    {
+        *processorFrequencyHertz = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
+        return 1;
+    }
+
+    parsedValue = strtod(text, &endPointer);
+    if (endPointer == text || parsedValue <= 0.0)
+    {
+        return 0;
+    }
+    while (*endPointer != '\0' && isspace((unsigned char)*endPointer))
+    {
+        ++endPointer;
+    }
+    frequencyHertz = parsedValue;
+    if (*endPointer == '\0')
+    {
+        if (parsedValue < 100000.0)
+        {
+            frequencyHertz = parsedValue * 1000000.0;
+        }
+    }
+    else if (_stricmp(endPointer, "mhz") == 0)
+    {
+        frequencyHertz = parsedValue * 1000000.0;
+    }
+    else if (_stricmp(endPointer, "hz") != 0)
+    {
+        return 0;
+    }
+    if (frequencyHertz < 1.0 || frequencyHertz > 4294967295.0)
+    {
+        return 0;
+    }
+
+    *processorFrequencyHertz = (uint32_t)(frequencyHertz + 0.5);
+    return *processorFrequencyHertz != 0u;
+}
+
 static void parse_command_line_disk_paths(const char* commandLine)
 {
     char              argument[HYPERDOS_MONITOR_PATH_CAPACITY];
@@ -5070,6 +5485,8 @@ static void parse_command_line_disk_paths(const char* commandLine)
     globalMemoryStopByteEnabled                   = 0;
     globalBootHardDiskWithoutFloppy               = 0;
     globalCoprocessorEnabled                      = 0;
+    globalProcessorFrequencyHertz                 = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
+    globalGuestClockThrottleEnabled               = 1;
     globalProcessorModel                          = HYPERDOS_X86_16_PROCESSOR_MODEL_80186;
     globalPcModel                                 = HYPERDOS_PC_MODEL_AT;
     globalCpuTraceStartsEnabled                   = 0;
@@ -5285,6 +5702,44 @@ static void parse_command_line_disk_paths(const char* commandLine)
         if (strcmp(argument, "--no-8087") == 0)
         {
             globalCoprocessorEnabled = 0;
+            continue;
+        }
+        if (strcmp(argument, "--processor-clock") == 0 || strcmp(argument, "--cpu-clock") == 0)
+        {
+            char     processorClockText[HYPERDOS_MONITOR_PATH_CAPACITY];
+            uint32_t processorFrequencyHertz = 0u;
+
+            if (copy_next_command_line_argument(commandLine,
+                                                sourceOffset,
+                                                processorClockText,
+                                                sizeof(processorClockText),
+                                                &sourceOffset) &&
+                parse_processor_frequency_hertz(processorClockText, &processorFrequencyHertz))
+            {
+                globalProcessorFrequencyHertz = processorFrequencyHertz;
+            }
+            continue;
+        }
+        if (strncmp(argument, "--processor-clock=", 18u) == 0 || strncmp(argument, "--cpu-clock=", 12u) == 0)
+        {
+            const char* processorClockText      = strncmp(argument, "--processor-clock=", 18u) == 0 ? argument + 18u
+                                                                                                    : argument + 12u;
+            uint32_t    processorFrequencyHertz = 0u;
+
+            if (parse_processor_frequency_hertz(processorClockText, &processorFrequencyHertz))
+            {
+                globalProcessorFrequencyHertz = processorFrequencyHertz;
+            }
+            continue;
+        }
+        if (strcmp(argument, "--unthrottled-turbo") == 0 || strcmp(argument, "--turbo") == 0)
+        {
+            globalGuestClockThrottleEnabled = 0;
+            continue;
+        }
+        if (strcmp(argument, "--throttle") == 0 || strcmp(argument, "--no-turbo") == 0)
+        {
+            globalGuestClockThrottleEnabled = 1;
             continue;
         }
         if (strcmp(argument, "--divide-error-returns-to-faulting-instruction") == 0)

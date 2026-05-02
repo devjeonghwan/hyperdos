@@ -31,6 +31,7 @@ typedef struct hyperdos_pc_machine_boot_configuration
     void*                                                  userContext;
     hyperdos_x86_16_processor_model                        processorModel;
     hyperdos_pc_model                                      pcModel;
+    uint32_t                                               processorFrequencyHertz;
     uint8_t                                                floppyDriveCount;
     uint8_t                                                fixedDiskDriveCount;
     uint8_t                                                coprocessorEnabled;

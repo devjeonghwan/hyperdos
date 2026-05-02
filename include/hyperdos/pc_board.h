@@ -41,7 +41,13 @@ enum
     HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE                   = 0xF0000u,
     HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE                   = 0x10000u,
     HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ                 = 14318181u,
-    HYPERDOS_PC_MILLISECONDS_PER_SECOND                      = 1000u
+    HYPERDOS_PC_8284_PROCESSOR_CLOCK_DIVISOR                 = 3u,
+    HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR           = 12u,
+    HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ            = HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ /
+                                                    HYPERDOS_PC_8284_PROCESSOR_CLOCK_DIVISOR,
+    HYPERDOS_PC_INTERVAL_TIMER_INPUT_FREQUENCY_HERTZ = HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ /
+                                                       HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR,
+    HYPERDOS_PC_MILLISECONDS_PER_SECOND = 1000u
 };
 
 typedef void (*hyperdos_pc_speaker_state_change_function)(void* userContext, uint32_t frequencyHertz, uint8_t enabled);
@@ -70,6 +76,8 @@ typedef struct hyperdos_pc
     hyperdos_pc_speaker_state_change_function            speakerStateChange;
     void*                                                speakerStateUserContext;
     uint64_t                                             programmableIntervalTimerInputClockRemainder;
+    uint64_t                                             programmableIntervalTimerInputClockNumerator;
+    uint64_t                                             programmableIntervalTimerInputClockDenominator;
     uint32_t                                             speakerFrequencyHertz;
     uint8_t                                              speakerEnabled;
     uint8_t                                              slaveProgrammableInterruptControllerEnabled;
@@ -78,6 +86,12 @@ typedef struct hyperdos_pc
 typedef void (*hyperdos_pc_board_trace_function)(void* userContext, const char* message);
 
 int hyperdos_pc_initialize(hyperdos_pc* pc);
+
+uint32_t hyperdos_pc_get_processor_frequency_hertz(const hyperdos_pc* pc);
+
+uint32_t hyperdos_pc_get_interval_timer_input_frequency_hertz(const hyperdos_pc* pc);
+
+void hyperdos_pc_set_processor_frequency_hertz(hyperdos_pc* pc, uint32_t processorFrequencyHertz);
 
 void hyperdos_pc_set_speaker_state_change_function(hyperdos_pc*                              pc,
                                                    hyperdos_pc_speaker_state_change_function speakerStateChange,

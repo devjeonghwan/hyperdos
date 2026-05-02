@@ -56,6 +56,10 @@ typedef struct hyperdos_intel_8286_bus_transceiver
 void hyperdos_intel_8284_clock_generator_initialize(hyperdos_intel_8284_clock_generator* clockGenerator,
                                                     uint32_t                             crystalFrequencyHertz);
 
+void hyperdos_intel_8284_clock_generator_set_processor_frequency_hertz(
+        hyperdos_intel_8284_clock_generator* clockGenerator,
+        uint32_t                             processorFrequencyHertz);
+
 void hyperdos_intel_8284_clock_generator_step(hyperdos_intel_8284_clock_generator* clockGenerator,
                                               hyperdos_bus*                        bus,
                                               uint64_t                             processorClockCount);

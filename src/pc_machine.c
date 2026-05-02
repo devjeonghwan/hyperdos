@@ -31,6 +31,10 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
     {
         return 0;
     }
+    if (configuration->processorFrequencyHertz != 0u)
+    {
+        hyperdos_pc_set_processor_frequency_hertz(&machine->pc, configuration->processorFrequencyHertz);
+    }
     if (configuration->pcModel == HYPERDOS_PC_MODEL_AT &&
         hyperdos_bus_map_input_output(&machine->pc.bus,
                                       HYPERDOS_PC_CMOS_ADDRESS_PORT,

@@ -1259,6 +1259,37 @@ static void test_pc_default_interval_timer_transition(void)
     free(pc);
 }
 
+static void test_pc_interval_timer_input_frequency_is_independent_from_processor_frequency(void)
+{
+    enum
+    {
+        TEST_INTERVAL_TIMER_FULL_RELOAD_INPUT_CLOCK_COUNT = 0x10000u,
+        TEST_TURBO_PROCESSOR_FREQUENCY_HERTZ              = 8000000u
+    };
+
+    hyperdos_pc* pc                                 = NULL;
+    uint64_t     timerTransitionProcessorClockCount = 0u;
+
+    pc = (hyperdos_pc*)calloc(1u, sizeof(*pc));
+    assert(pc != NULL);
+    assert(hyperdos_pc_initialize(pc));
+    hyperdos_pc_set_processor_frequency_hertz(pc, TEST_TURBO_PROCESSOR_FREQUENCY_HERTZ);
+    assert(hyperdos_pc_get_processor_frequency_hertz(pc) == TEST_TURBO_PROCESSOR_FREQUENCY_HERTZ);
+    assert(hyperdos_pc_get_interval_timer_input_frequency_hertz(pc) ==
+           HYPERDOS_PC_INTERVAL_TIMER_INPUT_FREQUENCY_HERTZ);
+
+    timerTransitionProcessorClockCount = ((uint64_t)TEST_INTERVAL_TIMER_FULL_RELOAD_INPUT_CLOCK_COUNT *
+                                                  HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR *
+                                                  TEST_TURBO_PROCESSOR_FREQUENCY_HERTZ +
+                                          HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ - 1u) /
+                                         HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ;
+    hyperdos_intel_8284_clock_generator_step(&pc->clockGenerator, &pc->bus, timerTransitionProcessorClockCount - 1u);
+    assert(!hyperdos_programmable_interval_timer_get_and_clear_output_transition(&pc->programmableIntervalTimer, 0u));
+    hyperdos_intel_8284_clock_generator_step(&pc->clockGenerator, &pc->bus, 1u);
+    assert(hyperdos_programmable_interval_timer_get_and_clear_output_transition(&pc->programmableIntervalTimer, 0u));
+    free(pc);
+}
+
 static void test_pc_speaker_callback_from_port_control(void)
 {
     hyperdos_pc_machine*                   machine = NULL;
@@ -3343,6 +3374,7 @@ int main(void)
     test_programmable_interrupt_controller_specific_end_of_interrupt();
     test_programmable_interval_timer_rate_generator_transition();
     test_pc_default_interval_timer_transition();
+    test_pc_interval_timer_input_frequency_is_independent_from_processor_frequency();
     test_pc_speaker_callback_from_port_control();
     test_pc_system_bios_timer_tick_data_area();
     test_pc_system_bios_identity_can_disable_at_services();

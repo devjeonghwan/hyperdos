@@ -30,6 +30,17 @@ void hyperdos_intel_8284_clock_generator_initialize(hyperdos_intel_8284_clock_ge
     hyperdos_signal_line_initialize(&clockGenerator->resetLine, "RESET", HYPERDOS_SIGNAL_LOW);
 }
 
+void hyperdos_intel_8284_clock_generator_set_processor_frequency_hertz(
+        hyperdos_intel_8284_clock_generator* clockGenerator,
+        uint32_t                             processorFrequencyHertz)
+{
+    if (clockGenerator == NULL || processorFrequencyHertz == 0u)
+    {
+        return;
+    }
+    clockGenerator->processorFrequencyHertz = processorFrequencyHertz;
+}
+
 void hyperdos_intel_8284_clock_generator_step(hyperdos_intel_8284_clock_generator* clockGenerator,
                                               hyperdos_bus*                        bus,
                                               uint64_t                             processorClockCount)

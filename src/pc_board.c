@@ -17,7 +17,6 @@ enum
     HYPERDOS_PC_AUXILIARY_DEVICE_INTERRUPT_REQUEST_LINE     = 4u,
     HYPERDOS_PC_SLAVE_INTERRUPT_VECTOR_BASE                 = 0x70u,
     HYPERDOS_PC_SPEAKER_TIMER_CHANNEL                       = 2u,
-    HYPERDOS_PC_INTERVAL_TIMER_INPUT_DIVISOR                = 4u,
     HYPERDOS_PC_INTERVAL_TIMER_CHANNEL_ZERO                 = HYPERDOS_PC_PROGRAMMABLE_INTERVAL_TIMER_PORT,
     HYPERDOS_PC_INTERVAL_TIMER_CHANNEL_TWO                  = HYPERDOS_PC_PROGRAMMABLE_INTERVAL_TIMER_PORT + 2u,
     HYPERDOS_PC_INTERVAL_TIMER_CONTROL_PORT                 = HYPERDOS_PC_PROGRAMMABLE_INTERVAL_TIMER_PORT + 3u,
@@ -49,9 +48,19 @@ static void hyperdos_pc_trace(hyperdos_pc_board_trace_function traceFunction,
     traceFunction(traceUserContext, message);
 }
 
-static uint32_t hyperdos_pc_get_interval_timer_input_frequency_hertz(const hyperdos_pc* pc)
+uint32_t hyperdos_pc_get_processor_frequency_hertz(const hyperdos_pc* pc)
 {
-    return pc->clockGenerator.processorFrequencyHertz / HYPERDOS_PC_INTERVAL_TIMER_INPUT_DIVISOR;
+    if (pc == NULL)
+    {
+        return 0u;
+    }
+    return pc->clockGenerator.processorFrequencyHertz;
+}
+
+uint32_t hyperdos_pc_get_interval_timer_input_frequency_hertz(const hyperdos_pc* pc)
+{
+    (void)pc;
+    return HYPERDOS_PC_INTERVAL_TIMER_INPUT_FREQUENCY_HERTZ;
 }
 
 static uint32_t hyperdos_pc_get_speaker_frequency_hertz(const hyperdos_pc* pc)
@@ -137,14 +146,44 @@ static void hyperdos_pc_tick_programmable_interval_timer(void* device, uint64_t 
         return;
     }
 
-    inputClockCountWithRemainder = elapsedProcessorClockCount + pc->programmableIntervalTimerInputClockRemainder;
-    inputClockCount              = inputClockCountWithRemainder / HYPERDOS_PC_INTERVAL_TIMER_INPUT_DIVISOR;
+    if (pc->programmableIntervalTimerInputClockNumerator == 0u ||
+        pc->programmableIntervalTimerInputClockDenominator == 0u)
+    {
+        pc->programmableIntervalTimerInputClockNumerator   = 1u;
+        pc->programmableIntervalTimerInputClockDenominator = 4u;
+    }
+    inputClockCountWithRemainder = elapsedProcessorClockCount * pc->programmableIntervalTimerInputClockNumerator +
+                                   pc->programmableIntervalTimerInputClockRemainder;
+    inputClockCount = inputClockCountWithRemainder / pc->programmableIntervalTimerInputClockDenominator;
     pc->programmableIntervalTimerInputClockRemainder = inputClockCountWithRemainder %
-                                                       HYPERDOS_PC_INTERVAL_TIMER_INPUT_DIVISOR;
+                                                       pc->programmableIntervalTimerInputClockDenominator;
     if (inputClockCount != 0u)
     {
         hyperdos_programmable_interval_timer_tick(&pc->programmableIntervalTimer, inputClockCount);
     }
+}
+
+static void hyperdos_pc_configure_interval_timer_input_clock_ratio(hyperdos_pc* pc)
+{
+    uint32_t processorFrequencyHertz = 0u;
+
+    if (pc == NULL)
+    {
+        return;
+    }
+    processorFrequencyHertz = pc->clockGenerator.processorFrequencyHertz;
+    if (processorFrequencyHertz == HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ)
+    {
+        pc->programmableIntervalTimerInputClockNumerator   = 1u;
+        pc->programmableIntervalTimerInputClockDenominator = 4u;
+    }
+    else
+    {
+        pc->programmableIntervalTimerInputClockNumerator   = HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ;
+        pc->programmableIntervalTimerInputClockDenominator = (uint64_t)HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR *
+                                                             processorFrequencyHertz;
+    }
+    pc->programmableIntervalTimerInputClockRemainder = 0u;
 }
 
 static uint8_t hyperdos_pc_read_peripheral_interface_byte(void* device, uint16_t port)
@@ -218,6 +257,7 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
     hyperdos_universal_asynchronous_receiver_transmitter_initialize(&pc->firstSerialPort);
     hyperdos_8087_initialize(&pc->floatingPointUnit);
     hyperdos_intel_8284_clock_generator_initialize(&pc->clockGenerator, HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ);
+    hyperdos_pc_configure_interval_timer_input_clock_ratio(pc);
     hyperdos_intel_8288_bus_controller_initialize(&pc->busController);
     hyperdos_intel_8282_address_latch_initialize(&pc->addressLatch);
     hyperdos_intel_8286_bus_transceiver_initialize(&pc->dataBusTransceiver);
@@ -355,6 +395,18 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
                                        hyperdos_8087_escape,
                                        &pc->floatingPointUnit);
     return 1;
+}
+
+void hyperdos_pc_set_processor_frequency_hertz(hyperdos_pc* pc, uint32_t processorFrequencyHertz)
+{
+    if (pc == NULL || processorFrequencyHertz == 0u)
+    {
+        return;
+    }
+
+    hyperdos_intel_8284_clock_generator_set_processor_frequency_hertz(&pc->clockGenerator, processorFrequencyHertz);
+    hyperdos_pc_configure_interval_timer_input_clock_ratio(pc);
+    hyperdos_pc_update_speaker_state(pc);
 }
 
 void hyperdos_pc_set_speaker_state_change_function(hyperdos_pc*                              pc,
