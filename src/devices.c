@@ -7,9 +7,9 @@
 enum
 {
     HYPERDOS_OPEN_BUS_BYTE                                               = 0xFFu,
-    HYPERDOS_X86_16_TWO_BIT_COUNT                                        = 2u,
-    HYPERDOS_X86_16_LOW_TWO_BITS_MASK                                    = 0x03u,
-    HYPERDOS_X86_16_LOW_THREE_BITS_MASK                                  = 0x07u,
+    HYPERDOS_X86_TWO_BIT_COUNT                                           = 2u,
+    HYPERDOS_X86_LOW_TWO_BITS_MASK                                       = 0x03u,
+    HYPERDOS_X86_LOW_THREE_BITS_MASK                                     = 0x07u,
     HYPERDOS_INTERRUPT_CONTROLLER_COMMAND_PORT_OFFSET                    = 0u,
     HYPERDOS_INTERRUPT_CONTROLLER_DATA_PORT_OFFSET                       = 1u,
     HYPERDOS_INTERRUPT_CONTROLLER_INITIALIZATION_COMMAND                 = 0x10u,
@@ -49,8 +49,8 @@ enum
     HYPERDOS_INTERVAL_TIMER_MODE_SOFTWARE_TRIGGERED_STROBE               = 4u,
     HYPERDOS_INTERVAL_TIMER_MODE_HARDWARE_TRIGGERED_STROBE               = 5u,
     HYPERDOS_INTERVAL_TIMER_MAXIMUM_COUNT                                = 0x10000u,
-    HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET             = 3u,
-    HYPERDOS_X86_16_PERIPHERAL_INTERFACE_DEFAULT_CONTROL                 = 0x9Bu,
+    HYPERDOS_X86_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET                = 3u,
+    HYPERDOS_X86_PERIPHERAL_INTERFACE_DEFAULT_CONTROL                    = 0x9Bu,
     HYPERDOS_KEYBOARD_CONTROLLER_DATA_PORT                               = 0x0060u,
     HYPERDOS_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT                     = 0x0064u,
     HYPERDOS_KEYBOARD_CONTROLLER_STATUS_OUTPUT_BUFFER_FULL               = 0x01u,
@@ -349,57 +349,54 @@ static void hyperdos_8087_pop_stack_value(hyperdos_8087* coprocessor)
     hyperdos_8087_update_environment_words(coprocessor);
 }
 
-static uint16_t hyperdos_8087_read_memory_word(const hyperdos_x86_16_processor*       processor,
-                                               hyperdos_x86_16_segment_register_index segmentRegister,
-                                               uint16_t                               offset)
+static uint16_t hyperdos_8087_read_memory_word(const hyperdos_x86_processor*       processor,
+                                               hyperdos_x86_segment_register_index segmentRegister,
+                                               uint16_t                            offset)
 {
     uint8_t lowByte  = 0;
     uint8_t highByte = 0;
 
-    (void)hyperdos_x86_16_read_memory_byte(processor, segmentRegister, offset, &lowByte);
-    (void)hyperdos_x86_16_read_memory_byte(processor, segmentRegister, (uint16_t)(offset + 1u), &highByte);
-    return (uint16_t)(lowByte | ((uint16_t)highByte << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+    (void)hyperdos_x86_read_memory_byte(processor, segmentRegister, offset, &lowByte);
+    (void)hyperdos_x86_read_memory_byte(processor, segmentRegister, (uint16_t)(offset + 1u), &highByte);
+    return (uint16_t)(lowByte | ((uint16_t)highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
-static void hyperdos_8087_write_memory_word(hyperdos_x86_16_processor*             processor,
-                                            hyperdos_x86_16_segment_register_index segmentRegister,
-                                            uint16_t                               offset,
-                                            uint16_t                               value)
+static void hyperdos_8087_write_memory_word(hyperdos_x86_processor*             processor,
+                                            hyperdos_x86_segment_register_index segmentRegister,
+                                            uint16_t                            offset,
+                                            uint16_t                            value)
 {
-    (void)hyperdos_x86_16_write_memory_byte(processor,
-                                            segmentRegister,
-                                            offset,
-                                            (uint8_t)(value & HYPERDOS_X86_16_BYTE_MASK));
-    (void)hyperdos_x86_16_write_memory_byte(processor,
-                                            segmentRegister,
-                                            (uint16_t)(offset + 1u),
-                                            (uint8_t)(value >> HYPERDOS_X86_16_BYTE_BIT_COUNT));
+    (void)hyperdos_x86_write_memory_byte(processor, segmentRegister, offset, (uint8_t)(value & HYPERDOS_X86_BYTE_MASK));
+    (void)hyperdos_x86_write_memory_byte(processor,
+                                         segmentRegister,
+                                         (uint16_t)(offset + 1u),
+                                         (uint8_t)(value >> HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
-static uint32_t hyperdos_8087_read_memory_double_word(const hyperdos_x86_16_processor*       processor,
-                                                      hyperdos_x86_16_segment_register_index segmentRegister,
-                                                      uint16_t                               offset)
+static uint32_t hyperdos_8087_read_memory_double_word(const hyperdos_x86_processor*       processor,
+                                                      hyperdos_x86_segment_register_index segmentRegister,
+                                                      uint16_t                            offset)
 {
     uint32_t lowWord  = hyperdos_8087_read_memory_word(processor, segmentRegister, offset);
     uint32_t highWord = hyperdos_8087_read_memory_word(processor, segmentRegister, (uint16_t)(offset + 2u));
-    return lowWord | (highWord << HYPERDOS_X86_16_WORD_BIT_COUNT);
+    return lowWord | (highWord << HYPERDOS_X86_WORD_BIT_COUNT);
 }
 
-static void hyperdos_8087_write_memory_double_word(hyperdos_x86_16_processor*             processor,
-                                                   hyperdos_x86_16_segment_register_index segmentRegister,
-                                                   uint16_t                               offset,
-                                                   uint32_t                               value)
+static void hyperdos_8087_write_memory_double_word(hyperdos_x86_processor*             processor,
+                                                   hyperdos_x86_segment_register_index segmentRegister,
+                                                   uint16_t                            offset,
+                                                   uint32_t                            value)
 {
     hyperdos_8087_write_memory_word(processor, segmentRegister, offset, (uint16_t)value);
     hyperdos_8087_write_memory_word(processor,
                                     segmentRegister,
                                     (uint16_t)(offset + 2u),
-                                    (uint16_t)(value >> HYPERDOS_X86_16_WORD_BIT_COUNT));
+                                    (uint16_t)(value >> HYPERDOS_X86_WORD_BIT_COUNT));
 }
 
-static uint64_t hyperdos_8087_read_memory_quad_word(const hyperdos_x86_16_processor*       processor,
-                                                    hyperdos_x86_16_segment_register_index segmentRegister,
-                                                    uint16_t                               offset)
+static uint64_t hyperdos_8087_read_memory_quad_word(const hyperdos_x86_processor*       processor,
+                                                    hyperdos_x86_segment_register_index segmentRegister,
+                                                    uint16_t                            offset)
 {
     uint64_t lowDoubleWord  = hyperdos_8087_read_memory_double_word(processor, segmentRegister, offset);
     uint64_t highDoubleWord = hyperdos_8087_read_memory_double_word(processor,
@@ -408,10 +405,10 @@ static uint64_t hyperdos_8087_read_memory_quad_word(const hyperdos_x86_16_proces
     return lowDoubleWord | (highDoubleWord << 32u);
 }
 
-static void hyperdos_8087_write_memory_quad_word(hyperdos_x86_16_processor*             processor,
-                                                 hyperdos_x86_16_segment_register_index segmentRegister,
-                                                 uint16_t                               offset,
-                                                 uint64_t                               value)
+static void hyperdos_8087_write_memory_quad_word(hyperdos_x86_processor*             processor,
+                                                 hyperdos_x86_segment_register_index segmentRegister,
+                                                 uint16_t                            offset,
+                                                 uint64_t                            value)
 {
     hyperdos_8087_write_memory_double_word(processor, segmentRegister, offset, (uint32_t)value);
     hyperdos_8087_write_memory_double_word(processor,
@@ -420,9 +417,9 @@ static void hyperdos_8087_write_memory_quad_word(hyperdos_x86_16_processor*     
                                            (uint32_t)(value >> 32u));
 }
 
-static long double hyperdos_8087_read_single_precision_real(const hyperdos_x86_16_processor*       processor,
-                                                            hyperdos_x86_16_segment_register_index segmentRegister,
-                                                            uint16_t                               offset)
+static long double hyperdos_8087_read_single_precision_real(const hyperdos_x86_processor*       processor,
+                                                            hyperdos_x86_segment_register_index segmentRegister,
+                                                            uint16_t                            offset)
 {
     uint32_t binaryValue = hyperdos_8087_read_memory_double_word(processor, segmentRegister, offset);
     float    realValue   = 0.0f;
@@ -431,10 +428,10 @@ static long double hyperdos_8087_read_single_precision_real(const hyperdos_x86_1
     return realValue;
 }
 
-static void hyperdos_8087_write_single_precision_real(hyperdos_x86_16_processor*             processor,
-                                                      hyperdos_x86_16_segment_register_index segmentRegister,
-                                                      uint16_t                               offset,
-                                                      long double                            value)
+static void hyperdos_8087_write_single_precision_real(hyperdos_x86_processor*             processor,
+                                                      hyperdos_x86_segment_register_index segmentRegister,
+                                                      uint16_t                            offset,
+                                                      long double                         value)
 {
     float    realValue   = (float)value;
     uint32_t binaryValue = 0;
@@ -443,9 +440,9 @@ static void hyperdos_8087_write_single_precision_real(hyperdos_x86_16_processor*
     hyperdos_8087_write_memory_double_word(processor, segmentRegister, offset, binaryValue);
 }
 
-static long double hyperdos_8087_read_double_precision_real(const hyperdos_x86_16_processor*       processor,
-                                                            hyperdos_x86_16_segment_register_index segmentRegister,
-                                                            uint16_t                               offset)
+static long double hyperdos_8087_read_double_precision_real(const hyperdos_x86_processor*       processor,
+                                                            hyperdos_x86_segment_register_index segmentRegister,
+                                                            uint16_t                            offset)
 {
     uint64_t binaryValue = hyperdos_8087_read_memory_quad_word(processor, segmentRegister, offset);
     double   realValue   = 0.0;
@@ -454,10 +451,10 @@ static long double hyperdos_8087_read_double_precision_real(const hyperdos_x86_1
     return realValue;
 }
 
-static void hyperdos_8087_write_double_precision_real(hyperdos_x86_16_processor*             processor,
-                                                      hyperdos_x86_16_segment_register_index segmentRegister,
-                                                      uint16_t                               offset,
-                                                      long double                            value)
+static void hyperdos_8087_write_double_precision_real(hyperdos_x86_processor*             processor,
+                                                      hyperdos_x86_segment_register_index segmentRegister,
+                                                      uint16_t                            offset,
+                                                      long double                         value)
 {
     double   realValue   = (double)value;
     uint64_t binaryValue = 0;
@@ -602,9 +599,9 @@ static void hyperdos_8087_execute_reversed_register_operation(hyperdos_8087* cop
     }
 }
 
-static void hyperdos_8087_store_environment(hyperdos_x86_16_processor*                     processor,
-                                            const hyperdos_x86_16_coprocessor_instruction* instruction,
-                                            const hyperdos_8087*                           coprocessor)
+static void hyperdos_8087_store_environment(hyperdos_x86_processor*                     processor,
+                                            const hyperdos_x86_coprocessor_instruction* instruction,
+                                            const hyperdos_8087*                        coprocessor)
 {
     hyperdos_8087_write_memory_word(processor,
                                     instruction->segmentRegister,
@@ -636,9 +633,9 @@ static void hyperdos_8087_store_environment(hyperdos_x86_16_processor*          
                                     coprocessor->lastOperandSegment);
 }
 
-static void hyperdos_8087_load_environment(const hyperdos_x86_16_processor*               processor,
-                                           const hyperdos_x86_16_coprocessor_instruction* instruction,
-                                           hyperdos_8087*                                 coprocessor)
+static void hyperdos_8087_load_environment(const hyperdos_x86_processor*               processor,
+                                           const hyperdos_x86_coprocessor_instruction* instruction,
+                                           hyperdos_8087*                              coprocessor)
 {
     size_t registerIndex = 0;
 
@@ -681,9 +678,9 @@ static void hyperdos_8087_load_environment(const hyperdos_x86_16_processor*     
     hyperdos_8087_update_environment_words(coprocessor);
 }
 
-static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_16_processor*                     processor,
-                                                     const hyperdos_x86_16_coprocessor_instruction* instruction,
-                                                     hyperdos_8087*                                 coprocessor)
+static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_processor*                     processor,
+                                                     const hyperdos_x86_coprocessor_instruction* instruction,
+                                                     hyperdos_8087*                              coprocessor)
 {
     long double stackValue   = hyperdos_8087_read_stack_value(coprocessor, 0u);
     int64_t     integerValue = 0;
@@ -869,9 +866,9 @@ static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_16_processor* 
     }
 }
 
-static void hyperdos_8087_execute_register_instruction(hyperdos_x86_16_processor*                     processor,
-                                                       const hyperdos_x86_16_coprocessor_instruction* instruction,
-                                                       hyperdos_8087*                                 coprocessor)
+static void hyperdos_8087_execute_register_instruction(hyperdos_x86_processor*                     processor,
+                                                       const hyperdos_x86_coprocessor_instruction* instruction,
+                                                       hyperdos_8087*                              coprocessor)
 {
     uint8_t registerGroup = (uint8_t)(instruction->registerMemoryByte & HYPERDOS_8087_REGISTER_MEMORY_GROUP_MASK);
     uint8_t stackIndex    = (uint8_t)(instruction->registerMemoryByte & HYPERDOS_8087_REGISTER_MEMORY_MASK);
@@ -971,7 +968,9 @@ static void hyperdos_8087_execute_register_instruction(hyperdos_x86_16_processor
     case HYPERDOS_8087_ESCAPE_DF:
         if (instruction->registerMemoryByte == HYPERDOS_8087_REGISTER_MEMORY_STORE_STATUS_ACCUMULATOR)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = coprocessor->statusWord;
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   coprocessor->statusWord);
         }
         break;
     }
@@ -1286,14 +1285,14 @@ uint8_t hyperdos_direct_memory_access_controller_read_byte(void* device, uint16_
         if ((portOffset & 1u) == 0u)
         {
             value = controller->firstLastFlipFlop == 0u
-                            ? (uint8_t)(channel->currentAddress & HYPERDOS_X86_16_BYTE_MASK)
-                            : (uint8_t)(channel->currentAddress >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+                            ? (uint8_t)(channel->currentAddress & HYPERDOS_X86_BYTE_MASK)
+                            : (uint8_t)(channel->currentAddress >> HYPERDOS_X86_BYTE_BIT_COUNT);
         }
         else
         {
             value = controller->firstLastFlipFlop == 0u
-                            ? (uint8_t)(channel->currentCount & HYPERDOS_X86_16_BYTE_MASK)
-                            : (uint8_t)(channel->currentCount >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+                            ? (uint8_t)(channel->currentCount & HYPERDOS_X86_BYTE_MASK)
+                            : (uint8_t)(channel->currentCount >> HYPERDOS_X86_BYTE_BIT_COUNT);
         }
         controller->firstLastFlipFlop ^= 1u;
         return value;
@@ -1326,19 +1325,18 @@ void hyperdos_direct_memory_access_controller_write_byte(void* device, uint16_t 
         if ((portOffset & 1u) == 0u)
         {
             channel->currentAddress = controller->firstLastFlipFlop == 0u
-                                              ? (uint16_t)((channel->currentAddress & HYPERDOS_X86_16_HIGH_BYTE_MASK) |
+                                              ? (uint16_t)((channel->currentAddress & HYPERDOS_X86_HIGH_BYTE_MASK) |
                                                            value)
-                                              : (uint16_t)((channel->currentAddress & HYPERDOS_X86_16_BYTE_MASK) |
-                                                           ((uint16_t)value << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+                                              : (uint16_t)((channel->currentAddress & HYPERDOS_X86_BYTE_MASK) |
+                                                           ((uint16_t)value << HYPERDOS_X86_BYTE_BIT_COUNT));
             channel->baseAddress    = channel->currentAddress;
         }
         else
         {
             channel->currentCount = controller->firstLastFlipFlop == 0u
-                                            ? (uint16_t)((channel->currentCount & HYPERDOS_X86_16_HIGH_BYTE_MASK) |
-                                                         value)
-                                            : (uint16_t)((channel->currentCount & HYPERDOS_X86_16_BYTE_MASK) |
-                                                         ((uint16_t)value << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+                                            ? (uint16_t)((channel->currentCount & HYPERDOS_X86_HIGH_BYTE_MASK) | value)
+                                            : (uint16_t)((channel->currentCount & HYPERDOS_X86_BYTE_MASK) |
+                                                         ((uint16_t)value << HYPERDOS_X86_BYTE_BIT_COUNT));
             channel->baseCount    = channel->currentCount;
         }
         controller->firstLastFlipFlop ^= 1u;
@@ -1416,12 +1414,12 @@ void hyperdos_programmable_interval_timer_initialize(hyperdos_programmable_inter
     }
 }
 
-static uint32_t hyperdos_x86_16_interval_timer_effective_count(uint16_t reloadValue)
+static uint32_t hyperdos_x86_interval_timer_effective_count(uint16_t reloadValue)
 {
     return reloadValue == 0u ? HYPERDOS_INTERVAL_TIMER_MAXIMUM_COUNT : reloadValue;
 }
 
-static uint16_t hyperdos_x86_16_interval_timer_visible_count(const hyperdos_x86_16_interval_timer_channel* channel)
+static uint16_t hyperdos_x86_interval_timer_visible_count(const hyperdos_x86_interval_timer_channel* channel)
 {
     if (channel->currentCounter == HYPERDOS_INTERVAL_TIMER_MAXIMUM_COUNT)
     {
@@ -1430,11 +1428,11 @@ static uint16_t hyperdos_x86_16_interval_timer_visible_count(const hyperdos_x86_
     return (uint16_t)channel->currentCounter;
 }
 
-static void hyperdos_x86_16_interval_timer_load_count(hyperdos_x86_16_interval_timer_channel* channel)
+static void hyperdos_x86_interval_timer_load_count(hyperdos_x86_interval_timer_channel* channel)
 {
-    channel->reloadCounter  = hyperdos_x86_16_interval_timer_effective_count(channel->reloadValue);
+    channel->reloadCounter  = hyperdos_x86_interval_timer_effective_count(channel->reloadValue);
     channel->currentCounter = channel->reloadCounter;
-    channel->currentValue   = hyperdos_x86_16_interval_timer_visible_count(channel);
+    channel->currentValue   = hyperdos_x86_interval_timer_visible_count(channel);
     channel->outputLevel = channel->operatingMode == HYPERDOS_INTERVAL_TIMER_MODE_INTERRUPT_ON_TERMINAL_COUNT ? 0u : 1u;
 }
 
@@ -1442,9 +1440,9 @@ uint8_t hyperdos_programmable_interval_timer_read_byte(void* device, uint16_t po
 {
     hyperdos_programmable_interval_timer* timer        = (hyperdos_programmable_interval_timer*)device;
     uint16_t                              channelIndex = (uint16_t)(port & HYPERDOS_INTERVAL_TIMER_CONTROL_PORT_OFFSET);
-    hyperdos_x86_16_interval_timer_channel* channel    = NULL;
-    uint16_t                                readValue  = 0u;
-    uint8_t                                 value      = 0;
+    hyperdos_x86_interval_timer_channel*  channel      = NULL;
+    uint16_t                              readValue    = 0u;
+    uint8_t                               value        = 0;
 
     if (timer == NULL || channelIndex >= HYPERDOS_INTERVAL_TIMER_CHANNEL_COUNT)
     {
@@ -1453,15 +1451,15 @@ uint8_t hyperdos_programmable_interval_timer_read_byte(void* device, uint16_t po
 
     channel   = &timer->channels[channelIndex];
     readValue = channel->countLatched != 0u ? channel->latchedValue
-                                            : hyperdos_x86_16_interval_timer_visible_count(channel);
+                                            : hyperdos_x86_interval_timer_visible_count(channel);
     if (channel->accessMode == HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LOW_BYTE)
     {
-        value                 = (uint8_t)(readValue & HYPERDOS_X86_16_BYTE_MASK);
+        value                 = (uint8_t)(readValue & HYPERDOS_X86_BYTE_MASK);
         channel->countLatched = 0u;
     }
     else if (channel->accessMode == HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_HIGH_BYTE)
     {
-        value                 = (uint8_t)(readValue >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+        value                 = (uint8_t)(readValue >> HYPERDOS_X86_BYTE_BIT_COUNT);
         channel->countLatched = 0u;
     }
     else
@@ -1469,12 +1467,12 @@ uint8_t hyperdos_programmable_interval_timer_read_byte(void* device, uint16_t po
         uint8_t* readLowByte = channel->countLatched != 0u ? &channel->latchedReadLowByte : &channel->readLatchLowByte;
         if (*readLowByte == 0u)
         {
-            value        = (uint8_t)(readValue & HYPERDOS_X86_16_BYTE_MASK);
+            value        = (uint8_t)(readValue & HYPERDOS_X86_BYTE_MASK);
             *readLowByte = 1u;
         }
         else
         {
-            value                 = (uint8_t)(readValue >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+            value                 = (uint8_t)(readValue >> HYPERDOS_X86_BYTE_BIT_COUNT);
             *readLowByte          = 0u;
             channel->countLatched = 0u;
         }
@@ -1482,41 +1480,40 @@ uint8_t hyperdos_programmable_interval_timer_read_byte(void* device, uint16_t po
     return value;
 }
 
-static void hyperdos_x86_16_interval_timer_write_reload_byte(hyperdos_x86_16_interval_timer_channel* channel,
-                                                             uint8_t                                 value)
+static void hyperdos_x86_interval_timer_write_reload_byte(hyperdos_x86_interval_timer_channel* channel, uint8_t value)
 {
     if (channel->accessMode == HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LOW_BYTE)
     {
-        channel->reloadValue = (uint16_t)((channel->reloadValue & HYPERDOS_X86_16_HIGH_BYTE_MASK) | value);
-        hyperdos_x86_16_interval_timer_load_count(channel);
+        channel->reloadValue = (uint16_t)((channel->reloadValue & HYPERDOS_X86_HIGH_BYTE_MASK) | value);
+        hyperdos_x86_interval_timer_load_count(channel);
         return;
     }
     if (channel->accessMode == HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_HIGH_BYTE)
     {
-        channel->reloadValue = (uint16_t)((channel->reloadValue & HYPERDOS_X86_16_BYTE_MASK) |
-                                          ((uint16_t)value << HYPERDOS_X86_16_BYTE_BIT_COUNT));
-        hyperdos_x86_16_interval_timer_load_count(channel);
+        channel->reloadValue = (uint16_t)((channel->reloadValue & HYPERDOS_X86_BYTE_MASK) |
+                                          ((uint16_t)value << HYPERDOS_X86_BYTE_BIT_COUNT));
+        hyperdos_x86_interval_timer_load_count(channel);
         return;
     }
     if (channel->writeLatchLowByte == 0u)
     {
-        channel->reloadValue       = (uint16_t)((channel->reloadValue & HYPERDOS_X86_16_HIGH_BYTE_MASK) | value);
+        channel->reloadValue       = (uint16_t)((channel->reloadValue & HYPERDOS_X86_HIGH_BYTE_MASK) | value);
         channel->writeLatchLowByte = 1u;
     }
     else
     {
-        channel->reloadValue       = (uint16_t)((channel->reloadValue & HYPERDOS_X86_16_BYTE_MASK) |
-                                          ((uint16_t)value << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+        channel->reloadValue       = (uint16_t)((channel->reloadValue & HYPERDOS_X86_BYTE_MASK) |
+                                          ((uint16_t)value << HYPERDOS_X86_BYTE_BIT_COUNT));
         channel->writeLatchLowByte = 0u;
-        hyperdos_x86_16_interval_timer_load_count(channel);
+        hyperdos_x86_interval_timer_load_count(channel);
     }
 }
 
 void hyperdos_programmable_interval_timer_write_byte(void* device, uint16_t port, uint8_t value)
 {
-    hyperdos_programmable_interval_timer*   timer      = (hyperdos_programmable_interval_timer*)device;
-    uint16_t                                portOffset = (uint16_t)(port & HYPERDOS_INTERVAL_TIMER_CONTROL_PORT_OFFSET);
-    hyperdos_x86_16_interval_timer_channel* channel    = NULL;
+    hyperdos_programmable_interval_timer* timer      = (hyperdos_programmable_interval_timer*)device;
+    uint16_t                              portOffset = (uint16_t)(port & HYPERDOS_INTERVAL_TIMER_CONTROL_PORT_OFFSET);
+    hyperdos_x86_interval_timer_channel*  channel    = NULL;
 
     if (timer == NULL)
     {
@@ -1526,20 +1523,20 @@ void hyperdos_programmable_interval_timer_write_byte(void* device, uint16_t port
     {
         uint8_t channelIndex = (uint8_t)(value >> HYPERDOS_INTERVAL_TIMER_SELECT_CHANNEL_SHIFT);
         uint8_t accessMode   = (uint8_t)((value >> HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_SHIFT) &
-                                       HYPERDOS_X86_16_LOW_TWO_BITS_MASK);
+                                       HYPERDOS_X86_LOW_TWO_BITS_MASK);
         if (channelIndex < HYPERDOS_INTERVAL_TIMER_CHANNEL_COUNT)
         {
             channel = &timer->channels[channelIndex];
             if (accessMode == HYPERDOS_INTERVAL_TIMER_ACCESS_MODE_LATCH_COUNT)
             {
-                channel->latchedValue       = hyperdos_x86_16_interval_timer_visible_count(channel);
+                channel->latchedValue       = hyperdos_x86_interval_timer_visible_count(channel);
                 channel->countLatched       = 1u;
                 channel->latchedReadLowByte = 0u;
                 return;
             }
             channel->accessMode    = accessMode;
             channel->operatingMode = (uint8_t)((value >> HYPERDOS_INTERVAL_TIMER_OPERATING_MODE_SHIFT) &
-                                               HYPERDOS_X86_16_LOW_THREE_BITS_MASK);
+                                               HYPERDOS_X86_LOW_THREE_BITS_MASK);
             if (channel->operatingMode > HYPERDOS_INTERVAL_TIMER_MODE_HARDWARE_TRIGGERED_STROBE)
             {
                 channel->operatingMode = (uint8_t)(channel->operatingMode -
@@ -1553,7 +1550,7 @@ void hyperdos_programmable_interval_timer_write_byte(void* device, uint16_t port
     }
 
     channel = &timer->channels[portOffset];
-    hyperdos_x86_16_interval_timer_write_reload_byte(channel, value);
+    hyperdos_x86_interval_timer_write_reload_byte(channel, value);
 }
 
 void hyperdos_programmable_interval_timer_tick(void* device, uint64_t elapsedClockCount)
@@ -1568,8 +1565,8 @@ void hyperdos_programmable_interval_timer_tick(void* device, uint64_t elapsedClo
 
     for (channelIndex = 0; channelIndex < HYPERDOS_INTERVAL_TIMER_CHANNEL_COUNT; ++channelIndex)
     {
-        hyperdos_x86_16_interval_timer_channel* channel             = &timer->channels[channelIndex];
-        uint64_t                                remainingClockCount = elapsedClockCount;
+        hyperdos_x86_interval_timer_channel* channel             = &timer->channels[channelIndex];
+        uint64_t                             remainingClockCount = elapsedClockCount;
         if (channel->reloadCounter == 0u)
         {
             continue;
@@ -1593,7 +1590,7 @@ void hyperdos_programmable_interval_timer_tick(void* device, uint64_t elapsedClo
             else
             {
                 channel->currentCounter -= (uint32_t)remainingClockCount;
-                channel->currentValue    = hyperdos_x86_16_interval_timer_visible_count(channel);
+                channel->currentValue    = hyperdos_x86_interval_timer_visible_count(channel);
             }
             continue;
         }
@@ -1614,14 +1611,14 @@ void hyperdos_programmable_interval_timer_tick(void* device, uint64_t elapsedClo
                 channel->outputTransitionPending = 1u;
             }
         }
-        channel->currentValue = hyperdos_x86_16_interval_timer_visible_count(channel);
+        channel->currentValue = hyperdos_x86_interval_timer_visible_count(channel);
     }
 }
 
 int hyperdos_programmable_interval_timer_get_and_clear_output_transition(hyperdos_programmable_interval_timer* timer,
                                                                          uint8_t channelIndex)
 {
-    hyperdos_x86_16_interval_timer_channel* channel = NULL;
+    hyperdos_x86_interval_timer_channel* channel = NULL;
 
     if (timer == NULL || channelIndex >= HYPERDOS_INTERVAL_TIMER_CHANNEL_COUNT)
     {
@@ -1643,7 +1640,7 @@ void hyperdos_programmable_peripheral_interface_initialize(hyperdos_programmable
         return;
     }
     memset(interface, 0, sizeof(*interface));
-    interface->control = HYPERDOS_X86_16_PERIPHERAL_INTERFACE_DEFAULT_CONTROL;
+    interface->control = HYPERDOS_X86_PERIPHERAL_INTERFACE_DEFAULT_CONTROL;
 }
 
 uint8_t hyperdos_programmable_peripheral_interface_read_byte(void* device, uint16_t port)
@@ -1655,7 +1652,7 @@ uint8_t hyperdos_programmable_peripheral_interface_read_byte(void* device, uint1
         return HYPERDOS_OPEN_BUS_BYTE;
     }
 
-    switch (port & HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET)
+    switch (port & HYPERDOS_X86_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET)
     {
     case 0u:
         return interface->portA;
@@ -1663,7 +1660,7 @@ uint8_t hyperdos_programmable_peripheral_interface_read_byte(void* device, uint1
         return interface->portB;
     case 2u:
         return interface->portC;
-    case HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET:
+    case HYPERDOS_X86_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET:
         return interface->control;
     }
     return HYPERDOS_OPEN_BUS_BYTE;
@@ -1678,7 +1675,7 @@ void hyperdos_programmable_peripheral_interface_write_byte(void* device, uint16_
         return;
     }
 
-    switch (port & HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET)
+    switch (port & HYPERDOS_X86_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET)
     {
     case 0u:
         interface->portA = value;
@@ -1689,7 +1686,7 @@ void hyperdos_programmable_peripheral_interface_write_byte(void* device, uint16_
     case 2u:
         interface->portC = value;
         break;
-    case HYPERDOS_X86_16_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET:
+    case HYPERDOS_X86_PERIPHERAL_INTERFACE_CONTROL_PORT_OFFSET:
         interface->control = value;
         break;
     }
@@ -2068,7 +2065,7 @@ static void hyperdos_intel_8042_keyboard_controller_write_auxiliary_device_comma
     }
     if (controller->pendingAuxiliaryDeviceCommand == HYPERDOS_AUXILIARY_MOUSE_DEVICE_COMMAND_SET_RESOLUTION)
     {
-        controller->auxiliaryDeviceResolution     = (uint8_t)(value & HYPERDOS_X86_16_LOW_TWO_BITS_MASK);
+        controller->auxiliaryDeviceResolution     = (uint8_t)(value & HYPERDOS_X86_LOW_TWO_BITS_MASK);
         controller->pendingAuxiliaryDeviceCommand = 0u;
         hyperdos_intel_8042_keyboard_controller_enqueue_auxiliary_acknowledge(controller);
         return;
@@ -2496,7 +2493,7 @@ static uint8_t hyperdos_video_graphics_array_rotate_right(uint8_t value, uint8_t
     {
         return value;
     }
-    return (uint8_t)((value >> rotationCount) | (value << (HYPERDOS_X86_16_BYTE_BIT_COUNT - rotationCount)));
+    return (uint8_t)((value >> rotationCount) | (value << (HYPERDOS_X86_BYTE_BIT_COUNT - rotationCount)));
 }
 
 static void hyperdos_video_graphics_array_load_latch(hyperdos_color_graphics_adapter* adapter, uint32_t relativeAddress)
@@ -2547,7 +2544,7 @@ static uint8_t hyperdos_video_graphics_array_read_memory_byte(hyperdos_color_gra
                                            [HYPERDOS_VIDEO_GRAPHICS_ARRAY_GRAPHICS_MODE_INDEX];
     uint8_t readMapSelect = (uint8_t)(adapter->graphicsControllerRegisters
                                               [HYPERDOS_VIDEO_GRAPHICS_ARRAY_GRAPHICS_READ_MAP_SELECT_INDEX] &
-                                      HYPERDOS_X86_16_LOW_TWO_BITS_MASK);
+                                      HYPERDOS_X86_LOW_TWO_BITS_MASK);
 
     hyperdos_video_graphics_array_load_latch(adapter, relativeAddress);
     if ((graphicsModeRegister & HYPERDOS_VIDEO_GRAPHICS_ARRAY_READ_MODE_BIT) == 0u)
@@ -2685,7 +2682,7 @@ static uint8_t hyperdos_video_graphics_array_get_memory_map_select(const hyperdo
                      HYPERDOS_VIDEO_GRAPHICS_ARRAY_MEMORY_MAP_SELECT_MASK);
 }
 
-static int hyperdos_x86_16_unsigned_address_is_in_range(uint32_t address, uint32_t firstAddress, uint32_t byteCount)
+static int hyperdos_x86_unsigned_address_is_in_range(uint32_t address, uint32_t firstAddress, uint32_t byteCount)
 {
     return address >= firstAddress && address < firstAddress + byteCount;
 }
@@ -2718,7 +2715,7 @@ static int hyperdos_video_graphics_array_translate_memory_address(const hyperdos
         break;
     }
 
-    if (!hyperdos_x86_16_unsigned_address_is_in_range(physicalAddress, firstAddress, byteCount))
+    if (!hyperdos_x86_unsigned_address_is_in_range(physicalAddress, firstAddress, byteCount))
     {
         return 0;
     }
@@ -2736,8 +2733,8 @@ static int hyperdos_video_graphics_array_chain_four_is_enabled(const hyperdos_co
 static uint8_t hyperdos_video_graphics_array_read_chain_four_memory_byte(hyperdos_color_graphics_adapter* adapter,
                                                                          uint32_t relativeAddress)
 {
-    size_t   planeIndex   = relativeAddress & HYPERDOS_X86_16_LOW_TWO_BITS_MASK;
-    uint32_t planeAddress = (relativeAddress >> HYPERDOS_X86_16_TWO_BIT_COUNT) &
+    size_t   planeIndex   = relativeAddress & HYPERDOS_X86_LOW_TWO_BITS_MASK;
+    uint32_t planeAddress = (relativeAddress >> HYPERDOS_X86_TWO_BIT_COUNT) &
                             (HYPERDOS_VIDEO_GRAPHICS_ARRAY_MEMORY_SIZE - 1u);
 
     hyperdos_video_graphics_array_load_latch(adapter, planeAddress);
@@ -2748,8 +2745,8 @@ static void hyperdos_video_graphics_array_write_chain_four_memory_byte(hyperdos_
                                                                        uint32_t                         relativeAddress,
                                                                        uint8_t                          value)
 {
-    size_t   planeIndex   = relativeAddress & HYPERDOS_X86_16_LOW_TWO_BITS_MASK;
-    uint32_t planeAddress = (relativeAddress >> HYPERDOS_X86_16_TWO_BIT_COUNT) &
+    size_t   planeIndex   = relativeAddress & HYPERDOS_X86_LOW_TWO_BITS_MASK;
+    uint32_t planeAddress = (relativeAddress >> HYPERDOS_X86_TWO_BIT_COUNT) &
                             (HYPERDOS_VIDEO_GRAPHICS_ARRAY_MEMORY_SIZE - 1u);
     uint8_t mapMask = (uint8_t)(adapter->sequencerRegisters[HYPERDOS_VIDEO_GRAPHICS_ARRAY_SEQUENCER_MAP_MASK_INDEX] &
                                 ((1u << HYPERDOS_VIDEO_GRAPHICS_ARRAY_PLANE_COUNT) - 1u));
@@ -2770,18 +2767,17 @@ static void hyperdos_video_graphics_array_set_display_start_address(hyperdos_col
                                                                     uint16_t displayStartAddress)
 {
     adapter->registers
-            [HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_START_ADDRESS_HIGH_INDEX] = (uint8_t)(displayStartAddress >>
-                                                                                     HYPERDOS_X86_16_BYTE_BIT_COUNT);
-    adapter->registers
-            [HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_START_ADDRESS_LOW_INDEX] = (uint8_t)(displayStartAddress &
-                                                                                    HYPERDOS_X86_16_BYTE_MASK);
+            [HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_START_ADDRESS_HIGH_INDEX]          = (uint8_t)(displayStartAddress >>
+                                                                                     HYPERDOS_X86_BYTE_BIT_COUNT);
+    adapter->registers[HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_START_ADDRESS_LOW_INDEX] = (uint8_t)(displayStartAddress &
+                                                                                              HYPERDOS_X86_BYTE_MASK);
 }
 
 static void hyperdos_video_graphics_array_set_display_stride_byte_count(hyperdos_color_graphics_adapter* adapter,
                                                                         uint16_t displayStrideByteCount)
 {
     adapter->registers[HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_OFFSET_INDEX] = (uint8_t)(displayStrideByteCount /
-                                                                                   HYPERDOS_X86_16_TWO_BIT_COUNT);
+                                                                                   HYPERDOS_X86_TWO_BIT_COUNT);
 }
 
 static void hyperdos_video_graphics_array_set_attribute_mode(hyperdos_color_graphics_adapter* adapter, int graphicsMode)
@@ -3067,7 +3063,7 @@ uint16_t hyperdos_color_graphics_adapter_get_display_start_address(const hyperdo
         return 0u;
     }
     return (uint16_t)(((uint16_t)adapter->registers[HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_START_ADDRESS_HIGH_INDEX]
-                       << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
+                       << HYPERDOS_X86_BYTE_BIT_COUNT) |
                       adapter->registers[HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_START_ADDRESS_LOW_INDEX]);
 }
 
@@ -3077,8 +3073,7 @@ uint16_t hyperdos_color_graphics_adapter_get_display_stride_byte_count(const hyp
     {
         return 0u;
     }
-    return (uint16_t)(adapter->registers[HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_OFFSET_INDEX] *
-                      HYPERDOS_X86_16_TWO_BIT_COUNT);
+    return (uint16_t)(adapter->registers[HYPERDOS_VIDEO_GRAPHICS_ARRAY_CRT_OFFSET_INDEX] * HYPERDOS_X86_TWO_BIT_COUNT);
 }
 
 uint8_t hyperdos_color_graphics_adapter_read_input_output_byte(void* device, uint16_t port)
@@ -3318,26 +3313,26 @@ void hyperdos_8087_initialize(hyperdos_8087* coprocessor)
     hyperdos_8087_update_environment_words(coprocessor);
 }
 
-hyperdos_x86_16_execution_result hyperdos_8087_wait(hyperdos_x86_16_processor* processor, void* userContext)
+hyperdos_x86_execution_result hyperdos_8087_wait(hyperdos_x86_processor* processor, void* userContext)
 {
     (void)processor;
     (void)userContext;
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
-hyperdos_x86_16_execution_result hyperdos_8087_escape(hyperdos_x86_16_processor*                     processor,
-                                                      const hyperdos_x86_16_coprocessor_instruction* instruction,
-                                                      void*                                          userContext)
+hyperdos_x86_execution_result hyperdos_8087_escape(hyperdos_x86_processor*                     processor,
+                                                   const hyperdos_x86_coprocessor_instruction* instruction,
+                                                   void*                                       userContext)
 {
     hyperdos_8087* coprocessor = (hyperdos_8087*)userContext;
 
     if (processor == NULL || instruction == NULL || coprocessor == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
 
     coprocessor->lastInstructionSegment = processor->lastInstructionSegment;
-    coprocessor->lastInstructionOffset  = processor->lastInstructionOffset;
+    coprocessor->lastInstructionOffset  = (uint16_t)processor->lastInstructionOffset;
     if (!instruction->isRegister)
     {
         coprocessor->lastOperandSegment = processor->segmentRegisters[instruction->segmentRegister];
@@ -3355,5 +3350,5 @@ hyperdos_x86_16_execution_result hyperdos_8087_escape(hyperdos_x86_16_processor*
     }
 
     hyperdos_8087_update_environment_words(coprocessor);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }

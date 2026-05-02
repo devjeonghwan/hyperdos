@@ -59,8 +59,8 @@ void hyperdos_pc_disk_bios_set_disk_operation_status(hyperdos_pc* pc, uint8_t dr
 
 uint8_t hyperdos_pc_disk_bios_get_disk_operation_status(hyperdos_pc* pc, uint8_t driveNumber);
 
-hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
-        hyperdos_x86_16_processor*             processor,
+hyperdos_x86_execution_result hyperdos_pc_disk_bios_handle_interrupt(
+        hyperdos_x86_processor*                processor,
         const hyperdos_pc_disk_bios_interface* diskBiosInterface);
 
 #endif

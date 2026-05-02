@@ -64,15 +64,15 @@ enum
 
 void hyperdos_pc_bios_install_interrupt_vector_stubs(hyperdos_pc* pc);
 
-void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int carry);
+void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry);
 
-void hyperdos_pc_bios_synchronize_interrupt_return_flag(hyperdos_pc*               pc,
-                                                        hyperdos_x86_16_processor* processor,
-                                                        uint16_t                   flagMask);
+void hyperdos_pc_bios_synchronize_interrupt_return_flag(hyperdos_pc*            pc,
+                                                        hyperdos_x86_processor* processor,
+                                                        uint16_t                flagMask);
 
-void hyperdos_pc_bios_synchronize_interrupt_return_carry_flag(hyperdos_pc* pc, hyperdos_x86_16_processor* processor);
+void hyperdos_pc_bios_synchronize_interrupt_return_carry_flag(hyperdos_pc* pc, hyperdos_x86_processor* processor);
 
-void hyperdos_pc_bios_synchronize_interrupt_return_zero_flag(hyperdos_pc* pc, hyperdos_x86_16_processor* processor);
+void hyperdos_pc_bios_synchronize_interrupt_return_zero_flag(hyperdos_pc* pc, hyperdos_x86_processor* processor);
 
 int hyperdos_pc_bios_interrupt_vector_matches(hyperdos_pc* pc,
                                               uint8_t      interruptNumber,

@@ -116,7 +116,7 @@ typedef struct hyperdos_win32_pc_monitor_runtime
     ULONGLONG                                   lastTextScreenDumpTick;
     ULONGLONG                                   lastVideoStateDumpTick;
     hyperdos_monitor_cpu_trace_entry            cpuTraceEntries[HYPERDOS_MONITOR_CPU_TRACE_ENTRY_COUNT];
-    hyperdos_x86_16_execution_result            executionResult;
+    hyperdos_x86_execution_result               executionResult;
     hyperdos_monitor_boot_device_kind           bootDeviceKind;
     uint8_t                                     bootDeviceIndex;
     hyperdos_monitor_host_notification          hostNotification;

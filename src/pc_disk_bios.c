@@ -56,17 +56,17 @@ enum
     HYPERDOS_PC_DISK_BIOS_MAXIMUM_FLOPPY_DRIVE_COUNT        = 4u
 };
 
-static void hyperdos_pc_disk_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int carry)
+static void hyperdos_pc_disk_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
     if (carry)
     {
-        processor->flags |= HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
     }
     else
     {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
     }
-    processor->flags |= HYPERDOS_X86_16_FLAG_RESERVED;
+    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
 }
 
 static void hyperdos_pc_disk_bios_trace(const hyperdos_pc_disk_bios_interface* diskBiosInterface,
@@ -393,20 +393,22 @@ void hyperdos_pc_disk_bios_initialize_data_area(hyperdos_pc*                  pc
     }
 }
 
-static void hyperdos_pc_disk_bios_set_status_in_accumulator(hyperdos_x86_16_processor* processor, uint8_t status)
+static void hyperdos_pc_disk_bios_set_status_in_accumulator(hyperdos_x86_processor* processor, uint8_t status)
 {
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            (uint16_t)(((uint16_t)status << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                       (processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                        HYPERDOS_X86_16_LOW_BYTE_MASK));
+    uint16_t accumulator = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           (uint16_t)(((uint16_t)status
+                                                       << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                      (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
 }
 
-static void hyperdos_pc_disk_bios_set_drive_parameters(hyperdos_x86_16_processor* processor,
-                                                       uint16_t                   accumulator,
-                                                       uint16_t                   cylinderCount,
-                                                       uint16_t                   headCount,
-                                                       uint16_t                   sectorsPerTrack,
-                                                       uint8_t                    driveCount)
+static void hyperdos_pc_disk_bios_set_drive_parameters(hyperdos_x86_processor* processor,
+                                                       uint16_t                accumulator,
+                                                       uint16_t                cylinderCount,
+                                                       uint16_t                headCount,
+                                                       uint16_t                sectorsPerTrack,
+                                                       uint8_t                 driveCount)
 {
     if (cylinderCount == 0u)
     {
@@ -435,29 +437,32 @@ static void hyperdos_pc_disk_bios_set_drive_parameters(hyperdos_x86_16_processor
     uint16_t maximumCylinder = (uint16_t)(cylinderCount - 1u);
     uint16_t maximumHead     = (uint16_t)(headCount - 1u);
 
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = accumulator &
-                                                                                HYPERDOS_X86_16_LOW_BYTE_MASK;
-    processor->generalRegisters
-            [HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] = (uint16_t)(((maximumCylinder & 0x00FFu)
-                                                                     << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                                                                    ((maximumCylinder >> 2u) & 0x00C0u) |
-                                                                    (sectorsPerTrack & 0x003Fu));
-    processor->generalRegisters
-            [HYPERDOS_X86_16_GENERAL_REGISTER_DATA] = (uint16_t)((maximumHead
-                                                                  << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                                                                 driveCount);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           (uint16_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK));
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                           (uint16_t)(((maximumCylinder & 0x00FFu)
+                                                       << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                      ((maximumCylinder >> 2u) & 0x00C0u) |
+                                                      (sectorsPerTrack & 0x003Fu)));
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_DATA,
+                                           (uint16_t)((maximumHead << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                      driveCount));
 }
 
-static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_fail_transfer(hyperdos_x86_16_processor* processor,
-                                                                            hyperdos_pc*               pc,
-                                                                            uint8_t                    driveNumber,
-                                                                            uint8_t                    status)
+static hyperdos_x86_execution_result hyperdos_pc_disk_bios_fail_transfer(hyperdos_x86_processor* processor,
+                                                                         hyperdos_pc*            pc,
+                                                                         uint8_t                 driveNumber,
+                                                                         uint8_t                 status)
 {
     hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, status);
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            (uint16_t)(status << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           (uint16_t)(status << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT));
     hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
 static uint8_t hyperdos_pc_disk_bios_get_transfer_status(hyperdos_pc_disk_transfer_result transferResult)
@@ -469,25 +474,25 @@ static uint8_t hyperdos_pc_disk_bios_get_transfer_status(hyperdos_pc_disk_transf
     return HYPERDOS_PC_DISK_BIOS_STATUS_SECTOR_NOT_FOUND;
 }
 
-static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
-        hyperdos_x86_16_processor*             processor,
+static hyperdos_x86_execution_result hyperdos_pc_disk_bios_handle_transfer(
+        hyperdos_x86_processor*                processor,
         const hyperdos_pc_disk_bios_interface* diskBiosInterface,
         int                                    isWrite)
 {
-    hyperdos_pc* pc             = diskBiosInterface->pc;
-    uint16_t     accumulator    = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR];
-    uint16_t     counter        = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER];
-    uint16_t     data           = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA];
-    uint8_t      sectorCount    = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
-    uint16_t     cylinder       = (uint16_t)((counter >> HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+    hyperdos_pc* pc      = diskBiosInterface->pc;
+    uint16_t accumulator = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
+    uint16_t counter     = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER);
+    uint16_t data        = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA);
+    uint8_t  sectorCount = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
+    uint16_t cylinder    = (uint16_t)((counter >> HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
                                    ((counter & 0x00C0u) << 2u));
-    uint16_t     sector         = (uint16_t)(counter & 0x003Fu);
-    uint16_t     head           = (uint16_t)(data >> HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT);
-    uint8_t      driveNumber    = (uint8_t)(data & HYPERDOS_X86_16_LOW_BYTE_MASK);
-    uint16_t     transferOffset = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE];
-    uint32_t transferAddress = (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA] << 4u) +
+    uint16_t sector      = (uint16_t)(counter & 0x003Fu);
+    uint16_t head        = (uint16_t)(data >> HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT);
+    uint8_t  driveNumber = (uint8_t)(data & HYPERDOS_X86_LOW_BYTE_MASK);
+    uint16_t transferOffset  = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
+    uint32_t transferAddress = (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] << 4u) +
                                 transferOffset) &
-                               HYPERDOS_X86_16_ADDRESS_MASK;
+                               HYPERDOS_X86_ADDRESS_MASK;
     hyperdos_pc_disk_image*          diskImage           = NULL;
     uint64_t                         logicalBlockAddress = 0u;
     size_t                           transferByteCount   = 0u;
@@ -545,10 +550,12 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
                                                                         driveNumber);
         }
         hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)(HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)(HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED
+                                                          << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT));
         hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (sectorCount == 0u || sector == 0u || sector > diskImage->sectorsPerTrack || head >= diskImage->headCount)
     {
@@ -625,7 +632,7 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
             transferBytes[byteIndex] = hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus,
                                                                                  (transferAddress +
                                                                                   (uint32_t)byteIndex) &
-                                                                                         HYPERDOS_X86_16_ADDRESS_MASK);
+                                                                                         HYPERDOS_X86_ADDRESS_MASK);
         }
         transferResult = hyperdos_pc_disk_image_write_sectors(diskImage,
                                                               logicalBlockAddress,
@@ -644,7 +651,7 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
             {
                 hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
                                                          (transferAddress + (uint32_t)byteIndex) &
-                                                                 HYPERDOS_X86_16_ADDRESS_MASK,
+                                                                 HYPERDOS_X86_ADDRESS_MASK,
                                                          transferBytes[byteIndex]);
             }
         }
@@ -706,25 +713,27 @@ static hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_transfer(
     }
     hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
 
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = sectorCount;
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, sectorCount);
     hyperdos_pc_disk_bios_set_carry_flag(processor, 0);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
-static void hyperdos_pc_disk_bios_return_invalid_function(hyperdos_x86_16_processor* processor,
-                                                          hyperdos_pc*               pc,
-                                                          uint8_t                    driveNumber,
-                                                          uint16_t                   accumulator)
+static void hyperdos_pc_disk_bios_return_invalid_function(hyperdos_x86_processor* processor,
+                                                          hyperdos_pc*            pc,
+                                                          uint8_t                 driveNumber,
+                                                          uint16_t                accumulator)
 {
     hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION);
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            (uint16_t)((HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                       (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           (uint16_t)((HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION
+                                                       << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                      (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
     hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
-        hyperdos_x86_16_processor*             processor,
+hyperdos_x86_execution_result hyperdos_pc_disk_bios_handle_interrupt(
+        hyperdos_x86_processor*                processor,
         const hyperdos_pc_disk_bios_interface* diskBiosInterface)
 {
     hyperdos_pc* pc            = NULL;
@@ -735,13 +744,13 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
 
     if (processor == NULL || diskBiosInterface == NULL || diskBiosInterface->pc == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
     pc            = diskBiosInterface->pc;
-    accumulator   = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR];
-    data          = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA];
+    accumulator   = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
+    data          = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA);
     serviceNumber = (uint8_t)(accumulator >> HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT);
-    driveNumber   = (uint8_t)(data & HYPERDOS_X86_16_LOW_BYTE_MASK);
+    driveNumber   = (uint8_t)(data & HYPERDOS_X86_LOW_BYTE_MASK);
 
     if (serviceNumber == HYPERDOS_PC_DISK_BIOS_RESET_SERVICE)
     {
@@ -761,19 +770,27 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
                         : 0u);
         hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
         hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &= HYPERDOS_X86_16_LOW_BYTE_MASK;
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                (uint16_t)(hyperdos_x86_get_general_register_word(processor,
+                                                                  HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                           HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_disk_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_DISK_BIOS_STATUS_SERVICE)
     {
         uint8_t status = hyperdos_pc_disk_bios_get_disk_operation_status(pc, driveNumber);
 
         hyperdos_pc_disk_bios_trace(diskBiosInterface, "int13 status drive=%02X status=%02X", driveNumber, status);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)(((uint16_t)status << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) | status);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)(((uint16_t)status
+                                                           << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                          status));
         hyperdos_pc_disk_bios_set_carry_flag(processor, status != HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_DISK_BIOS_READ_SECTORS_SERVICE)
     {
@@ -804,11 +821,11 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
                                                            floppyDriveCount);
                 hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
                 hyperdos_pc_disk_bios_set_carry_flag(processor, 0);
-                return HYPERDOS_X86_16_EXECUTION_OK;
+                return HYPERDOS_X86_EXECUTION_OK;
             }
             hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
             hyperdos_pc_disk_bios_return_invalid_function(processor, pc, driveNumber, accumulator);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         hyperdos_pc_disk_bios_set_drive_parameters(processor,
                                                    accumulator,
@@ -823,7 +840,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
         hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
         hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
         hyperdos_pc_disk_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_DISK_BIOS_GET_TYPE_SERVICE)
     {
@@ -844,28 +861,34 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
                                             driveNumber,
                                             floppyType);
                 hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                        (uint16_t)((floppyType << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                                   (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+                hyperdos_x86_set_general_register_word(processor,
+                                                       HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                       (uint16_t)((floppyType
+                                                                   << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                                  (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
                 hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
                 hyperdos_pc_disk_bios_set_carry_flag(processor, 0);
-                return HYPERDOS_X86_16_EXECUTION_OK;
+                return HYPERDOS_X86_EXECUTION_OK;
             }
             hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
             hyperdos_pc_disk_bios_return_invalid_function(processor, pc, driveNumber, accumulator);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (diskImage->isHardDisk)
         {
             uint32_t totalSectorCount = diskImage->sectorCount > 0xFFFFFFFFu ? 0xFFFFFFFFu
                                                                              : (uint32_t)diskImage->sectorCount;
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((HYPERDOS_PC_DISK_BIOS_TYPE_FIXED << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                               (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
-            processor->generalRegisters
-                    [HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER]                 = (uint16_t)(totalSectorCount >>
-                                                                            HYPERDOS_X86_16_WORD_BIT_COUNT);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA] = (uint16_t)totalSectorCount;
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((HYPERDOS_PC_DISK_BIOS_TYPE_FIXED
+                                                               << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                              (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                                   (uint16_t)(totalSectorCount >> HYPERDOS_X86_WORD_BIT_COUNT));
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_DATA,
+                                                   (uint16_t)totalSectorCount);
         }
         else
         {
@@ -877,14 +900,16 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
                                         driveNumber,
                                         floppyType,
                                         diskImage->path);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((floppyType << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                               (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((floppyType
+                                                               << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                              (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
         }
         hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
         hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
         hyperdos_pc_disk_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_DISK_BIOS_CHANGE_LINE_STATUS_SERVICE)
     {
@@ -902,16 +927,17 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
                                             driveNumber);
                 hyperdos_pc_disk_bios_mark_floppy_drive_media_state_changed(pc, driveNumber, NULL);
                 hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                        (uint16_t)((HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED
-                                    << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                                   (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+                hyperdos_x86_set_general_register_word(processor,
+                                                       HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                       (uint16_t)((HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED
+                                                                   << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                                  (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
                 hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
-                return HYPERDOS_X86_16_EXECUTION_OK;
+                return HYPERDOS_X86_EXECUTION_OK;
             }
             hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
             hyperdos_pc_disk_bios_return_invalid_function(processor, pc, driveNumber, accumulator);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         changed = (uint8_t)(diskImage->mediaChanged ||
                             (diskBiosInterface->floppyController != NULL &&
@@ -946,21 +972,23 @@ hyperdos_x86_16_execution_result hyperdos_pc_disk_bios_handle_interrupt(
             hyperdos_pc_disk_bios_set_disk_operation_status(pc, driveNumber, HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS);
         }
         hyperdos_pc_disk_bios_unlock_disk_images(diskBiosInterface);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)(((changed ? HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED : HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS)
-                            << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
-                           (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)(((changed ? HYPERDOS_PC_DISK_BIOS_STATUS_CHANGED
+                                                                    : HYPERDOS_PC_DISK_BIOS_STATUS_SUCCESS)
+                                                           << HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                          (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
         hyperdos_pc_disk_bios_set_carry_flag(processor, changed);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_DISK_BIOS_EXTENSION_INSTALLATION_CHECK_SERVICE)
     {
         hyperdos_pc_disk_bios_set_status_in_accumulator(processor, HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION);
         hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
 
     hyperdos_pc_disk_bios_set_status_in_accumulator(processor, HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION);
     hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }

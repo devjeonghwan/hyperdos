@@ -168,7 +168,7 @@
     <ClCompile Include="src\pc_text.c" />
     <ClCompile Include="src\pc_video_bios.c" />
     <ClCompile Include="src\pc_video_services.c" />
-    <ClCompile Include="src\x86_16_processor.c" />
+    <ClCompile Include="src\x86_processor.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\hyperdos\chipset.h" />
@@ -191,7 +191,7 @@
     <ClInclude Include="include\hyperdos\pc_text.h" />
     <ClInclude Include="include\hyperdos\pc_video_bios.h" />
     <ClInclude Include="include\hyperdos\pc_video_services.h" />
-    <ClInclude Include="include\hyperdos\x86_16_processor.h" />
+    <ClInclude Include="include\hyperdos\x86_processor.h" />
     <ClInclude Include="platforms\win32\pc_directory_disk.h" />
     <ClInclude Include="platforms\win32\pc_file_disk.h" />
     <ClInclude Include="platforms\win32\pc_monitor.h" />

@@ -55,33 +55,31 @@ uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled,
 
 uint16_t hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes(void);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(
-        hyperdos_x86_16_processor* processor,
-        uint8_t                    coprocessorEnabled,
-        uint8_t                    floppyDriveCount,
-        uint8_t                    pointingDevicePresent);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(hyperdos_x86_processor* processor,
+                                                                                 uint8_t coprocessorEnabled,
+                                                                                 uint8_t floppyDriveCount,
+                                                                                 uint8_t pointingDevicePresent);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(
-        hyperdos_x86_16_processor* processor);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(hyperdos_x86_processor* processor);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_serial_interrupt(hyperdos_x86_16_processor* processor,
-                                                                                 uint8_t serviceNumber);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_serial_interrupt(hyperdos_x86_processor* processor,
+                                                                              uint8_t                 serviceNumber);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_interrupt(
-        hyperdos_x86_16_processor* processor,
-        hyperdos_pc*               pc,
-        hyperdos_pc_system_bios*   systemBios,
-        uint8_t                    serviceNumber);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_interrupt(
+        hyperdos_x86_processor*  processor,
+        hyperdos_pc*             pc,
+        hyperdos_pc_system_bios* systemBios,
+        uint8_t                  serviceNumber);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_printer_interrupt(hyperdos_x86_16_processor* processor,
-                                                                                  uint8_t serviceNumber);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_printer_interrupt(hyperdos_x86_processor* processor,
+                                                                               uint8_t                 serviceNumber);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_time_interrupt(hyperdos_x86_16_processor* processor,
-                                                                               hyperdos_pc*               pc,
-                                                                               uint8_t serviceNumber);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_time_interrupt(hyperdos_x86_processor* processor,
+                                                                            hyperdos_pc*            pc,
+                                                                            uint8_t                 serviceNumber);
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_expanded_memory_manager_interrupt(
-        hyperdos_x86_16_processor* processor,
-        uint8_t                    serviceNumber);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_expanded_memory_manager_interrupt(
+        hyperdos_x86_processor* processor,
+        uint8_t                 serviceNumber);
 
 #endif

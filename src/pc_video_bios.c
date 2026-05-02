@@ -107,30 +107,30 @@ enum
     HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_DISPLAY_COMBINATION_CODE_INDEX_OFFSET     = 0x008Au
 };
 
-static void hyperdos_pc_video_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int carry)
+static void hyperdos_pc_video_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
     if (carry)
     {
-        processor->flags |= HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
     }
     else
     {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
     }
-    processor->flags |= HYPERDOS_X86_16_FLAG_RESERVED;
+    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
 }
 
-static uint32_t hyperdos_pc_video_bios_get_extra_segment_physical_address(const hyperdos_x86_16_processor* processor,
-                                                                          uint16_t                         offset)
+static uint32_t hyperdos_pc_video_bios_get_extra_segment_physical_address(const hyperdos_x86_processor* processor,
+                                                                          uint16_t                      offset)
 {
-    return (processor->segmentBases[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA] + offset) & HYPERDOS_X86_16_ADDRESS_MASK;
+    return (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] + offset) & HYPERDOS_X86_ADDRESS_MASK;
 }
 
 static uint8_t hyperdos_pc_video_bios_read_guest_memory_byte(const hyperdos_pc_video_bios_interface* videoBiosInterface,
                                                              uint32_t                                physicalAddress)
 {
     return hyperdos_bus_read_memory_byte_or_open_bus(&videoBiosInterface->pc->bus,
-                                                     physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK);
+                                                     physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
 }
 
 static uint16_t hyperdos_pc_video_bios_read_guest_memory_word(
@@ -140,17 +140,18 @@ static uint16_t hyperdos_pc_video_bios_read_guest_memory_word(
     uint16_t lowByte  = hyperdos_pc_video_bios_read_guest_memory_byte(videoBiosInterface, physicalAddress);
     uint16_t highByte = hyperdos_pc_video_bios_read_guest_memory_byte(videoBiosInterface, physicalAddress + 1u);
 
-    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
 static uint16_t hyperdos_pc_video_bios_read_guest_stack_word(const hyperdos_pc_video_bios_interface* videoBiosInterface,
-                                                             const hyperdos_x86_16_processor*        processor,
+                                                             const hyperdos_x86_processor*           processor,
                                                              uint16_t                                stackByteOffset)
 {
-    uint32_t physicalAddress = (processor->segmentBases[HYPERDOS_X86_16_SEGMENT_REGISTER_STACK] +
-                                (uint16_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER] +
-                                           stackByteOffset)) &
-                               HYPERDOS_X86_16_ADDRESS_MASK;
+    uint32_t physicalAddress =
+            (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_STACK] +
+             (uint16_t)(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) +
+                        stackByteOffset)) &
+            HYPERDOS_X86_ADDRESS_MASK;
 
     return hyperdos_pc_video_bios_read_guest_memory_word(videoBiosInterface, physicalAddress);
 }
@@ -160,7 +161,7 @@ static void hyperdos_pc_video_bios_write_guest_memory_byte(const hyperdos_pc_vid
                                                            uint8_t                                 value)
 {
     hyperdos_bus_write_memory_byte_if_mapped(&videoBiosInterface->pc->bus,
-                                             physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK,
+                                             physicalAddress & HYPERDOS_X86_ADDRESS_MASK,
                                              value);
 }
 
@@ -231,11 +232,11 @@ static void set_low_byte(uint16_t* value, uint8_t lowByte)
 
 static void set_high_byte(uint16_t* value, uint8_t highByte)
 {
-    *value = (uint16_t)((*value & 0x00FFu) | ((uint16_t)highByte << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+    *value = (uint16_t)((*value & 0x00FFu) | ((uint16_t)highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
 static void hyperdos_pc_video_bios_return_unsupported_service(
-        hyperdos_x86_16_processor*              processor,
+        hyperdos_x86_processor*                 processor,
         const hyperdos_pc_video_bios_interface* videoBiosInterface,
         uint8_t                                 serviceNumber,
         uint16_t                                accumulator,
@@ -243,17 +244,19 @@ static void hyperdos_pc_video_bios_return_unsupported_service(
 {
     uint16_t callerReturnOffset      = hyperdos_pc_video_bios_read_guest_stack_word(videoBiosInterface, processor, 0u);
     uint16_t callerReturnSegment     = hyperdos_pc_video_bios_read_guest_stack_word(videoBiosInterface, processor, 2u);
-    uint16_t callerInstructionOffset = (uint16_t)(callerReturnOffset - HYPERDOS_X86_16_WORD_SIZE);
+    uint16_t callerInstructionOffset = (uint16_t)(callerReturnOffset - HYPERDOS_X86_WORD_SIZE);
 
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            (uint16_t)((HYPERDOS_PC_VIDEO_BIOS_UNSUPPORTED_STATUS << HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT) |
-                       (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           (uint16_t)((HYPERDOS_PC_VIDEO_BIOS_UNSUPPORTED_STATUS
+                                                       << HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                      (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
 
     hyperdos_pc_video_bios_trace(videoBiosInterface,
                                  "%s AH=%02X AL=%02X returned-status=%02X caller=%04X:%04X return=%04X:%04X",
                                  eventName,
                                  serviceNumber,
-                                 accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK,
+                                 accumulator & HYPERDOS_X86_LOW_BYTE_MASK,
                                  HYPERDOS_PC_VIDEO_BIOS_UNSUPPORTED_STATUS,
                                  callerReturnSegment,
                                  callerInstructionOffset,
@@ -262,22 +265,22 @@ static void hyperdos_pc_video_bios_return_unsupported_service(
     hyperdos_pc_video_bios_set_carry_flag(processor, 1);
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
-        hyperdos_x86_16_processor*              processor,
+hyperdos_x86_execution_result hyperdos_pc_video_bios_handle_interrupt(
+        hyperdos_x86_processor*                 processor,
         const hyperdos_pc_video_bios_interface* videoBiosInterface,
         uint8_t                                 serviceNumber)
 {
-    uint16_t accumulator = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR];
-    uint16_t base        = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE];
-    uint16_t counter     = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER];
-    uint16_t data        = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA];
+    uint16_t accumulator = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
+    uint16_t base        = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
+    uint16_t counter     = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER);
+    uint16_t data        = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA);
     void*    userContext = videoBiosInterface->userContext;
 
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SET_MODE_SERVICE)
     {
-        videoBiosInterface->setVideoMode(userContext, (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+        videoBiosInterface->setVideoMode(userContext, (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SET_CURSOR_SHAPE_SERVICE)
     {
@@ -285,16 +288,16 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                               HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_CURSOR_SHAPE_OFFSET,
                                               counter);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SET_CURSOR_POSITION_SERVICE)
     {
         videoBiosInterface->setTextCursorPosition(userContext,
                                                   (uint8_t)(base >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
                                                   (uint16_t)(data >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
-                                                  (uint16_t)(data & HYPERDOS_X86_16_LOW_BYTE_MASK));
+                                                  (uint16_t)(data & HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_READ_CURSOR_POSITION_SERVICE)
     {
@@ -305,52 +308,54 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
         {
             cursorPosition = videoBiosInterface->getTextCursorPosition(userContext, videoPage);
         }
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] = 0x0607u;
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA]    = cursorPosition;
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, 0x0607u);
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, cursorPosition);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SET_ACTIVE_PAGE_SERVICE)
     {
-        videoBiosInterface->setActiveVideoPage(userContext, (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+        videoBiosInterface->setActiveVideoPage(userContext, (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SCROLL_UP_SERVICE ||
         serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SCROLL_DOWN_SERVICE)
     {
         videoBiosInterface->scrollTextRegion(userContext,
                                              (uint16_t)(counter >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
-                                             (uint16_t)(counter & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                             (uint16_t)(counter & HYPERDOS_X86_LOW_BYTE_MASK),
                                              (uint16_t)(data >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
-                                             (uint16_t)(data & HYPERDOS_X86_16_LOW_BYTE_MASK),
-                                             (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                             (uint16_t)(data & HYPERDOS_X86_LOW_BYTE_MASK),
+                                             (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK),
                                              (uint8_t)(base >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
                                              serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SCROLL_DOWN_SERVICE);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_READ_CHARACTER_ATTRIBUTE_SERVICE)
     {
         uint8_t videoPage = (uint8_t)(base >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT);
 
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                videoBiosInterface->readTextCharacterAttributeAtCursor(userContext, videoPage);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               videoBiosInterface->readTextCharacterAttributeAtCursor(userContext,
+                                                                                                      videoPage));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_WRITE_CHARACTER_ATTRIBUTE_SERVICE ||
         serviceNumber == HYPERDOS_PC_VIDEO_BIOS_WRITE_CHARACTER_SERVICE)
     {
         videoBiosInterface->writeCharacterRepeated(userContext,
                                                    (uint8_t)(base >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
-                                                   (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK),
-                                                   (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                                   (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK),
+                                                   (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK),
                                                    counter,
                                                    serviceNumber ==
                                                            HYPERDOS_PC_VIDEO_BIOS_WRITE_CHARACTER_ATTRIBUTE_SERVICE);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_WRITE_PIXEL_SERVICE)
     {
@@ -358,9 +363,9 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                        (uint8_t)(base >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
                                        counter,
                                        data,
-                                       (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+                                       (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_READ_PIXEL_SERVICE)
     {
@@ -369,51 +374,54 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                       counter,
                                                       data);
 
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = (uint16_t)((accumulator & 0xFF00u) |
-                                                                                               color);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)((accumulator & 0xFF00u) | color));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_TELETYPE_SERVICE)
     {
         videoBiosInterface->writeTeletypeCharacter(userContext,
-                                                   (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                                   (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK),
                                                    HYPERDOS_PC_VIDEO_BIOS_TEXT_ATTRIBUTE);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_WRITE_STRING_SERVICE)
     {
         videoBiosInterface->writeString(processor,
                                         userContext,
-                                        (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                        (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK),
                                         (uint8_t)(base >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
-                                        (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                        (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK),
                                         counter,
                                         (uint16_t)(data >> HYPERDOS_PC_VIDEO_BIOS_SERVICE_REGISTER_SHIFT),
-                                        (uint16_t)(data & HYPERDOS_X86_16_LOW_BYTE_MASK));
+                                        (uint16_t)(data & HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_GET_MODE_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)(((uint16_t)videoBiosInterface->getVideoColumnCount(userContext)
-                            << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
-                           videoBiosInterface->getVideoMode(userContext));
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = 0u;
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)(((uint16_t)videoBiosInterface->getVideoColumnCount(
+                                                                   userContext)
+                                                           << HYPERDOS_X86_BYTE_BIT_COUNT) |
+                                                          videoBiosInterface->getVideoMode(userContext)));
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SERVICE)
     {
         hyperdos_color_graphics_adapter* adapter          = &videoBiosInterface->pc->colorGraphicsAdapter;
-        uint8_t                          subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
-        uint8_t                          baseLowByte      = (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK);
-        uint8_t                          baseHighByte     = (uint8_t)(base >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
-        uint8_t                          counterLowByte   = (uint8_t)(counter & HYPERDOS_X86_16_LOW_BYTE_MASK);
-        uint8_t                          counterHighByte  = (uint8_t)(counter >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
-        uint8_t                          dataHighByte     = (uint8_t)(data >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+        uint8_t                          subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
+        uint8_t                          baseLowByte      = (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK);
+        uint8_t                          baseHighByte     = (uint8_t)(base >> HYPERDOS_X86_BYTE_BIT_COUNT);
+        uint8_t                          counterLowByte   = (uint8_t)(counter & HYPERDOS_X86_LOW_BYTE_MASK);
+        uint8_t                          counterHighByte  = (uint8_t)(counter >> HYPERDOS_X86_BYTE_BIT_COUNT);
+        uint8_t                          dataHighByte     = (uint8_t)(data >> HYPERDOS_X86_BYTE_BIT_COUNT);
         uint32_t tablePhysicalAddress = hyperdos_pc_video_bios_get_extra_segment_physical_address(processor, data);
 
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_SINGLE_REGISTER_SUBSERVICE)
@@ -424,14 +432,14 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                          (unsigned int)get_video_palette_register_number(base),
                                          baseHighByte);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_BORDER_COLOR_SUBSERVICE)
         {
             set_video_border_color_register(adapter, baseHighByte);
             hyperdos_pc_video_bios_trace(videoBiosInterface, "int10 palette set border=%02X", baseHighByte);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_ALL_REGISTERS_SUBSERVICE)
         {
@@ -454,7 +462,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                          "int10 palette set all table=%05lX",
                                          (unsigned long)tablePhysicalAddress);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_TOGGLE_INTENSITY_BLINKING_SUBSERVICE)
         {
@@ -469,23 +477,23 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                         (uint8_t)~HYPERDOS_PC_VIDEO_BIOS_ATTRIBUTE_MODE_CONTROL_BLINK_BIT;
             }
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_SINGLE_REGISTER_SUBSERVICE)
         {
             set_high_byte(&base, adapter->attributeControllerRegisters[get_video_palette_register_number(base)]);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = base;
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, base);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_BORDER_COLOR_SUBSERVICE)
         {
             set_high_byte(&base,
                           adapter->attributeControllerRegisters
                                   [HYPERDOS_PC_VIDEO_BIOS_ATTRIBUTE_OVERSCAN_COLOR_REGISTER]);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = base;
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, base);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_ALL_REGISTERS_SUBSERVICE)
         {
@@ -502,7 +510,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                     tablePhysicalAddress + HYPERDOS_PC_VIDEO_BIOS_PALETTE_REGISTER_COUNT,
                     adapter->attributeControllerRegisters[HYPERDOS_PC_VIDEO_BIOS_ATTRIBUTE_OVERSCAN_COLOR_REGISTER]);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_SINGLE_DAC_REGISTER_SUBSERVICE)
         {
@@ -518,7 +526,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                          counterHighByte,
                                          counterLowByte);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_DAC_REGISTER_BLOCK_SUBSERVICE)
         {
@@ -548,7 +556,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                          (unsigned int)counter,
                                          (unsigned long)tablePhysicalAddress);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_COLOR_PAGE_STATE_SUBSERVICE)
         {
@@ -571,7 +579,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                         [HYPERDOS_PC_VIDEO_BIOS_ATTRIBUTE_COLOR_SELECT_REGISTER] = (uint8_t)(baseHighByte & 0x0Fu);
             }
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_SINGLE_DAC_REGISTER_SUBSERVICE)
         {
@@ -581,10 +589,10 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             set_high_byte(&data, color[0]);
             set_high_byte(&counter, color[1]);
             set_low_byte(&counter, color[2]);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] = counter;
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA]    = data;
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, counter);
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, data);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_DAC_REGISTER_BLOCK_SUBSERVICE)
         {
@@ -611,20 +619,20 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                                color[2]);
             }
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SET_DAC_MASK_REGISTER_SUBSERVICE)
         {
             adapter->digitalToAnalogConverterMaskRegister = baseLowByte;
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_DAC_MASK_REGISTER_SUBSERVICE)
         {
             set_low_byte(&base, adapter->digitalToAnalogConverterMaskRegister);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = base;
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, base);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_READ_COLOR_PAGE_STATE_SUBSERVICE)
         {
@@ -637,15 +645,13 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                           [HYPERDOS_PC_VIDEO_BIOS_ATTRIBUTE_COLOR_SELECT_REGISTER];
 
             set_low_byte(&base, colorSelectMode);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]    = base;
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] = colorSelectMode != 0u
-                                                                                            ? (uint16_t)(colorSelect &
-                                                                                                         0x0Fu)
-                                                                                            : (uint16_t)((colorSelect >>
-                                                                                                          2u) &
-                                                                                                         0x03u);
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, base);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                                   colorSelectMode != 0u ? (uint16_t)(colorSelect & 0x0Fu)
+                                                                         : (uint16_t)((colorSelect >> 2u) & 0x03u));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_PALETTE_SUM_COLORS_TO_GRAY_SUBSERVICE)
         {
@@ -668,51 +674,57 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                 color[2]  = grayValue;
             }
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
 
         hyperdos_pc_video_bios_trace(videoBiosInterface,
                                      "int10 palette unsupported subservice AL=%02X",
                                      subserviceNumber);
         hyperdos_pc_video_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_FONT_SERVICE)
     {
-        uint8_t subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
 
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_GET_FONT_INFORMATION_SUBSERVICE)
         {
-            hyperdos_x86_16_set_segment_register(processor,
-                                                 HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA,
-                                                 HYPERDOS_PC_VIDEO_BIOS_FONT_SEGMENT);
-            processor->generalRegisters
-                    [HYPERDOS_X86_16_GENERAL_REGISTER_BASE_POINTER] = HYPERDOS_PC_VIDEO_BIOS_FONT_OFFSET;
-            processor->generalRegisters
-                    [HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] = HYPERDOS_PC_VIDEO_BIOS_CHARACTER_HEIGHT;
-            processor->generalRegisters
-                    [HYPERDOS_X86_16_GENERAL_REGISTER_DATA] = (uint16_t)((data & 0xFF00u) |
-                                                                         (HYPERDOS_COLOR_GRAPHICS_ADAPTER_ROW_COUNT -
-                                                                          1u));
+            hyperdos_x86_set_segment_register(processor,
+                                              HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                              HYPERDOS_PC_VIDEO_BIOS_FONT_SEGMENT);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER,
+                                                   HYPERDOS_PC_VIDEO_BIOS_FONT_OFFSET);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                                   HYPERDOS_PC_VIDEO_BIOS_CHARACTER_HEIGHT);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_DATA,
+                                                   (uint16_t)((data & 0xFF00u) |
+                                                              (HYPERDOS_COLOR_GRAPHICS_ADAPTER_ROW_COUNT - 1u)));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE)
     {
-        uint8_t subserviceNumber     = (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK);
-        uint8_t alternateSelectValue = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t subserviceNumber     = (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK);
+        uint8_t alternateSelectValue = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
 
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_GET_ENHANCED_GRAPHICS_INFORMATION_SUBSERVICE)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = (uint16_t)((base & 0xFF00u) | 0x0003u);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] =
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                                   (uint16_t)((base & 0xFF00u) | 0x0003u));
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
                     (uint16_t)((counter & 0xFF00u) | (hyperdos_pc_bios_data_area_read_byte(
                                                               videoBiosInterface->pc,
                                                               HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_VIDEO_SWITCHES_OFFSET) &
-                                                      0x0Fu));
+                                                      0x0Fu)));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_VERTICAL_RESOLUTION_SUBSERVICE)
         {
@@ -751,10 +763,12 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             hyperdos_pc_bios_data_area_write_byte(videoBiosInterface->pc,
                                                   HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_VIDEO_SWITCHES_OFFSET,
                                                   videoSwitches);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_DEFAULT_PALETTE_LOADING_SUBSERVICE)
         {
@@ -768,17 +782,21 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             hyperdos_pc_bios_data_area_write_byte(videoBiosInterface->pc,
                                                   HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_VIDEO_CONTROL_OFFSET,
                                                   videoControl);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_ADDRESSING_SUBSERVICE)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_GRAY_SCALE_SUMMING_SUBSERVICE)
         {
@@ -797,10 +815,12 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             hyperdos_pc_bios_data_area_write_byte(videoBiosInterface->pc,
                                                   HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_VIDEO_MODE_SET_CONTROL_OFFSET,
                                                   videoModeSetControl);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_CURSOR_EMULATION_SUBSERVICE)
         {
@@ -813,46 +833,54 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             hyperdos_pc_bios_data_area_write_byte(videoBiosInterface->pc,
                                                   HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_VIDEO_CONTROL_OFFSET,
                                                   videoControl);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_DISPLAY_SWITCH_INTERFACE_SUBSERVICE ||
             subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_SCREEN_REFRESH_SUBSERVICE)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_ENHANCED_GRAPHICS_INFORMATION_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
 
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_SERVICE)
     {
-        uint8_t subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
 
         if (subserviceNumber == 0u)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_SERVICE;
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] =
-                    HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_VIDEO_GRAPHICS_ARRAY_COLOR;
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_SERVICE);
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                    HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_VIDEO_GRAPHICS_ARRAY_COLOR);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == 1u)
         {
             hyperdos_pc_bios_data_area_write_byte(
                     videoBiosInterface->pc,
                     HYPERDOS_PC_VIDEO_BIOS_DATA_AREA_DISPLAY_COMBINATION_CODE_INDEX_OFFSET,
-                    (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK));
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_SERVICE;
+                    (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK));
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   HYPERDOS_PC_VIDEO_BIOS_DISPLAY_COMBINATION_CODE_SERVICE);
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_FUNCTIONALITY_STATE_SERVICE)
@@ -860,41 +888,47 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
         if (base == HYPERDOS_PC_VIDEO_BIOS_FUNCTIONALITY_STATE_IMPLEMENTATION_TYPE)
         {
             videoBiosInterface->writeFunctionalityStateTable(processor, userContext);
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_FUNCTIONALITY_STATE_SERVICE);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((accumulator & 0xFF00u) |
+                                                              HYPERDOS_PC_VIDEO_BIOS_FUNCTIONALITY_STATE_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
 
         hyperdos_pc_video_bios_trace(videoBiosInterface,
                                      "int10 functionality-state unsupported implementation BX=%04X",
                                      base);
         hyperdos_pc_video_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE)
     {
-        uint8_t  subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t  subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
         uint16_t requestedState   = (uint16_t)(counter & HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_MASK);
 
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_GET_BUFFER_SIZE)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE);
-            processor->generalRegisters
-                    [HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = videoBiosInterface->getSaveRestoreStateBufferBlocks(
-                    requestedState);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((accumulator & 0xFF00u) |
+                                                              HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE));
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                                   videoBiosInterface->getSaveRestoreStateBufferBlocks(requestedState));
             hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_SAVE_STATE)
         {
             int savedState = videoBiosInterface->writeSaveRestoreState(processor, userContext, requestedState, base);
 
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((accumulator & 0xFF00u) |
+                                                              HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, savedState ? 0 : 1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_RESTORE_STATE)
         {
@@ -903,17 +937,19 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                                             requestedState,
                                                                             base);
 
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((accumulator & 0xFF00u) | HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((accumulator & 0xFF00u) |
+                                                              HYPERDOS_PC_VIDEO_BIOS_SAVE_RESTORE_STATE_SERVICE));
             hyperdos_pc_video_bios_set_carry_flag(processor, restoredState ? 0 : 1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
 
         hyperdos_pc_video_bios_trace(videoBiosInterface,
                                      "int10 save-restore unsupported subservice AL=%02X",
                                      subserviceNumber);
         hyperdos_pc_video_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_READ_REGISTER_SERVICE)
     {
@@ -921,34 +957,36 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
 
         if (videoBiosInterface->readRegisterInterfaceRegister(userContext,
                                                               data,
-                                                              (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                                              (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK),
                                                               &registerValue))
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = (uint16_t)((base & 0xFF00u) |
-                                                                                            registerValue);
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                                   (uint16_t)((base & 0xFF00u) | registerValue));
         }
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_WRITE_REGISTER_SERVICE)
     {
         uint8_t registerValue = videoBiosInterface->registerGroupIsSingleRegister(data)
-                                        ? (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK)
-                                        : (uint8_t)(base >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+                                        ? (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK)
+                                        : (uint8_t)(base >> HYPERDOS_X86_BYTE_BIT_COUNT);
 
         (void)videoBiosInterface->writeRegisterInterfaceRegister(userContext,
                                                                  data,
-                                                                 (uint8_t)(base & HYPERDOS_X86_16_LOW_BYTE_MASK),
+                                                                 (uint8_t)(base & HYPERDOS_X86_LOW_BYTE_MASK),
                                                                  registerValue);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = (uint16_t)((base & 0xFF00u) |
-                                                                                        registerValue);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                               (uint16_t)((base & 0xFF00u) | registerValue));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_READ_REGISTER_RANGE_SERVICE)
     {
-        uint8_t  firstRegisterNumber        = (uint8_t)(counter >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
-        uint8_t  registerCount              = (uint8_t)(counter & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t  firstRegisterNumber        = (uint8_t)(counter >> HYPERDOS_X86_BYTE_BIT_COUNT);
+        uint8_t  registerCount              = (uint8_t)(counter & HYPERDOS_X86_LOW_BYTE_MASK);
         uint32_t destinationPhysicalAddress = hyperdos_pc_video_bios_get_extra_segment_physical_address(processor,
                                                                                                         base);
         uint8_t  registerOffset             = 0u;
@@ -969,12 +1007,12 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                            registerValue);
         }
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_WRITE_REGISTER_RANGE_SERVICE)
     {
-        uint8_t  firstRegisterNumber   = (uint8_t)(counter >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
-        uint8_t  registerCount         = (uint8_t)(counter & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t  firstRegisterNumber   = (uint8_t)(counter >> HYPERDOS_X86_BYTE_BIT_COUNT);
+        uint8_t  registerCount         = (uint8_t)(counter & HYPERDOS_X86_LOW_BYTE_MASK);
         uint32_t sourcePhysicalAddress = hyperdos_pc_video_bios_get_extra_segment_physical_address(processor, base);
         uint8_t  registerOffset        = 0u;
 
@@ -991,7 +1029,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             }
         }
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_READ_REGISTER_SET_SERVICE)
     {
@@ -1020,7 +1058,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
             }
         }
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_WRITE_REGISTER_SET_SERVICE)
     {
@@ -1045,17 +1083,18 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                                      registerValue);
         }
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_GET_VERSION_SERVICE)
     {
-        hyperdos_x86_16_set_segment_register(processor,
-                                             HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA,
-                                             HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_VERSION_SEGMENT);
-        processor->generalRegisters
-                [HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_VERSION_OFFSET;
+        hyperdos_x86_set_segment_register(processor,
+                                          HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                          HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_VERSION_SEGMENT);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                               HYPERDOS_PC_VIDEO_BIOS_REGISTER_INTERFACE_VERSION_OFFSET);
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_ORIGINAL_EQUIPMENT_MANUFACTURER_EXTENSION_SERVICE)
     {
@@ -1065,37 +1104,39 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                           accumulator,
                                                           "int10 original-equipment-manufacturer extension "
                                                           "unsupported");
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_ADAPTER_EXTENSION_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0u;
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]        = 0u;
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
         hyperdos_pc_video_bios_trace(videoBiosInterface, "int10 adapter extension absent AH=%02X", serviceNumber);
         hyperdos_pc_video_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_KOREAN_EXTENSION_STATUS_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = (uint16_t)(accumulator & 0xFF00u);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)(accumulator & 0xFF00u));
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_KOREAN_EXTENSION_CHARACTER_SHAPE_SERVICE)
     {
-        uint8_t subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t subserviceNumber = (uint8_t)(accumulator & HYPERDOS_X86_LOW_BYTE_MASK);
 
         if (subserviceNumber == HYPERDOS_PC_VIDEO_BIOS_KOREAN_EXTENSION_CHARACTER_SHAPE_SUBSERVICE)
         {
             videoBiosInterface->writeKoreanExtensionPlaceholderCharacterShape(processor, userContext, base);
         }
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_VIDEO_BIOS_KOREAN_EXTENSION_OUTPUT_SERVICE)
     {
         hyperdos_pc_video_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
 
     hyperdos_pc_video_bios_return_unsupported_service(processor,
@@ -1103,5 +1144,5 @@ hyperdos_x86_16_execution_result hyperdos_pc_video_bios_handle_interrupt(
                                                       serviceNumber,
                                                       accumulator,
                                                       "int10 unhandled service");
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }

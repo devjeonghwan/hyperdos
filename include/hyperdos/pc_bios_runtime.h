@@ -39,24 +39,24 @@ void hyperdos_pc_bios_runtime_initialize(hyperdos_pc_bios_runtime*              
                                          hyperdos_pc_bios_runtime_trace_function                traceFunction,
                                          void*                                                  userContext);
 
-hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyperdos_x86_16_processor* processor,
-                                                                           uint8_t                    interruptNumber,
-                                                                           void*                      userContext);
+hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyperdos_x86_processor* processor,
+                                                                        uint8_t                 interruptNumber,
+                                                                        void*                   userContext);
 
 void hyperdos_pc_bios_runtime_initialize_data_area(hyperdos_pc_bios_runtime*     biosRuntime,
                                                    const hyperdos_pc_disk_image* activeFloppyDisk,
                                                    uint8_t                       fixedDiskCount);
 
-hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_execute_processor_slice(hyperdos_pc_bios_runtime* biosRuntime,
-                                                                                  uint64_t  instructionLimit,
-                                                                                  uint64_t* executedInstructionCount);
+hyperdos_x86_execution_result hyperdos_pc_bios_runtime_execute_processor_slice(hyperdos_pc_bios_runtime* biosRuntime,
+                                                                               uint64_t  instructionLimit,
+                                                                               uint64_t* executedInstructionCount);
 
 int hyperdos_pc_bios_runtime_prepare_boot_from_disk_image(hyperdos_pc_bios_runtime*     biosRuntime,
                                                           const hyperdos_pc_disk_image* bootDisk,
                                                           const hyperdos_pc_disk_image* activeFloppyDisk,
                                                           uint8_t                       fixedDiskCount);
 
-hyperdos_x86_16_execution_result hyperdos_pc_bios_runtime_service_pending_hardware_interrupts(
+hyperdos_x86_execution_result hyperdos_pc_bios_runtime_service_pending_hardware_interrupts(
         hyperdos_pc_bios_runtime* biosRuntime);
 
 #endif

@@ -98,17 +98,17 @@ enum
     HYPERDOS_PC_SYSTEM_BIOS_EXPANDED_MEMORY_MANAGER_STATUS_UNSUPPORTED_FUNCTION = 0x84u
 };
 
-static void hyperdos_pc_system_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int carry)
+static void hyperdos_pc_system_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
     if (carry)
     {
-        processor->flags |= HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
     }
     else
     {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
     }
-    processor->flags |= HYPERDOS_X86_16_FLAG_RESERVED;
+    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
 }
 
 static uint8_t hyperdos_pc_system_bios_make_binary_coded_decimal(uint8_t value)
@@ -118,27 +118,29 @@ static uint8_t hyperdos_pc_system_bios_make_binary_coded_decimal(uint8_t value)
                      (value % HYPERDOS_PC_SYSTEM_BIOS_BINARY_CODED_DECIMAL_TENS_DIVISOR));
 }
 
-static void hyperdos_pc_system_bios_set_system_services_status(hyperdos_x86_16_processor* processor,
-                                                               uint8_t                    status,
-                                                               int                        carry)
+static void hyperdos_pc_system_bios_set_system_services_status(hyperdos_x86_processor* processor,
+                                                               uint8_t                 status,
+                                                               int                     carry)
 {
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            (uint16_t)(((uint16_t)status << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
-                       (processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                        HYPERDOS_X86_16_LOW_BYTE_MASK));
+    uint16_t accumulator = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           (uint16_t)(((uint16_t)status
+                                                       << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                      (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
     hyperdos_pc_system_bios_set_carry_flag(processor, carry);
 }
 
 static uint32_t hyperdos_pc_system_bios_get_system_services_wait_microsecond_count(
-        const hyperdos_x86_16_processor* processor)
+        const hyperdos_x86_processor* processor)
 {
-    return ((uint32_t)processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER]
-            << HYPERDOS_X86_16_WORD_BIT_COUNT) |
-           processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA];
+    return ((uint32_t)hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER)
+            << HYPERDOS_X86_WORD_BIT_COUNT) |
+           hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA);
 }
 
-static uint64_t hyperdos_pc_system_bios_get_system_services_wait_clock_count(const hyperdos_pc*               pc,
-                                                                             const hyperdos_x86_16_processor* processor)
+static uint64_t hyperdos_pc_system_bios_get_system_services_wait_clock_count(const hyperdos_pc*            pc,
+                                                                             const hyperdos_x86_processor* processor)
 {
     uint32_t microsecondCount   = hyperdos_pc_system_bios_get_system_services_wait_microsecond_count(processor);
     uint64_t processorFrequency = 0u;
@@ -332,63 +334,67 @@ uint16_t hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes(void)
     return HYPERDOS_PC_SYSTEM_BIOS_CONVENTIONAL_MEMORY_KILOBYTES;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(
-        hyperdos_x86_16_processor* processor,
-        uint8_t                    coprocessorEnabled,
-        uint8_t                    floppyDriveCount,
-        uint8_t                    pointingDevicePresent)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(hyperdos_x86_processor* processor,
+                                                                                 uint8_t coprocessorEnabled,
+                                                                                 uint8_t floppyDriveCount,
+                                                                                 uint8_t pointingDevicePresent)
 {
     if (processor == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            hyperdos_pc_system_bios_get_equipment_flags(coprocessorEnabled, floppyDriveCount, pointingDevicePresent);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           hyperdos_pc_system_bios_get_equipment_flags(coprocessorEnabled,
+                                                                                       floppyDriveCount,
+                                                                                       pointingDevicePresent));
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(
-        hyperdos_x86_16_processor* processor)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(hyperdos_x86_processor* processor)
 {
     if (processor == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes();
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes());
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_serial_interrupt(hyperdos_x86_16_processor* processor,
-                                                                                 uint8_t serviceNumber)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_serial_interrupt(hyperdos_x86_processor* processor,
+                                                                              uint8_t                 serviceNumber)
 {
     uint16_t accumulator = 0u;
 
     if (processor == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
-    accumulator = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR];
+    accumulator = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SERIAL_INITIALIZE_SERVICE ||
         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SERIAL_WRITE_SERVICE ||
         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SERIAL_STATUS_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_SERIAL_STATUS_TRANSMIT_READY
-                            << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
-                           (accumulator & HYPERDOS_X86_16_LOW_BYTE_MASK));
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_SERIAL_STATUS_TRANSMIT_READY
+                                                           << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                          (accumulator & HYPERDOS_X86_LOW_BYTE_MASK)));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SERIAL_READ_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)(HYPERDOS_PC_SYSTEM_BIOS_SERIAL_STATUS_TIMEOUT
-                           << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)(HYPERDOS_PC_SYSTEM_BIOS_SERIAL_STATUS_TIMEOUT
+                                                          << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT));
         hyperdos_pc_system_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
-    return HYPERDOS_X86_16_EXECUTION_INTERRUPT_NOT_HANDLED;
+    return HYPERDOS_X86_EXECUTION_INTERRUPT_NOT_HANDLED;
 }
 
 static void hyperdos_pc_system_bios_set_pointing_device_defaults(hyperdos_pc_system_bios* systemBios)
@@ -400,19 +406,20 @@ static void hyperdos_pc_system_bios_set_pointing_device_defaults(hyperdos_pc_sys
     systemBios->pointingDevicePacketByteCount = 0u;
 }
 
-static uint8_t hyperdos_pc_system_bios_get_high_register_byte(const hyperdos_x86_16_processor*       processor,
-                                                              hyperdos_x86_16_general_register_index registerIndex)
+static uint8_t hyperdos_pc_system_bios_get_high_register_byte(const hyperdos_x86_processor*       processor,
+                                                              hyperdos_x86_general_register_index registerIndex)
 {
-    return (uint8_t)(processor->generalRegisters[registerIndex] >> HYPERDOS_X86_16_BYTE_BIT_COUNT);
+    return (uint8_t)(hyperdos_x86_get_general_register_word(processor, registerIndex) >> HYPERDOS_X86_BYTE_BIT_COUNT);
 }
 
-static void hyperdos_pc_system_bios_write_low_register_byte(hyperdos_x86_16_processor*             processor,
-                                                            hyperdos_x86_16_general_register_index registerIndex,
-                                                            uint8_t                                value)
+static void hyperdos_pc_system_bios_write_low_register_byte(hyperdos_x86_processor*             processor,
+                                                            hyperdos_x86_general_register_index registerIndex,
+                                                            uint8_t                             value)
 {
-    processor->generalRegisters[registerIndex] = (uint16_t)((processor->generalRegisters[registerIndex] &
-                                                             HYPERDOS_X86_16_HIGH_BYTE_MASK) |
-                                                            value);
+    uint16_t registerValue = hyperdos_x86_get_general_register_word(processor, registerIndex);
+    hyperdos_x86_set_general_register_word(processor,
+                                           registerIndex,
+                                           (uint16_t)((registerValue & HYPERDOS_X86_HIGH_BYTE_MASK) | value));
 }
 
 static uint8_t hyperdos_pc_system_bios_get_pointing_device_status_byte(const hyperdos_pc*             pc,
@@ -441,16 +448,17 @@ static uint8_t hyperdos_pc_system_bios_get_pointing_device_status_byte(const hyp
     return pointingDeviceStatus;
 }
 
-static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_device_interrupt(
-        hyperdos_x86_16_processor* processor,
-        hyperdos_pc*               pc,
-        hyperdos_pc_system_bios*   systemBios)
+static hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_pointing_device_interrupt(
+        hyperdos_x86_processor*  processor,
+        hyperdos_pc*             pc,
+        hyperdos_pc_system_bios* systemBios)
 {
     static const uint8_t sampleRates[] = {10u, 20u, 40u, 60u, 80u, 100u, 200u};
-    uint8_t subservice   = (uint8_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                                   HYPERDOS_X86_16_LOW_BYTE_MASK);
-    uint8_t baseHighByte = hyperdos_pc_system_bios_get_high_register_byte(processor,
-                                                                          HYPERDOS_X86_16_GENERAL_REGISTER_BASE);
+    uint8_t              subservice    = (uint8_t)(hyperdos_x86_get_general_register_word(processor,
+                                                                          HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                                   HYPERDOS_X86_LOW_BYTE_MASK);
+    uint8_t              baseHighByte  = hyperdos_pc_system_bios_get_high_register_byte(processor,
+                                                                          HYPERDOS_X86_GENERAL_REGISTER_BASE);
 
     switch (subservice)
     {
@@ -461,7 +469,7 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
                     processor,
                     HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
                     1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (baseHighByte != 0u && systemBios->pointingDeviceHandlerOffset == 0u &&
             systemBios->pointingDeviceHandlerSegment == 0u)
@@ -470,7 +478,7 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
                     processor,
                     HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_NO_HANDLER,
                     1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         systemBios->pointingDeviceEnabled = baseHighByte != 0u ? 1u : 0u;
         hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(
@@ -480,19 +488,20 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_SUBSERVICE:
         hyperdos_pc_system_bios_set_pointing_device_defaults(systemBios);
         hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(&pc->keyboardController, 0u);
         hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(pc, 0u);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] =
-                (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_TYPE_STANDARD_MOUSE
-                            << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
-                           HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_PASSED);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                               (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_TYPE_STANDARD_MOUSE
+                                                           << HYPERDOS_X86_BYTE_BIT_COUNT) |
+                                                          HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_RESET_PASSED));
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_SAMPLE_RATE_SUBSERVICE:
         if (baseHighByte >= sizeof(sampleRates))
         {
@@ -500,13 +509,13 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
                     processor,
                     HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
                     1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         systemBios->pointingDeviceSampleRate = sampleRates[baseHighByte];
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_RESOLUTION_SUBSERVICE:
         if (baseHighByte > 3u)
         {
@@ -514,23 +523,25 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
                     processor,
                     HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
                     1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         systemBios->pointingDeviceResolution = baseHighByte;
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_READ_DEVICE_TYPE_SUBSERVICE:
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] =
-                (uint16_t)((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] &
-                            HYPERDOS_X86_16_LOW_BYTE_MASK) |
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                (uint16_t)((hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) &
+                            HYPERDOS_X86_LOW_BYTE_MASK) |
                            (HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_TYPE_STANDARD_MOUSE
-                            << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+                            << HYPERDOS_X86_BYTE_BIT_COUNT)));
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_INITIALIZE_SUBSERVICE:
         if (baseHighByte == 0u || baseHighByte > 8u)
         {
@@ -538,7 +549,7 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
                     processor,
                     HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_INPUT,
                     1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         hyperdos_pc_system_bios_set_pointing_device_defaults(systemBios);
         hyperdos_intel_8042_keyboard_controller_set_auxiliary_mouse_reporting_enabled(&pc->keyboardController, 0u);
@@ -546,24 +557,24 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_EXTENDED_COMMANDS_SUBSERVICE:
         if (baseHighByte == 0u)
         {
             uint8_t pointingDeviceStatus = hyperdos_pc_system_bios_get_pointing_device_status_byte(pc, systemBios);
             hyperdos_pc_system_bios_write_low_register_byte(processor,
-                                                            HYPERDOS_X86_16_GENERAL_REGISTER_BASE,
+                                                            HYPERDOS_X86_GENERAL_REGISTER_BASE,
                                                             pointingDeviceStatus);
             hyperdos_pc_system_bios_write_low_register_byte(processor,
-                                                            HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER,
+                                                            HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
                                                             systemBios->pointingDeviceResolution);
             hyperdos_pc_system_bios_write_low_register_byte(processor,
-                                                            HYPERDOS_X86_16_GENERAL_REGISTER_DATA,
+                                                            HYPERDOS_X86_GENERAL_REGISTER_DATA,
                                                             systemBios->pointingDeviceSampleRate);
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (baseHighByte == 1u || baseHighByte == 2u)
         {
@@ -571,40 +582,41 @@ static hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_pointing_
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         hyperdos_pc_system_bios_set_system_services_status(
                 processor,
                 HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_FUNCTION,
                 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_HANDLER_SUBSERVICE:
-        systemBios->pointingDeviceHandlerOffset  = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE];
-        systemBios->pointingDeviceHandlerSegment = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA];
+        systemBios->pointingDeviceHandlerOffset =
+                hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
+        systemBios->pointingDeviceHandlerSegment = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     default:
         hyperdos_pc_system_bios_set_system_services_status(
                 processor,
                 HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_INVALID_FUNCTION,
                 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_interrupt(
-        hyperdos_x86_16_processor* processor,
-        hyperdos_pc*               pc,
-        hyperdos_pc_system_bios*   systemBios,
-        uint8_t                    serviceNumber)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_interrupt(
+        hyperdos_x86_processor*  processor,
+        hyperdos_pc*             pc,
+        hyperdos_pc_system_bios* systemBios,
+        uint8_t                  serviceNumber)
 {
     uint8_t modelIdentifier = 0u;
 
     if (processor == NULL || pc == NULL || systemBios == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
     modelIdentifier = hyperdos_pc_system_bios_get_model_identifier(systemBios);
     if (!hyperdos_pc_system_bios_model_is_at_compatible(modelIdentifier) &&
@@ -618,12 +630,12 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_UNSUPPORTED_STATUS,
                                                            1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_KEYBOARD_INTERCEPT_SERVICE)
     {
         hyperdos_pc_system_bios_set_carry_flag(processor, 1);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_POINTING_DEVICE_SERVICE)
     {
@@ -631,8 +643,9 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_GATE_SERVICE)
     {
-        uint8_t subservice = (uint8_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                                       HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t subservice =
+                (uint8_t)(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                          HYPERDOS_X86_LOW_BYTE_MASK);
 
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_DISABLE_SUBSERVICE)
         {
@@ -640,7 +653,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_ENABLE_SUBSERVICE)
         {
@@ -648,32 +661,36 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_QUERY_SUBSERVICE)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                    (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS
-                                << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
-                               (systemBios->a20GateEnabled ? 1u : 0u));
+            hyperdos_x86_set_general_register_word(processor,
+                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                                   (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS
+                                                               << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
+                                                              (systemBios->a20GateEnabled ? 1u : 0u)));
             hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_SUPPORT_SUBSERVICE)
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE] =
+            hyperdos_x86_set_general_register_word(
+                    processor,
+                    HYPERDOS_X86_GENERAL_REGISTER_BASE,
                     HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_KEYBOARD_CONTROLLER_SUPPORT |
-                    HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_FAST_GATE_SUPPORT;
+                            HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_FAST_GATE_SUPPORT);
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_EVENT_WAIT_SERVICE)
     {
-        uint8_t subservice = (uint8_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                                       HYPERDOS_X86_16_LOW_BYTE_MASK);
+        uint8_t subservice =
+                (uint8_t)(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                          HYPERDOS_X86_LOW_BYTE_MASK);
 
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_EVENT_WAIT_CANCEL_SUBSERVICE)
         {
@@ -681,7 +698,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_EVENT_WAIT_SET_SUBSERVICE)
         {
@@ -693,12 +710,12 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
                         processor,
                         HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_WAIT_BUSY_STATUS,
                         1);
-                return HYPERDOS_X86_16_EXECUTION_OK;
+                return HYPERDOS_X86_EXECUTION_OK;
             }
             systemBios->waitEventFlagPhysicalAddress =
-                    (processor->segmentBases[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA] +
-                     processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]) &
-                    HYPERDOS_X86_16_ADDRESS_MASK;
+                    (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] +
+                     hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE)) &
+                    HYPERDOS_X86_ADDRESS_MASK;
             systemBios->waitEventCompletionClockCount = pc->bus.clockCount + clockCount;
             systemBios->waitEventActive               = 1u;
             if (clockCount == 0u)
@@ -708,14 +725,14 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_EXTENDED_MEMORY_SIZE_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0u;
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_WAIT_SERVICE)
     {
@@ -726,7 +743,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_WAIT_BUSY_STATUS,
                                                                1);
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
         if (clockCount != 0u)
         {
@@ -735,141 +752,173 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_system_services_
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                            0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_CONFIGURATION_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                (uint16_t)(processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                           HYPERDOS_X86_16_LOW_BYTE_MASK);
-        processor->generalRegisters
-                [HYPERDOS_X86_16_GENERAL_REGISTER_BASE] = HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_OFFSET;
-        hyperdos_x86_16_set_segment_register(processor,
-                                             HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA,
-                                             HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_SEGMENT);
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                (uint16_t)(hyperdos_x86_get_general_register_word(processor,
+                                                                  HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                           HYPERDOS_X86_LOW_BYTE_MASK));
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_BASE,
+                                               HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_OFFSET);
+        hyperdos_x86_set_segment_register(processor,
+                                          HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                          HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_SEGMENT);
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
 
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
+    hyperdos_x86_set_general_register_word(
+            processor,
+            HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
             (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_UNSUPPORTED_STATUS
                         << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
-                       (processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                        HYPERDOS_X86_16_LOW_BYTE_MASK));
+                       (hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                        HYPERDOS_X86_LOW_BYTE_MASK)));
     hyperdos_pc_system_bios_set_carry_flag(processor, 1);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_printer_interrupt(hyperdos_x86_16_processor* processor,
-                                                                                  uint8_t serviceNumber)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_printer_interrupt(hyperdos_x86_processor* processor,
+                                                                               uint8_t                 serviceNumber)
 {
     if (processor == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_PRINTER_WRITE_SERVICE ||
         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_PRINTER_INITIALIZE_SERVICE ||
         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_PRINTER_STATUS_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
                 (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_PRINTER_STATUS_SELECTED_READY
                             << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
-                           (processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                            HYPERDOS_X86_16_LOW_BYTE_MASK));
+                           (hyperdos_x86_get_general_register_word(processor,
+                                                                   HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                            HYPERDOS_X86_LOW_BYTE_MASK)));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
-    return HYPERDOS_X86_16_EXECUTION_INTERRUPT_NOT_HANDLED;
+    return HYPERDOS_X86_EXECUTION_INTERRUPT_NOT_HANDLED;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_time_interrupt(hyperdos_x86_16_processor* processor,
-                                                                               hyperdos_pc*               pc,
-                                                                               uint8_t                    serviceNumber)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_time_interrupt(hyperdos_x86_processor* processor,
+                                                                            hyperdos_pc*            pc,
+                                                                            uint8_t                 serviceNumber)
 {
     if (processor == NULL || pc == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_TIME_TICKS_SERVICE)
     {
         uint32_t timerTickCount =
                 hyperdos_pc_bios_data_area_read_double_word(pc, HYPERDOS_PC_BIOS_DATA_AREA_TIMER_TICK_COUNT_OFFSET);
-        processor->generalRegisters
-                [HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER]                 = (uint16_t)(timerTickCount >>
-                                                                        HYPERDOS_X86_16_WORD_BIT_COUNT);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA] = (uint16_t)timerTickCount;
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-                hyperdos_pc_bios_data_area_read_byte(pc, HYPERDOS_PC_BIOS_DATA_AREA_TIMER_MIDNIGHT_FLAG_OFFSET);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                               (uint16_t)(timerTickCount >> HYPERDOS_X86_WORD_BIT_COUNT));
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, (uint16_t)timerTickCount);
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                hyperdos_pc_bios_data_area_read_byte(pc, HYPERDOS_PC_BIOS_DATA_AREA_TIMER_MIDNIGHT_FLAG_OFFSET));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_TIME_SET_TICKS_SERVICE)
     {
-        uint32_t timerTickCount = ((uint32_t)processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER]
-                                   << HYPERDOS_X86_16_WORD_BIT_COUNT) |
-                                  processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA];
+        uint32_t timerTickCount = ((uint32_t)
+                                           hyperdos_x86_get_general_register_word(processor,
+                                                                                  HYPERDOS_X86_GENERAL_REGISTER_COUNTER)
+                                   << HYPERDOS_X86_WORD_BIT_COUNT) |
+                                  hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA);
 
         hyperdos_pc_bios_data_area_write_double_word(pc,
                                                      HYPERDOS_PC_BIOS_DATA_AREA_TIMER_TICK_COUNT_OFFSET,
                                                      timerTickCount);
         hyperdos_pc_bios_data_area_write_byte(pc, HYPERDOS_PC_BIOS_DATA_AREA_TIMER_MIDNIGHT_FLAG_OFFSET, 0u);
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = 0u;
+        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_TIME_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] =
-                (uint16_t)(((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
-                                    HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_HOUR)
-                            << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
-                           hyperdos_pc_system_bios_make_binary_coded_decimal(
-                                   HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_MINUTE));
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA]         = (uint16_t)((
-                (uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
-                        HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_SECOND)
-                << HYPERDOS_X86_16_BYTE_BIT_COUNT));
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &= HYPERDOS_X86_16_LOW_BYTE_MASK;
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                               (uint16_t)(((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                   HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_HOUR)
+                                                           << HYPERDOS_X86_BYTE_BIT_COUNT) |
+                                                          hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                  HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_MINUTE)));
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_DATA,
+                                               (uint16_t)((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                  HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_SECOND)
+                                                          << HYPERDOS_X86_BYTE_BIT_COUNT));
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                (uint16_t)(hyperdos_x86_get_general_register_word(processor,
+                                                                  HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                           HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_DATE_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] =
-                (uint16_t)(((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
-                                    HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_CENTURY)
-                            << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
-                           hyperdos_pc_system_bios_make_binary_coded_decimal(
-                                   HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_YEAR));
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA] =
-                (uint16_t)(((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
-                                    HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_MONTH)
-                            << HYPERDOS_X86_16_BYTE_BIT_COUNT) |
-                           hyperdos_pc_system_bios_make_binary_coded_decimal(
-                                   HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_DAY));
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &= HYPERDOS_X86_16_LOW_BYTE_MASK;
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                               (uint16_t)(((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                   HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_CENTURY)
+                                                           << HYPERDOS_X86_BYTE_BIT_COUNT) |
+                                                          hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                  HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_YEAR)));
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_DATA,
+                                               (uint16_t)(((uint16_t)hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                   HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_MONTH)
+                                                           << HYPERDOS_X86_BYTE_BIT_COUNT) |
+                                                          hyperdos_pc_system_bios_make_binary_coded_decimal(
+                                                                  HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_DAY)));
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                (uint16_t)(hyperdos_x86_get_general_register_word(processor,
+                                                                  HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                           HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_SET_TIME_SERVICE ||
         serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_REAL_TIME_CLOCK_SET_DATE_SERVICE)
     {
-        processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &= HYPERDOS_X86_16_LOW_BYTE_MASK;
+        hyperdos_x86_set_general_register_word(
+                processor,
+                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                (uint16_t)(hyperdos_x86_get_general_register_word(processor,
+                                                                  HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                           HYPERDOS_X86_LOW_BYTE_MASK));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
-    return HYPERDOS_X86_16_EXECUTION_INTERRUPT_NOT_HANDLED;
+    return HYPERDOS_X86_EXECUTION_INTERRUPT_NOT_HANDLED;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_expanded_memory_manager_interrupt(
-        hyperdos_x86_16_processor* processor,
-        uint8_t                    serviceNumber)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_expanded_memory_manager_interrupt(
+        hyperdos_x86_processor* processor,
+        uint8_t                 serviceNumber)
 {
     uint8_t status = HYPERDOS_PC_SYSTEM_BIOS_EXPANDED_MEMORY_MANAGER_STATUS_NOT_AVAILABLE;
 
     if (processor == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
     if (serviceNumber != HYPERDOS_PC_SYSTEM_BIOS_EXPANDED_MEMORY_MANAGER_STATUS_SERVICE &&
         serviceNumber != HYPERDOS_PC_SYSTEM_BIOS_EXPANDED_MEMORY_MANAGER_PAGE_FRAME_SERVICE &&
@@ -879,13 +928,15 @@ hyperdos_x86_16_execution_result hyperdos_pc_system_bios_handle_expanded_memory_
         status = HYPERDOS_PC_SYSTEM_BIOS_EXPANDED_MEMORY_MANAGER_STATUS_UNSUPPORTED_FUNCTION;
     }
 
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
-            (uint16_t)((processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                        HYPERDOS_X86_16_LOW_BYTE_MASK) |
-                       ((uint16_t)status << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT));
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE]    = 0u;
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER] = 0u;
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA]    = 0u;
+    hyperdos_x86_set_general_register_word(
+            processor,
+            HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+            (uint16_t)((hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                        HYPERDOS_X86_LOW_BYTE_MASK) |
+                       ((uint16_t)status << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT)));
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, 0u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, 0u);
     hyperdos_pc_system_bios_set_carry_flag(processor, 1);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }

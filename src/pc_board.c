@@ -384,16 +384,13 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
         return 0;
     }
 
-    if (hyperdos_x86_16_initialize_processor(&pc->processor, pc->processorMemory, sizeof(pc->processorMemory)) !=
-        HYPERDOS_X86_16_EXECUTION_OK)
+    if (hyperdos_x86_initialize_processor(&pc->processor, pc->processorMemory, sizeof(pc->processorMemory)) !=
+        HYPERDOS_X86_EXECUTION_OK)
     {
         return 0;
     }
-    hyperdos_x86_16_attach_bus(&pc->processor, &pc->bus);
-    hyperdos_x86_16_attach_coprocessor(&pc->processor,
-                                       hyperdos_8087_wait,
-                                       hyperdos_8087_escape,
-                                       &pc->floatingPointUnit);
+    hyperdos_x86_attach_bus(&pc->processor, &pc->bus);
+    hyperdos_x86_attach_coprocessor(&pc->processor, hyperdos_8087_wait, hyperdos_8087_escape, &pc->floatingPointUnit);
     return 1;
 }
 
@@ -465,18 +462,18 @@ void hyperdos_pc_prepare_boot_sector_execution(hyperdos_pc* pc, uint8_t bootDriv
         return;
     }
 
-    hyperdos_x86_16_set_segment_register(&pc->processor, HYPERDOS_X86_16_SEGMENT_REGISTER_CODE, 0u);
-    hyperdos_x86_16_set_segment_register(&pc->processor, HYPERDOS_X86_16_SEGMENT_REGISTER_STACK, 0u);
-    hyperdos_x86_16_set_segment_register(&pc->processor, HYPERDOS_X86_16_SEGMENT_REGISTER_DATA, 0u);
-    hyperdos_x86_16_set_segment_register(&pc->processor, HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA, 0u);
-    hyperdos_x86_16_set_general_register(&pc->processor,
-                                         HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER,
-                                         HYPERDOS_PC_BOOT_STACK_POINTER);
-    hyperdos_x86_16_set_general_register(&pc->processor, HYPERDOS_X86_16_GENERAL_REGISTER_DATA, bootDriveNumber);
+    hyperdos_x86_set_segment_register(&pc->processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, 0u);
+    hyperdos_x86_set_segment_register(&pc->processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, 0u);
+    hyperdos_x86_set_segment_register(&pc->processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0u);
+    hyperdos_x86_set_segment_register(&pc->processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, 0u);
+    hyperdos_x86_set_general_register(&pc->processor,
+                                      HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                      HYPERDOS_PC_BOOT_STACK_POINTER);
+    hyperdos_x86_set_general_register(&pc->processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, bootDriveNumber);
     pc->processor.instructionPointer = HYPERDOS_PC_BOOT_SECTOR_ADDRESS;
 }
 
-int hyperdos_x86_16_processor_is_at_bios_reset_vector(const hyperdos_x86_16_processor* processor)
+int hyperdos_x86_processor_is_at_bios_reset_vector(const hyperdos_x86_processor* processor)
 {
     return processor != NULL && processor->lastInstructionSegment == HYPERDOS_PC_BIOS_RESET_VECTOR_SEGMENT &&
            processor->lastInstructionOffset == HYPERDOS_PC_BIOS_RESET_VECTOR_OFFSET;

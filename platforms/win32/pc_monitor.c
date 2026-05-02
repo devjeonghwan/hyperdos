@@ -93,9 +93,11 @@ enum
     HYPERDOS_MONITOR_COMMAND_RESET_PC                                = 2001u,
     HYPERDOS_MONITOR_COMMAND_START_CPU_TRACE                         = 2002u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086                    = 2101u,
-    HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186                   = 2102u,
-    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE                        = 2103u,
-    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087                        = 2104u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8088                    = 2102u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186                   = 2103u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188                   = 2104u,
+    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE                        = 2111u,
+    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087                        = 2112u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT                             = 2201u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT                             = 2202u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ                = 2301u,
@@ -175,7 +177,7 @@ static int                                globalMemoryStopByteEnabled;
 static hyperdos_monitor_coprocessor_model globalCoprocessorModel;
 static uint32_t                           globalProcessorFrequencyHertz;
 static int                                globalGuestClockThrottleEnabled;
-static hyperdos_x86_16_processor_model    globalProcessorModel;
+static hyperdos_x86_processor_model       globalProcessorModel;
 static hyperdos_pc_model                  globalPcModel;
 static int                                globalDivideErrorReturnsToFaultingInstruction;
 static int                                globalCpuTraceStartsEnabled;
@@ -250,13 +252,41 @@ static void get_monitor_display_client_rectangle(HWND windowHandle, RECT* displa
     }
 }
 
+static UINT get_processor_model_menu_command(hyperdos_x86_processor_model processorModel)
+{
+    switch (processorModel)
+    {
+    case HYPERDOS_X86_PROCESSOR_MODEL_8086:
+        return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086;
+    case HYPERDOS_X86_PROCESSOR_MODEL_8088:
+        return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8088;
+    case HYPERDOS_X86_PROCESSOR_MODEL_80186:
+        return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186;
+    case HYPERDOS_X86_PROCESSOR_MODEL_80188:
+        return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188;
+    }
+    return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186;
+}
+
+static const char* get_processor_model_text(hyperdos_x86_processor_model processorModel)
+{
+    switch (processorModel)
+    {
+    case HYPERDOS_X86_PROCESSOR_MODEL_8086:
+        return "8086";
+    case HYPERDOS_X86_PROCESSOR_MODEL_8088:
+        return "8088";
+    case HYPERDOS_X86_PROCESSOR_MODEL_80186:
+        return "80186";
+    case HYPERDOS_X86_PROCESSOR_MODEL_80188:
+        return "80188";
+    }
+    return "80186";
+}
+
 static const char* get_processor_status_bar_text(void)
 {
-    if (globalProcessorModel == HYPERDOS_X86_16_PROCESSOR_MODEL_8086)
-    {
-        return "8086/8088";
-    }
-    return "80186/80188";
+    return get_processor_model_text(globalProcessorModel);
 }
 
 static const char* get_machine_status_bar_text(void)
@@ -614,18 +644,18 @@ static void trace_disk_event(hyperdos_win32_boot_state* bootState, const char* f
     }
     if (bootState != NULL)
     {
-        hyperdos_x86_16_processor* processor = &bootState->machine.pc.processor;
+        hyperdos_x86_processor* processor = &bootState->machine.pc.processor;
 
         fprintf(globalDiskTraceFile,
                 "%04X:%04X AX=%04X BX=%04X CX=%04X DX=%04X SP=%04X FLAGS=%04X ",
                 processor->lastInstructionSegment,
-                processor->lastInstructionOffset,
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR],
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE],
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER],
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA],
-                processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER],
-                processor->flags);
+                (uint16_t)processor->lastInstructionOffset,
+                hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR),
+                hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE),
+                hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER),
+                hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA),
+                hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER),
+                (uint16_t)processor->flags);
     }
     va_start(arguments, format);
     vfprintf(globalDiskTraceFile, format, arguments);
@@ -679,7 +709,7 @@ static int parse_memory_watch_address(const char* text, hyperdos_monitor_memory_
     char*         endPointer        = NULL;
     unsigned long parsedFirstValue  = 0u;
     unsigned long parsedSecondValue = 0u;
-    unsigned long byteCount         = HYPERDOS_X86_16_WORD_SIZE;
+    unsigned long byteCount         = HYPERDOS_X86_WORD_SIZE;
     uint32_t      physicalAddress   = 0u;
 
     if (text == NULL || memoryWatch == NULL || text[0] == '\0')
@@ -700,8 +730,7 @@ static int parse_memory_watch_address(const char* text, hyperdos_monitor_memory_
         {
             return 0;
         }
-        physicalAddress = (uint32_t)((parsedFirstValue << HYPERDOS_X86_16_SEGMENT_SHIFT) +
-                                     (parsedSecondValue & 0xFFFFu));
+        physicalAddress = (uint32_t)((parsedFirstValue << HYPERDOS_X86_SEGMENT_SHIFT) + (parsedSecondValue & 0xFFFFu));
     }
     else
     {
@@ -721,9 +750,9 @@ static int parse_memory_watch_address(const char* text, hyperdos_monitor_memory_
         return 0;
     }
 
-    memoryWatch->firstPhysicalAddress = physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK;
+    memoryWatch->firstPhysicalAddress = physicalAddress & HYPERDOS_X86_ADDRESS_MASK;
     memoryWatch->lastPhysicalAddress  = (memoryWatch->firstPhysicalAddress + (uint32_t)(byteCount - 1u)) &
-                                       HYPERDOS_X86_16_ADDRESS_MASK;
+                                       HYPERDOS_X86_ADDRESS_MASK;
     copy_string_to_buffer(memoryWatch->text, sizeof(memoryWatch->text), text);
     return 1;
 }
@@ -1484,7 +1513,7 @@ static size_t make_keyboard_scan_code_sequence_from_host_key_state_index(uint16_
                                                                          size_t   scanCodeByteCapacity)
 {
     int     extendedKey      = hostKeyStateIndex >= HYPERDOS_MONITOR_HOST_EXTENDED_KEY_STATE_OFFSET;
-    uint8_t keyboardScanCode = (uint8_t)(hostKeyStateIndex & HYPERDOS_X86_16_LOW_BYTE_MASK);
+    uint8_t keyboardScanCode = (uint8_t)(hostKeyStateIndex & HYPERDOS_X86_LOW_BYTE_MASK);
 
     if (extendedKey && keyboardScanCode == 0x37u)
     {
@@ -1756,13 +1785,12 @@ static void refresh_keyboard_input_state(hyperdos_win32_boot_state* bootState)
 static uint8_t read_guest_memory_byte(hyperdos_win32_boot_state* bootState, uint32_t physicalAddress)
 {
     return hyperdos_bus_read_memory_byte_or_open_bus(&bootState->machine.pc.bus,
-                                                     physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK);
+                                                     physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
 }
 
 static uint8_t read_guest_instruction_byte(hyperdos_win32_boot_state* bootState, uint16_t segment, uint16_t offset)
 {
-    uint32_t physicalAddress = (((uint32_t)segment << HYPERDOS_X86_16_SEGMENT_SHIFT) + offset) &
-                               HYPERDOS_X86_16_ADDRESS_MASK;
+    uint32_t physicalAddress = (((uint32_t)segment << HYPERDOS_X86_SEGMENT_SHIFT) + offset) & HYPERDOS_X86_ADDRESS_MASK;
 
     return read_guest_memory_byte(bootState, physicalAddress);
 }
@@ -1772,7 +1800,7 @@ static uint16_t read_guest_memory_word(hyperdos_win32_boot_state* bootState, uin
     uint16_t lowByte  = read_guest_memory_byte(bootState, physicalAddress);
     uint16_t highByte = read_guest_memory_byte(bootState, physicalAddress + 1u);
 
-    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
 static int memory_watch_contains_address(const hyperdos_monitor_memory_watch* memoryWatch, uint32_t physicalAddress)
@@ -1810,7 +1838,7 @@ static void observe_guest_memory_write(void*    observerContext,
                                        uint8_t  newValue)
 {
     hyperdos_win32_boot_state* bootState        = (hyperdos_win32_boot_state*)observerContext;
-    hyperdos_x86_16_processor* processor        = NULL;
+    hyperdos_x86_processor*    processor        = NULL;
     size_t                     memoryWatchIndex = 0u;
 
     if (bootState == NULL)
@@ -1818,7 +1846,7 @@ static void observe_guest_memory_write(void*    observerContext,
         return;
     }
     processor        = &bootState->machine.pc.processor;
-    physicalAddress &= HYPERDOS_X86_16_ADDRESS_MASK;
+    physicalAddress &= HYPERDOS_X86_ADDRESS_MASK;
     if (physical_address_is_keyboard_shift_data_area(physicalAddress))
     {
         ++bootState->keyboardDataAreaShiftWriteSequence;
@@ -1864,26 +1892,27 @@ static void observe_guest_memory_write(void*    observerContext,
                     newValue,
                     memoryWatch->text,
                     read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress),
-                    read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress + HYPERDOS_X86_16_WORD_SIZE),
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE_POINTER],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_SOURCE_INDEX],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DESTINATION_INDEX],
-                    processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_DATA],
-                    processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA],
-                    processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_STACK],
-                    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER],
-                    (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_DATA]
-                      << HYPERDOS_X86_16_SEGMENT_SHIFT) +
-                     processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_SOURCE_INDEX]) &
-                            HYPERDOS_X86_16_ADDRESS_MASK,
-                    (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA]
-                      << HYPERDOS_X86_16_SEGMENT_SHIFT) +
-                     processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DESTINATION_INDEX]) &
-                            HYPERDOS_X86_16_ADDRESS_MASK,
+                    read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress + HYPERDOS_X86_WORD_SIZE),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX),
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX),
+                    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA],
+                    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA],
+                    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_STACK],
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER),
+                    (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA]
+                      << HYPERDOS_X86_SEGMENT_SHIFT) +
+                     hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX)) &
+                            HYPERDOS_X86_ADDRESS_MASK,
+                    (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA]
+                      << HYPERDOS_X86_SEGMENT_SHIFT) +
+                     hyperdos_x86_get_general_register_word(processor,
+                                                            HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX)) &
+                            HYPERDOS_X86_ADDRESS_MASK,
                     processor->flags,
                     bootState->machine.pc.colorGraphicsAdapter.sequencerRegisters[2],
                     bootState->machine.pc.colorGraphicsAdapter.sequencerRegisters[4],
@@ -1916,27 +1945,32 @@ static void observe_guest_memory_write(void*    observerContext,
 
 static void capture_cpu_trace_entry(hyperdos_win32_boot_state* bootState)
 {
-    hyperdos_x86_16_processor*        processor      = &bootState->machine.pc.processor;
+    hyperdos_x86_processor*           processor      = &bootState->machine.pc.processor;
     hyperdos_monitor_cpu_trace_entry* traceEntry     = &bootState->cpuTraceEntries[processor->executedInstructionCount %
                                                                                HYPERDOS_MONITOR_CPU_TRACE_ENTRY_COUNT];
     size_t                            byteIndex      = 0u;
     size_t                            stackWordIndex = 0u;
 
     traceEntry->instructionCount   = processor->executedInstructionCount;
-    traceEntry->codeSegment        = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_CODE];
-    traceEntry->instructionPointer = processor->instructionPointer;
-    traceEntry->stackSegment       = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_STACK];
-    traceEntry->stackPointer       = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER];
-    traceEntry->dataSegment        = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_DATA];
-    traceEntry->extraSegment       = processor->segmentRegisters[HYPERDOS_X86_16_SEGMENT_REGISTER_EXTRA];
-    traceEntry->accumulator        = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR];
-    traceEntry->base               = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE];
-    traceEntry->counter            = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_COUNTER];
-    traceEntry->data               = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DATA];
-    traceEntry->basePointer        = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_BASE_POINTER];
-    traceEntry->sourceIndex        = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_SOURCE_INDEX];
-    traceEntry->destinationIndex   = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_DESTINATION_INDEX];
-    traceEntry->flags              = processor->flags;
+    traceEntry->codeSegment        = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE];
+    traceEntry->instructionPointer = (uint16_t)processor->instructionPointer;
+    traceEntry->stackSegment       = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_STACK];
+    traceEntry->stackPointer       = hyperdos_x86_get_general_register_word(processor,
+                                                                      HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    traceEntry->dataSegment        = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA];
+    traceEntry->extraSegment       = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
+    traceEntry->accumulator        = hyperdos_x86_get_general_register_word(processor,
+                                                                     HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
+    traceEntry->base        = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
+    traceEntry->counter     = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER);
+    traceEntry->data        = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA);
+    traceEntry->basePointer = hyperdos_x86_get_general_register_word(processor,
+                                                                     HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER);
+    traceEntry->sourceIndex = hyperdos_x86_get_general_register_word(processor,
+                                                                     HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX);
+    traceEntry->destinationIndex =
+            hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX);
+    traceEntry->flags = (uint16_t)processor->flags;
     for (byteIndex = 0u; byteIndex < HYPERDOS_MONITOR_CPU_TRACE_BYTE_COUNT; ++byteIndex)
     {
         traceEntry->instructionBytes
@@ -1946,19 +1980,19 @@ static void capture_cpu_trace_entry(hyperdos_win32_boot_state* bootState)
     }
     for (stackWordIndex = 0u; stackWordIndex < HYPERDOS_MONITOR_CPU_TRACE_STACK_WORD_COUNT; ++stackWordIndex)
     {
-        uint32_t physicalAddress = (((uint32_t)traceEntry->stackSegment << HYPERDOS_X86_16_SEGMENT_SHIFT) +
-                                    (uint16_t)(traceEntry->stackPointer + stackWordIndex * HYPERDOS_X86_16_WORD_SIZE)) &
-                                   HYPERDOS_X86_16_ADDRESS_MASK;
+        uint32_t physicalAddress = (((uint32_t)traceEntry->stackSegment << HYPERDOS_X86_SEGMENT_SHIFT) +
+                                    (uint16_t)(traceEntry->stackPointer + stackWordIndex * HYPERDOS_X86_WORD_SIZE)) &
+                                   HYPERDOS_X86_ADDRESS_MASK;
         traceEntry->stackWords[stackWordIndex] = read_guest_memory_word(bootState, physicalAddress);
     }
 }
 
 static void write_cpu_trace_file(hyperdos_win32_boot_state* bootState)
 {
-    hyperdos_x86_16_processor* processor                  = &bootState->machine.pc.processor;
-    uint64_t                   traceStartInstructionCount = 0u;
-    uint64_t                   traceInstructionCount      = 0u;
-    FILE*                      traceFile                  = NULL;
+    hyperdos_x86_processor* processor                  = &bootState->machine.pc.processor;
+    uint64_t                traceStartInstructionCount = 0u;
+    uint64_t                traceInstructionCount      = 0u;
+    FILE*                   traceFile                  = NULL;
 
     if (globalCpuTracePath[0] == '\0' || InterlockedCompareExchange(&bootState->cpuTraceEnabled, 0, 0) == 0)
     {
@@ -2080,7 +2114,7 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     hyperdos_win32_pc_monitor_runtime_clear_host_notification(bootState);
     bootState->bootDeviceKind  = HYPERDOS_MONITOR_BOOT_DEVICE_KIND_NONE;
     bootState->bootDeviceIndex = 0u;
-    bootState->executionResult = HYPERDOS_X86_16_EXECUTION_OK;
+    bootState->executionResult = HYPERDOS_X86_EXECUTION_OK;
     InterlockedExchange(&bootState->stopRequested, 0);
     InterlockedExchange(&bootState->isRunning, 0);
     InterlockedExchange(&bootState->isWaitingForKeyboard, 0);
@@ -2296,7 +2330,7 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
                                                                                       NULL);
         maybe_write_text_screen_dump_file(bootState);
         maybe_write_video_state_dump_file(bootState);
-        if (bootState->executionResult == HYPERDOS_X86_16_EXECUTION_HALTED)
+        if (bootState->executionResult == HYPERDOS_X86_EXECUTION_HALTED)
         {
             (void)hyperdos_pc_step_halted_processor_clock(&bootState->machine.pc,
                                                           HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS,
@@ -2311,13 +2345,13 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
             }
             continue;
         }
-        if (bootState->executionResult != HYPERDOS_X86_16_EXECUTION_STEP_LIMIT_REACHED)
+        if (bootState->executionResult != HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED)
         {
             InterlockedExchange(&bootState->isRunning, 0);
             write_cpu_trace_file(bootState);
             write_guest_memory_dump_file(bootState);
-            if (bootState->executionResult == HYPERDOS_X86_16_EXECUTION_UNSUPPORTED_INSTRUCTION &&
-                hyperdos_x86_16_processor_is_at_bios_reset_vector(&bootState->machine.pc.processor))
+            if (bootState->executionResult == HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION &&
+                hyperdos_x86_processor_is_at_bios_reset_vector(&bootState->machine.pc.processor))
             {
                 hyperdos_win32_pc_monitor_runtime_set_host_notification(
                         bootState,
@@ -2327,7 +2361,7 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
                 hyperdos_win32_pc_monitor_runtime_request_reset(bootState);
                 break;
             }
-            if (bootState->executionResult != HYPERDOS_X86_16_EXECUTION_HALTED)
+            if (bootState->executionResult != HYPERDOS_X86_EXECUTION_HALTED)
             {
                 uint16_t instructionSegment = bootState->machine.pc.processor.lastInstructionSegment;
                 uint16_t instructionOffset  = bootState->machine.pc.processor.lastInstructionOffset;
@@ -2346,7 +2380,7 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
                         HYPERDOS_MONITOR_HOST_NOTIFICATION_SEVERITY_ERROR,
                         HYPERDOS_MONITOR_HOST_NOTIFICATION_CATEGORY_EXECUTION,
                         "%s at %04X:%04X opcode %02X bytes %02X %02X %02X %02X",
-                        hyperdos_x86_16_execution_result_name(bootState->executionResult),
+                        hyperdos_x86_execution_result_name(bootState->executionResult),
                         instructionSegment,
                         instructionOffset,
                         bootState->machine.pc.processor.lastOperationCode,
@@ -4203,17 +4237,17 @@ static void release_host_mouse_buttons(HWND windowHandle, hyperdos_win32_boot_st
 
 static void show_unsupported_instruction_message(HWND windowHandle, const hyperdos_win32_boot_state* bootState)
 {
-    char                             message[256];
-    hyperdos_win32_boot_state*       writableBootState  = NULL;
-    const hyperdos_x86_16_processor* processor          = NULL;
-    uint16_t                         instructionSegment = 0u;
-    uint16_t                         instructionOffset  = 0u;
-    uint8_t                          firstByte          = 0u;
-    uint8_t                          secondByte         = 0u;
-    uint8_t                          thirdByte          = 0u;
-    uint8_t                          fourthByte         = 0u;
+    char                          message[256];
+    hyperdos_win32_boot_state*    writableBootState  = NULL;
+    const hyperdos_x86_processor* processor          = NULL;
+    uint16_t                      instructionSegment = 0u;
+    uint16_t                      instructionOffset  = 0u;
+    uint8_t                       firstByte          = 0u;
+    uint8_t                       secondByte         = 0u;
+    uint8_t                       thirdByte          = 0u;
+    uint8_t                       fourthByte         = 0u;
 
-    if (bootState == NULL || bootState->executionResult != HYPERDOS_X86_16_EXECUTION_UNSUPPORTED_INSTRUCTION)
+    if (bootState == NULL || bootState->executionResult != HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION)
     {
         return;
     }
@@ -4968,10 +5002,8 @@ static void update_machine_model_menu(HWND windowHandle)
     }
     CheckMenuRadioItem(menuHandle,
                        HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086,
-                       HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186,
-                       globalProcessorModel == HYPERDOS_X86_16_PROCESSOR_MODEL_8086
-                               ? HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086
-                               : HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186,
+                       HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188,
+                       get_processor_model_menu_command(globalProcessorModel),
                        MF_BYCOMMAND);
     CheckMenuRadioItem(menuHandle,
                        HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT,
@@ -4988,9 +5020,9 @@ static void update_machine_model_menu(HWND windowHandle)
                        MF_BYCOMMAND);
 }
 
-static void set_processor_model(HWND                            windowHandle,
-                                hyperdos_win32_boot_state*      bootState,
-                                hyperdos_x86_16_processor_model processorModel)
+static void set_processor_model(HWND                         windowHandle,
+                                hyperdos_win32_boot_state*   bootState,
+                                hyperdos_x86_processor_model processorModel)
 {
     if (globalProcessorModel != processorModel)
     {
@@ -5231,8 +5263,10 @@ HMENU hyperdos_win32_pc_monitor_create_menu(void)
     size_t fixedDiskIndex              = 0u;
     size_t processorClockOptionIndex   = 0u;
 
-    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086, "8086 / 8088");
-    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186, "80186 / 80188");
+    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086, "8086");
+    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8088, "8088");
+    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186, "80186");
+    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188, "80188");
     AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)processorModelMenuHandle, "Processor");
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT, "XT");
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT, "AT");
@@ -5435,10 +5469,16 @@ LRESULT CALLBACK hyperdos_win32_pc_monitor_window_procedure(HWND   windowHandle,
             handle_start_cpu_trace_command(windowHandle, &globalBootState);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086:
-            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_16_PROCESSOR_MODEL_8086);
+            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_PROCESSOR_MODEL_8086);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8088:
+            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_PROCESSOR_MODEL_8088);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186:
-            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_16_PROCESSOR_MODEL_80186);
+            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_PROCESSOR_MODEL_80186);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188:
+            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_PROCESSOR_MODEL_80188);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE:
             set_coprocessor_model(windowHandle, &globalBootState, HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE);
@@ -5985,6 +6025,35 @@ static int parse_processor_frequency_hertz(const char* text, uint32_t* processor
     return *processorFrequencyHertz != 0u;
 }
 
+static int parse_processor_model_text(const char* text, hyperdos_x86_processor_model* processorModel)
+{
+    if (text == NULL || processorModel == NULL)
+    {
+        return 0;
+    }
+    if (_stricmp(text, "8086") == 0)
+    {
+        *processorModel = HYPERDOS_X86_PROCESSOR_MODEL_8086;
+        return 1;
+    }
+    if (_stricmp(text, "8088") == 0)
+    {
+        *processorModel = HYPERDOS_X86_PROCESSOR_MODEL_8088;
+        return 1;
+    }
+    if (_stricmp(text, "80186") == 0)
+    {
+        *processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80186;
+        return 1;
+    }
+    if (_stricmp(text, "80188") == 0)
+    {
+        *processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80188;
+        return 1;
+    }
+    return 0;
+}
+
 static int set_command_line_error_text(char* errorText, size_t errorTextSize, const char* format, ...)
 {
     va_list arguments;
@@ -6024,7 +6093,7 @@ int hyperdos_win32_pc_monitor_configure_from_command_line(const char* commandLin
     globalCoprocessorModel                        = HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
     globalProcessorFrequencyHertz                 = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
     globalGuestClockThrottleEnabled               = 1;
-    globalProcessorModel                          = HYPERDOS_X86_16_PROCESSOR_MODEL_80186;
+    globalProcessorModel                          = HYPERDOS_X86_PROCESSOR_MODEL_80186;
     globalPcModel                                 = HYPERDOS_PC_MODEL_AT;
     globalCpuTraceStartsEnabled                   = 0;
     globalDivideErrorReturnsToFaultingInstruction = 0;
@@ -6112,6 +6181,33 @@ int hyperdos_win32_pc_monitor_configure_from_command_line(const char* commandLin
         if (strcmp(argument, "--no-8087") == 0)
         {
             globalCoprocessorModel = HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
+            continue;
+        }
+        if (strcmp(argument, "--8086") == 0 || strcmp(argument, "--8088") == 0 || strcmp(argument, "--80186") == 0 ||
+            strcmp(argument, "--80188") == 0)
+        {
+            hyperdos_x86_processor_model processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80186;
+            if (!parse_processor_model_text(argument + 2u, &processorModel))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalProcessorModel = processorModel;
+            continue;
+        }
+        if (strncmp(argument, "--processor-model=", 18u) == 0)
+        {
+            hyperdos_x86_processor_model processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80186;
+            if (!parse_processor_model_text(argument + 18u, &processorModel))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalProcessorModel = processorModel;
             continue;
         }
         if (strncmp(argument, "--processor-clock=", 18u) == 0)

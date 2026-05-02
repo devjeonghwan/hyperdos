@@ -285,7 +285,7 @@ static int hyperdos_pc_disk_image_master_boot_record_bootstrap_is_empty(const ui
     return 1;
 }
 
-static int hyperdos_pc_disk_image_master_boot_record_bootstrap_is_hyperdos_x86_16_message_stub(const uint8_t* bytes)
+static int hyperdos_pc_disk_image_master_boot_record_bootstrap_is_hyperdos_x86_message_stub(const uint8_t* bytes)
 {
     static const uint8_t messageStubBytes[] = {0x31u, 0xC0u, 0x8Eu, 0xD8u, 0xBEu, 0x15u, 0x7Cu, 0xB4u, 0x0Eu, 0xACu,
                                                0x84u, 0xC0u, 0x74u, 0x04u, 0xCDu, 0x10u, 0xEBu, 0xF7u, 0xF4u, 0xEBu,
@@ -323,7 +323,7 @@ static void hyperdos_pc_disk_image_install_master_boot_record_bootstrap(hyperdos
         return;
     }
     if ((hyperdos_pc_disk_image_master_boot_record_bootstrap_is_empty(sectorBytes) ||
-         hyperdos_pc_disk_image_master_boot_record_bootstrap_is_hyperdos_x86_16_message_stub(sectorBytes)) &&
+         hyperdos_pc_disk_image_master_boot_record_bootstrap_is_hyperdos_x86_message_stub(sectorBytes)) &&
         hyperdos_pc_disk_image_boot_sector_signature_is_present(sectorBytes, 0u))
     {
         hyperdos_pc_disk_image_write_master_boot_record_bootstrap(sectorBytes);

@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "hyperdos/hardware.h"
-#include "hyperdos/x86_16_processor.h"
+#include "hyperdos/x86_processor.h"
 
 #define HYPERDOS_CONVENTIONAL_MEMORY_SIZE                                         0xA0000u
 #define HYPERDOS_COLOR_GRAPHICS_ADAPTER_MEMORY_ADDRESS                            0xB8000u
@@ -87,7 +87,7 @@ typedef struct hyperdos_direct_memory_access_controller
     uint8_t                               firstLastFlipFlop;
 } hyperdos_direct_memory_access_controller;
 
-typedef struct hyperdos_x86_16_interval_timer_channel
+typedef struct hyperdos_x86_interval_timer_channel
 {
     uint16_t reloadValue;
     uint16_t currentValue;
@@ -102,11 +102,11 @@ typedef struct hyperdos_x86_16_interval_timer_channel
     uint8_t  latchedReadLowByte;
     uint8_t  outputLevel;
     uint8_t  outputTransitionPending;
-} hyperdos_x86_16_interval_timer_channel;
+} hyperdos_x86_interval_timer_channel;
 
 typedef struct hyperdos_programmable_interval_timer
 {
-    hyperdos_x86_16_interval_timer_channel channels[3];
+    hyperdos_x86_interval_timer_channel channels[3];
 } hyperdos_programmable_interval_timer;
 
 typedef struct hyperdos_programmable_peripheral_interface
@@ -331,10 +331,10 @@ const uint8_t* hyperdos_color_graphics_adapter_get_text_memory(const hyperdos_co
 
 void hyperdos_8087_initialize(hyperdos_8087* coprocessor);
 
-hyperdos_x86_16_execution_result hyperdos_8087_wait(hyperdos_x86_16_processor* processor, void* userContext);
+hyperdos_x86_execution_result hyperdos_8087_wait(hyperdos_x86_processor* processor, void* userContext);
 
-hyperdos_x86_16_execution_result hyperdos_8087_escape(hyperdos_x86_16_processor*                     processor,
-                                                      const hyperdos_x86_16_coprocessor_instruction* instruction,
-                                                      void*                                          userContext);
+hyperdos_x86_execution_result hyperdos_8087_escape(hyperdos_x86_processor*                     processor,
+                                                   const hyperdos_x86_coprocessor_instruction* instruction,
+                                                   void*                                       userContext);
 
 #endif

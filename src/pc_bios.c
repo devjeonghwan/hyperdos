@@ -32,7 +32,7 @@ enum
 
 static uint8_t hyperdos_pc_bios_read_guest_memory_byte(hyperdos_pc* pc, uint32_t physicalAddress)
 {
-    return hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus, physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK);
+    return hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus, physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
 }
 
 static uint16_t hyperdos_pc_bios_read_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress)
@@ -40,31 +40,32 @@ static uint16_t hyperdos_pc_bios_read_guest_memory_word(hyperdos_pc* pc, uint32_
     uint16_t lowByte  = hyperdos_pc_bios_read_guest_memory_byte(pc, physicalAddress);
     uint16_t highByte = hyperdos_pc_bios_read_guest_memory_byte(pc, physicalAddress + 1u);
 
-    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_16_BYTE_BIT_COUNT));
+    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
 static void hyperdos_pc_bios_write_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress, uint16_t value)
 {
     hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
-                                             physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK,
+                                             physicalAddress & HYPERDOS_X86_ADDRESS_MASK,
                                              (uint8_t)(value & 0x00FFu));
     hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
-                                             (physicalAddress + 1u) & HYPERDOS_X86_16_ADDRESS_MASK,
-                                             (uint8_t)(value >> HYPERDOS_X86_16_BYTE_BIT_COUNT));
+                                             (physicalAddress + 1u) & HYPERDOS_X86_ADDRESS_MASK,
+                                             (uint8_t)(value >> HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
-static uint32_t hyperdos_pc_bios_get_stack_physical_address(const hyperdos_x86_16_processor* processor,
-                                                            uint16_t                         stackOffset)
+static uint32_t hyperdos_pc_bios_get_stack_physical_address(const hyperdos_x86_processor* processor,
+                                                            uint16_t                      stackOffset)
 {
-    uint16_t stackPointer = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_STACK_POINTER];
+    uint16_t stackPointer = hyperdos_x86_get_general_register_word(processor,
+                                                                   HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
 
-    return (processor->segmentBases[HYPERDOS_X86_16_SEGMENT_REGISTER_STACK] + (uint16_t)(stackPointer + stackOffset)) &
-           HYPERDOS_X86_16_ADDRESS_MASK;
+    return (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_STACK] + (uint16_t)(stackPointer + stackOffset)) &
+           HYPERDOS_X86_ADDRESS_MASK;
 }
 
 static int hyperdos_pc_bios_monitor_service_returns_to_interrupt_return_instruction(
-        hyperdos_pc*                     pc,
-        const hyperdos_x86_16_processor* processor)
+        hyperdos_pc*                  pc,
+        const hyperdos_x86_processor* processor)
 {
     uint32_t returnOffsetPhysicalAddress =
             hyperdos_pc_bios_get_stack_physical_address(processor,
@@ -74,24 +75,24 @@ static int hyperdos_pc_bios_monitor_service_returns_to_interrupt_return_instruct
                                                         HYPERDOS_PC_BIOS_INTERRUPT_RETURN_SEGMENT_STACK_OFFSET);
     uint16_t returnOffset          = hyperdos_pc_bios_read_guest_memory_word(pc, returnOffsetPhysicalAddress);
     uint16_t returnSegment         = hyperdos_pc_bios_read_guest_memory_word(pc, returnSegmentPhysicalAddress);
-    uint32_t returnPhysicalAddress = (((uint32_t)returnSegment << HYPERDOS_X86_16_SEGMENT_SHIFT) + returnOffset) &
-                                     HYPERDOS_X86_16_ADDRESS_MASK;
+    uint32_t returnPhysicalAddress = (((uint32_t)returnSegment << HYPERDOS_X86_SEGMENT_SHIFT) + returnOffset) &
+                                     HYPERDOS_X86_ADDRESS_MASK;
 
     return returnSegment == HYPERDOS_PC_BIOS_FIRMWARE_STUB_SEGMENT &&
            hyperdos_pc_bios_read_guest_memory_byte(pc, returnPhysicalAddress) ==
                    HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN;
 }
 
-static void hyperdos_pc_bios_synchronize_interrupt_return_flag_at_stack_offset(hyperdos_pc*               pc,
-                                                                               hyperdos_x86_16_processor* processor,
-                                                                               uint16_t                   stackOffset,
-                                                                               uint16_t                   flagMask)
+static void hyperdos_pc_bios_synchronize_interrupt_return_flag_at_stack_offset(hyperdos_pc*            pc,
+                                                                               hyperdos_x86_processor* processor,
+                                                                               uint16_t                stackOffset,
+                                                                               uint16_t                flagMask)
 {
     uint32_t flagsPhysicalAddress = hyperdos_pc_bios_get_stack_physical_address(processor, stackOffset);
     uint16_t flags                = hyperdos_pc_bios_read_guest_memory_word(pc, flagsPhysicalAddress);
 
     flags  = (uint16_t)((flags & (uint16_t)~flagMask) | (processor->flags & flagMask));
-    flags |= HYPERDOS_X86_16_FLAG_RESERVED;
+    flags |= HYPERDOS_X86_FLAG_RESERVED;
     hyperdos_pc_bios_write_guest_memory_word(pc, flagsPhysicalAddress, flags);
 }
 
@@ -103,7 +104,7 @@ static void hyperdos_pc_bios_install_interrupt_vector(hyperdos_pc* pc,
     uint32_t interruptVectorAddress = (uint32_t)interruptNumber * HYPERDOS_PC_BIOS_INTERRUPT_VECTOR_BYTE_COUNT;
 
     hyperdos_pc_bios_write_guest_memory_word(pc, interruptVectorAddress, offset);
-    hyperdos_pc_bios_write_guest_memory_word(pc, interruptVectorAddress + HYPERDOS_X86_16_WORD_SIZE, segment);
+    hyperdos_pc_bios_write_guest_memory_word(pc, interruptVectorAddress + HYPERDOS_X86_WORD_SIZE, segment);
 }
 
 static void hyperdos_pc_bios_install_timer_hardware_interrupt_vector_stub(hyperdos_pc* pc)
@@ -122,7 +123,7 @@ static void hyperdos_pc_bios_install_timer_hardware_interrupt_vector_stub(hyperd
              HYPERDOS_PC_BIOS_OPERATION_CODE_POP_ACCUMULATOR,
              HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN};
     uint32_t stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_TIMER_HARDWARE_STUB_SEGMENT
-                                    << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                    << HYPERDOS_X86_SEGMENT_SHIFT) +
                                    HYPERDOS_PC_BIOS_TIMER_HARDWARE_STUB_OFFSET;
     size_t byteIndex = 0u;
 
@@ -141,7 +142,7 @@ static void hyperdos_pc_bios_install_timer_hardware_interrupt_vector_stub(hyperd
 static void hyperdos_pc_bios_install_user_timer_tick_interrupt_vector_stub(hyperdos_pc* pc)
 {
     uint32_t stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_USER_TIMER_TICK_STUB_SEGMENT
-                                    << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                    << HYPERDOS_X86_SEGMENT_SHIFT) +
                                    HYPERDOS_PC_BIOS_USER_TIMER_TICK_STUB_OFFSET;
 
     hyperdos_pc_firmware_write_byte(pc, stubPhysicalAddress, HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN);
@@ -174,7 +175,7 @@ static void hyperdos_pc_bios_install_keyboard_hardware_interrupt_vector_stub(hyp
              HYPERDOS_PC_BIOS_OPERATION_CODE_POP_ACCUMULATOR,
              HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN};
     uint32_t stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_KEYBOARD_HARDWARE_STUB_SEGMENT
-                                    << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                    << HYPERDOS_X86_SEGMENT_SHIFT) +
                                    HYPERDOS_PC_BIOS_KEYBOARD_HARDWARE_STUB_OFFSET;
     size_t byteIndex = 0u;
 
@@ -211,10 +212,10 @@ static void hyperdos_pc_bios_install_auxiliary_device_hardware_interrupt_vector_
              0x08u,
              HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR};
     uint32_t stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_SEGMENT
-                                    << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                    << HYPERDOS_X86_SEGMENT_SHIFT) +
                                    HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_OFFSET;
     uint32_t cleanupStubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_CALLBACK_CLEANUP_STUB_SEGMENT
-                                           << HYPERDOS_X86_16_SEGMENT_SHIFT) +
+                                           << HYPERDOS_X86_SEGMENT_SHIFT) +
                                           HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_CALLBACK_CLEANUP_STUB_OFFSET;
     size_t byteIndex = 0u;
 
@@ -289,7 +290,7 @@ void hyperdos_pc_bios_install_interrupt_vector_stubs(hyperdos_pc* pc)
                                                        HYPERDOS_PC_BIOS_TIME_STUB_OFFSET);
 }
 
-void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int carry)
+void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
     if (processor == NULL)
     {
@@ -297,18 +298,18 @@ void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int c
     }
     if (carry)
     {
-        processor->flags |= HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
     }
     else
     {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
     }
-    processor->flags |= HYPERDOS_X86_16_FLAG_RESERVED;
+    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
 }
 
-void hyperdos_pc_bios_synchronize_interrupt_return_flag(hyperdos_pc*               pc,
-                                                        hyperdos_x86_16_processor* processor,
-                                                        uint16_t                   flagMask)
+void hyperdos_pc_bios_synchronize_interrupt_return_flag(hyperdos_pc*            pc,
+                                                        hyperdos_x86_processor* processor,
+                                                        uint16_t                flagMask)
 {
     if (pc == NULL || processor == NULL)
     {
@@ -330,14 +331,14 @@ void hyperdos_pc_bios_synchronize_interrupt_return_flag(hyperdos_pc*            
     }
 }
 
-void hyperdos_pc_bios_synchronize_interrupt_return_carry_flag(hyperdos_pc* pc, hyperdos_x86_16_processor* processor)
+void hyperdos_pc_bios_synchronize_interrupt_return_carry_flag(hyperdos_pc* pc, hyperdos_x86_processor* processor)
 {
-    hyperdos_pc_bios_synchronize_interrupt_return_flag(pc, processor, HYPERDOS_X86_16_FLAG_CARRY);
+    hyperdos_pc_bios_synchronize_interrupt_return_flag(pc, processor, HYPERDOS_X86_FLAG_CARRY);
 }
 
-void hyperdos_pc_bios_synchronize_interrupt_return_zero_flag(hyperdos_pc* pc, hyperdos_x86_16_processor* processor)
+void hyperdos_pc_bios_synchronize_interrupt_return_zero_flag(hyperdos_pc* pc, hyperdos_x86_processor* processor)
 {
-    hyperdos_pc_bios_synchronize_interrupt_return_flag(pc, processor, HYPERDOS_X86_16_FLAG_ZERO);
+    hyperdos_pc_bios_synchronize_interrupt_return_flag(pc, processor, HYPERDOS_X86_FLAG_ZERO);
 }
 
 int hyperdos_pc_bios_interrupt_vector_matches(hyperdos_pc* pc,
@@ -355,7 +356,7 @@ int hyperdos_pc_bios_interrupt_vector_matches(hyperdos_pc* pc,
     }
 
     vectorOffset  = hyperdos_pc_bios_read_guest_memory_word(pc, vectorAddress);
-    vectorSegment = hyperdos_pc_bios_read_guest_memory_word(pc, vectorAddress + HYPERDOS_X86_16_WORD_SIZE);
+    vectorSegment = hyperdos_pc_bios_read_guest_memory_word(pc, vectorAddress + HYPERDOS_X86_WORD_SIZE);
     return vectorOffset == expectedOffset && vectorSegment == expectedSegment;
 }
 

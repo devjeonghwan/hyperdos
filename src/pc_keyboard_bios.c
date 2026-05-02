@@ -13,17 +13,17 @@ enum
     HYPERDOS_PC_KEYBOARD_BIOS_UNSUPPORTED_STATUS                   = 0x86u,
 };
 
-static void hyperdos_pc_keyboard_bios_set_carry_flag(hyperdos_x86_16_processor* processor, int carry)
+static void hyperdos_pc_keyboard_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
     if (carry)
     {
-        processor->flags |= HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
     }
     else
     {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_CARRY;
+        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
     }
-    processor->flags |= HYPERDOS_X86_16_FLAG_RESERVED;
+    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
 }
 
 static void hyperdos_pc_keyboard_bios_lock(const hyperdos_pc_keyboard_bios_interface* keyboardBiosInterface)
@@ -287,7 +287,7 @@ static uint16_t hyperdos_pc_keyboard_bios_make_key_word_from_set_one_scan_code(u
     }
     if (character != 0u)
     {
-        return (uint16_t)(((uint16_t)scanCode << HYPERDOS_X86_16_BYTE_BIT_COUNT) | character);
+        return (uint16_t)(((uint16_t)scanCode << HYPERDOS_X86_BYTE_BIT_COUNT) | character);
     }
 
     if (scanCode >= 0x3Bu && scanCode <= 0x44u)
@@ -307,11 +307,11 @@ static uint16_t hyperdos_pc_keyboard_bios_make_key_word_from_set_one_scan_code(u
         {
             returnedScanCode = (uint8_t)(0x54u + functionKeyIndex);
         }
-        return (uint16_t)((uint16_t)returnedScanCode << HYPERDOS_X86_16_BYTE_BIT_COUNT);
+        return (uint16_t)((uint16_t)returnedScanCode << HYPERDOS_X86_BYTE_BIT_COUNT);
     }
     if (scanCode == 0x57u || scanCode == 0x58u || (scanCode >= 0x47u && scanCode <= 0x53u))
     {
-        return (uint16_t)((uint16_t)scanCode << HYPERDOS_X86_16_BYTE_BIT_COUNT);
+        return (uint16_t)((uint16_t)scanCode << HYPERDOS_X86_BYTE_BIT_COUNT);
     }
 
     switch (scanCode)
@@ -407,7 +407,7 @@ static uint16_t hyperdos_pc_keyboard_bios_make_key_word_from_set_one_scan_code(u
         {
             character = (uint8_t)(character - ('a' - 'A'));
         }
-        return (uint16_t)(((uint16_t)scanCode << HYPERDOS_X86_16_BYTE_BIT_COUNT) | character);
+        return (uint16_t)(((uint16_t)scanCode << HYPERDOS_X86_BYTE_BIT_COUNT) | character);
     }
 
     switch (scanCode)
@@ -478,7 +478,7 @@ static uint16_t hyperdos_pc_keyboard_bios_make_key_word_from_set_one_scan_code(u
     default:
         return 0u;
     }
-    return (uint16_t)(((uint16_t)scanCode << HYPERDOS_X86_16_BYTE_BIT_COUNT) | character);
+    return (uint16_t)(((uint16_t)scanCode << HYPERDOS_X86_BYTE_BIT_COUNT) | character);
 }
 
 static int hyperdos_pc_keyboard_bios_scan_code_is_keyboard_response(uint8_t scanCode)
@@ -588,8 +588,8 @@ int hyperdos_pc_keyboard_bios_service_hardware_byte(hyperdos_pc_keyboard_bios*  
     return 1;
 }
 
-hyperdos_x86_16_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
-        hyperdos_x86_16_processor*                 processor,
+hyperdos_x86_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
+        hyperdos_x86_processor*                    processor,
         hyperdos_pc_keyboard_bios*                 keyboardBios,
         const hyperdos_pc_keyboard_bios_interface* keyboardBiosInterface,
         hyperdos_pc*                               pc,
@@ -605,7 +605,7 @@ hyperdos_x86_16_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
 
     if (processor == NULL || keyboardBios == NULL || pc == NULL)
     {
-        return HYPERDOS_X86_16_EXECUTION_INVALID_ARGUMENT;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
 
     if (keyboardBiosInterface != NULL && keyboardBiosInterface->refreshInputState != NULL)
@@ -617,51 +617,54 @@ hyperdos_x86_16_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
     {
         if (hyperdos_pc_keyboard_bios_pop_key_word(keyboardBios, keyboardBiosInterface, pc, &keyWord))
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = keyWord;
-            processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_ZERO;
-            processor->flags |= HYPERDOS_X86_16_FLAG_RESERVED;
-            return HYPERDOS_X86_16_EXECUTION_OK;
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, keyWord);
+            processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_ZERO;
+            processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+            return HYPERDOS_X86_EXECUTION_OK;
         }
 
         processor->instructionPointer  = processor->lastInstructionOffset;
-        processor->flags              |= HYPERDOS_X86_16_FLAG_INTERRUPT_ENABLE | HYPERDOS_X86_16_FLAG_RESERVED;
-        return HYPERDOS_X86_16_EXECUTION_STEP_LIMIT_REACHED;
+        processor->flags              |= HYPERDOS_X86_FLAG_INTERRUPT_ENABLE | HYPERDOS_X86_FLAG_RESERVED;
+        return HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED;
     }
 
     if (isStatusService)
     {
         if (hyperdos_pc_keyboard_bios_peek_key_word(keyboardBios, keyboardBiosInterface, pc, &keyWord))
         {
-            processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] = keyWord;
-            processor->flags &= (uint16_t)~HYPERDOS_X86_16_FLAG_ZERO;
+            hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, keyWord);
+            processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_ZERO;
         }
         else
         {
-            processor->flags |= HYPERDOS_X86_16_FLAG_ZERO;
+            processor->flags |= HYPERDOS_X86_FLAG_ZERO;
         }
-        processor->flags |= HYPERDOS_X86_16_FLAG_INTERRUPT_ENABLE | HYPERDOS_X86_16_FLAG_RESERVED;
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        processor->flags |= HYPERDOS_X86_FLAG_INTERRUPT_ENABLE | HYPERDOS_X86_FLAG_RESERVED;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
 
     if (isShiftStatusService)
     {
-        uint16_t accumulator = processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR];
+        uint16_t accumulator = hyperdos_x86_get_general_register_word(processor,
+                                                                      HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
         uint8_t  shiftFlags =
                 hyperdos_pc_bios_data_area_read_byte(pc, HYPERDOS_PC_BIOS_DATA_AREA_KEYBOARD_SHIFT_FLAGS_OFFSET);
 
-        processor->generalRegisters
-                [HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR]  = (uint16_t)((accumulator &
-                                                                             (uint16_t)~HYPERDOS_X86_16_LOW_BYTE_MASK) |
-                                                                            shiftFlags);
-        processor->flags                                       |= HYPERDOS_X86_16_FLAG_RESERVED;
-        return HYPERDOS_X86_16_EXECUTION_OK;
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               (uint16_t)((accumulator & (uint16_t)~HYPERDOS_X86_LOW_BYTE_MASK) |
+                                                          shiftFlags));
+        processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+        return HYPERDOS_X86_EXECUTION_OK;
     }
 
-    processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] =
+    hyperdos_x86_set_general_register_word(
+            processor,
+            HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
             (uint16_t)((HYPERDOS_PC_KEYBOARD_BIOS_UNSUPPORTED_STATUS
                         << HYPERDOS_PC_KEYBOARD_BIOS_SERVICE_REGISTER_SHIFT) |
-                       (processor->generalRegisters[HYPERDOS_X86_16_GENERAL_REGISTER_ACCUMULATOR] &
-                        HYPERDOS_X86_16_LOW_BYTE_MASK));
+                       (hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+                        HYPERDOS_X86_LOW_BYTE_MASK)));
     hyperdos_pc_keyboard_bios_set_carry_flag(processor, 1);
-    return HYPERDOS_X86_16_EXECUTION_OK;
+    return HYPERDOS_X86_EXECUTION_OK;
 }

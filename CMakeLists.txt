@@ -10,7 +10,7 @@ add_library(hyperdos STATIC
         src/chipset.c
         src/devices.c
         src/hardware.c
-        src/x86_16_processor.c
+        src/x86_processor.c
         src/pc_bios.c
         src/pc_bios_data_area.c
         src/pc_bios_runtime.c

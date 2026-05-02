@@ -90,8 +90,8 @@ int hyperdos_pc_keyboard_bios_service_hardware_byte(hyperdos_pc_keyboard_bios*  
                                                     hyperdos_pc_keyboard_bios_trace_function   traceFunction,
                                                     void*                                      traceUserContext);
 
-hyperdos_x86_16_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
-        hyperdos_x86_16_processor*                 processor,
+hyperdos_x86_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
+        hyperdos_x86_processor*                    processor,
         hyperdos_pc_keyboard_bios*                 keyboardBios,
         const hyperdos_pc_keyboard_bios_interface* keyboardBiosInterface,
         hyperdos_pc*                               pc,

@@ -62,7 +62,7 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
                 (uint8_t)(machine->pc.programmableInterruptController.interruptMaskRegister &
                           ~(1u << HYPERDOS_PC_MACHINE_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE));
     }
-    hyperdos_x86_16_set_processor_model(&machine->pc.processor, configuration->processorModel);
+    hyperdos_x86_set_processor_model(&machine->pc.processor, configuration->processorModel);
     hyperdos_pc_set_speaker_state_change_function(&machine->pc,
                                                   configuration->speakerStateChange,
                                                   configuration->userContext);
@@ -103,7 +103,7 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
 
     if (!configuration->coprocessorEnabled)
     {
-        hyperdos_x86_16_attach_coprocessor(&machine->pc.processor, NULL, NULL, NULL);
+        hyperdos_x86_attach_coprocessor(&machine->pc.processor, NULL, NULL, NULL);
     }
     machine->pc.processor.divideErrorReturnsToFaultingInstruction =
             configuration->divideErrorReturnsToFaultingInstruction;

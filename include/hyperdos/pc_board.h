@@ -7,7 +7,7 @@
 #include "hyperdos/chipset.h"
 #include "hyperdos/devices.h"
 #include "hyperdos/pc_cmos.h"
-#include "hyperdos/x86_16_processor.h"
+#include "hyperdos/x86_processor.h"
 
 enum
 {
@@ -54,8 +54,8 @@ typedef void (*hyperdos_pc_speaker_state_change_function)(void* userContext, uin
 
 typedef struct hyperdos_pc
 {
-    uint8_t                                              processorMemory[HYPERDOS_X86_16_MEMORY_SIZE];
-    hyperdos_x86_16_processor                            processor;
+    uint8_t                                              processorMemory[HYPERDOS_X86_MEMORY_SIZE];
+    hyperdos_x86_processor                               processor;
     hyperdos_bus                                         bus;
     hyperdos_random_access_memory                        randomAccessMemory;
     hyperdos_read_only_memory                            basicInputOutputSystemReadOnlyMemory;
@@ -103,7 +103,7 @@ int hyperdos_pc_load_boot_sector(hyperdos_pc* pc, const uint8_t* bootSectorBytes
 
 void hyperdos_pc_prepare_boot_sector_execution(hyperdos_pc* pc, uint8_t bootDriveNumber);
 
-int hyperdos_x86_16_processor_is_at_bios_reset_vector(const hyperdos_x86_16_processor* processor);
+int hyperdos_x86_processor_is_at_bios_reset_vector(const hyperdos_x86_processor* processor);
 
 void hyperdos_pc_raise_keyboard_controller_interrupt_request(hyperdos_pc*                     pc,
                                                              hyperdos_pc_board_trace_function traceFunction,

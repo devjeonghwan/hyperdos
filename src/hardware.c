@@ -9,20 +9,20 @@ enum
     HYPERDOS_OPEN_BUS_BYTE = 0xFFu
 };
 
-static int hyperdos_x86_16_unsigned_range_contains_32(uint32_t firstAddress, uint32_t lastAddress, uint32_t address)
+static int hyperdos_x86_unsigned_range_contains_32(uint32_t firstAddress, uint32_t lastAddress, uint32_t address)
 {
     return address >= firstAddress && address <= lastAddress;
 }
 
-static int hyperdos_x86_16_unsigned_ranges_overlap_32(uint32_t firstStart,
-                                                      uint32_t firstEnd,
-                                                      uint32_t secondStart,
-                                                      uint32_t secondEnd)
+static int hyperdos_x86_unsigned_ranges_overlap_32(uint32_t firstStart,
+                                                   uint32_t firstEnd,
+                                                   uint32_t secondStart,
+                                                   uint32_t secondEnd)
 {
     return firstStart <= secondEnd && secondStart <= firstEnd;
 }
 
-static int hyperdos_x86_16_unsigned_range_contains_16(uint16_t firstPort, uint16_t lastPort, uint16_t port)
+static int hyperdos_x86_unsigned_range_contains_16(uint16_t firstPort, uint16_t lastPort, uint16_t port)
 {
     return port >= firstPort && port <= lastPort;
 }
@@ -172,10 +172,10 @@ void hyperdos_bus_set_memory_mapping_observer_old_value_read_enabled(hyperdos_bu
     for (mappingIndex = 0u; mappingIndex < bus->memoryMappingCount; ++mappingIndex)
     {
         hyperdos_memory_mapping* mapping = &bus->memoryMappings[mappingIndex];
-        if (hyperdos_x86_16_unsigned_ranges_overlap_32(mapping->firstAddress,
-                                                       mapping->lastAddress,
-                                                       firstAddress,
-                                                       lastAddress))
+        if (hyperdos_x86_unsigned_ranges_overlap_32(mapping->firstAddress,
+                                                    mapping->lastAddress,
+                                                    firstAddress,
+                                                    lastAddress))
         {
             mapping->observerOldValueReadEnabled = enabled != 0 ? 1u : 0u;
         }
@@ -194,7 +194,7 @@ uint8_t hyperdos_bus_read_memory_byte_or_open_bus(hyperdos_bus* bus, uint32_t ph
     for (mappingIndex = 0; mappingIndex < bus->memoryMappingCount; ++mappingIndex)
     {
         hyperdos_memory_mapping* mapping = &bus->memoryMappings[mappingIndex];
-        if (hyperdos_x86_16_unsigned_range_contains_32(mapping->firstAddress, mapping->lastAddress, physicalAddress))
+        if (hyperdos_x86_unsigned_range_contains_32(mapping->firstAddress, mapping->lastAddress, physicalAddress))
         {
             return mapping->readByte(mapping->device, physicalAddress);
         }
@@ -214,7 +214,7 @@ void hyperdos_bus_write_memory_byte_if_mapped(hyperdos_bus* bus, uint32_t physic
     for (mappingIndex = 0; mappingIndex < bus->memoryMappingCount; ++mappingIndex)
     {
         hyperdos_memory_mapping* mapping = &bus->memoryMappings[mappingIndex];
-        if (hyperdos_x86_16_unsigned_range_contains_32(mapping->firstAddress, mapping->lastAddress, physicalAddress))
+        if (hyperdos_x86_unsigned_range_contains_32(mapping->firstAddress, mapping->lastAddress, physicalAddress))
         {
             uint8_t oldValue = HYPERDOS_OPEN_BUS_BYTE;
             if (bus->memoryWriteObserver != NULL && mapping->observerOldValueReadEnabled != 0u)
@@ -243,7 +243,7 @@ uint8_t hyperdos_bus_read_input_output_byte_or_open_bus(hyperdos_bus* bus, uint1
     for (mappingIndex = 0; mappingIndex < bus->inputOutputMappingCount; ++mappingIndex)
     {
         hyperdos_input_output_mapping* mapping = &bus->inputOutputMappings[mappingIndex];
-        if (hyperdos_x86_16_unsigned_range_contains_16(mapping->firstPort, mapping->lastPort, port))
+        if (hyperdos_x86_unsigned_range_contains_16(mapping->firstPort, mapping->lastPort, port))
         {
             return mapping->readByte(mapping->device, port);
         }
@@ -263,7 +263,7 @@ void hyperdos_bus_write_input_output_byte_if_mapped(hyperdos_bus* bus, uint16_t 
     for (mappingIndex = 0; mappingIndex < bus->inputOutputMappingCount; ++mappingIndex)
     {
         hyperdos_input_output_mapping* mapping = &bus->inputOutputMappings[mappingIndex];
-        if (hyperdos_x86_16_unsigned_range_contains_16(mapping->firstPort, mapping->lastPort, port))
+        if (hyperdos_x86_unsigned_range_contains_16(mapping->firstPort, mapping->lastPort, port))
         {
             mapping->writeByte(mapping->device, port, value);
             return;

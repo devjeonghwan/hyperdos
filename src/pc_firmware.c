@@ -9,20 +9,20 @@ enum
 
 static void hyperdos_pc_firmware_write_guest_memory_byte(hyperdos_pc* pc, uint32_t physicalAddress, uint8_t value)
 {
-    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK, value);
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress & HYPERDOS_X86_ADDRESS_MASK, value);
 }
 
 static void hyperdos_pc_firmware_write_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress, uint16_t value)
 {
-    hyperdos_pc_firmware_write_guest_memory_byte(pc, physicalAddress, (uint8_t)(value & HYPERDOS_X86_16_LOW_BYTE_MASK));
+    hyperdos_pc_firmware_write_guest_memory_byte(pc, physicalAddress, (uint8_t)(value & HYPERDOS_X86_LOW_BYTE_MASK));
     hyperdos_pc_firmware_write_guest_memory_byte(pc,
                                                  physicalAddress + 1u,
-                                                 (uint8_t)(value >> HYPERDOS_X86_16_BYTE_BIT_COUNT));
+                                                 (uint8_t)(value >> HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
 void hyperdos_pc_firmware_write_byte(hyperdos_pc* pc, uint32_t physicalAddress, uint8_t value)
 {
-    pc->processorMemory[physicalAddress & HYPERDOS_X86_16_ADDRESS_MASK] = value;
+    pc->processorMemory[physicalAddress & HYPERDOS_X86_ADDRESS_MASK] = value;
 }
 
 void hyperdos_pc_firmware_install_interrupt_vector_stub(hyperdos_pc* pc,
@@ -37,8 +37,8 @@ void hyperdos_pc_firmware_install_interrupt_vector_stub(hyperdos_pc* pc,
     hyperdos_pc_firmware_write_byte(pc, stubPhysicalAddress, HYPERDOS_PC_FIRMWARE_OPERATION_CODE_INTERRUPT_IMMEDIATE);
     hyperdos_pc_firmware_write_byte(pc, stubPhysicalAddress + 1u, monitorServiceInterruptNumber);
     hyperdos_pc_firmware_write_byte(pc,
-                                    stubPhysicalAddress + HYPERDOS_X86_16_WORD_SIZE,
+                                    stubPhysicalAddress + HYPERDOS_X86_WORD_SIZE,
                                     HYPERDOS_PC_FIRMWARE_OPERATION_CODE_INTERRUPT_RETURN);
     hyperdos_pc_firmware_write_guest_memory_word(pc, interruptVectorAddress, stubOffset);
-    hyperdos_pc_firmware_write_guest_memory_word(pc, interruptVectorAddress + HYPERDOS_X86_16_WORD_SIZE, stubSegment);
+    hyperdos_pc_firmware_write_guest_memory_word(pc, interruptVectorAddress + HYPERDOS_X86_WORD_SIZE, stubSegment);
 }
