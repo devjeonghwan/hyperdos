@@ -772,8 +772,8 @@ static void test_push_stack_pointer_model_policy(void)
 {
     test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_8086, 0x01FEu);
     test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_8088, 0x01FEu);
-    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186, 0x0200u);
-    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188, 0x0200u);
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186, 0x01FEu);
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188, 0x01FEu);
 }
 
 static void test_80186_basic_stack_instructions_for_model(hyperdos_x86_processor_model processorModel)
