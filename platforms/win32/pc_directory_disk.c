@@ -1050,9 +1050,39 @@ static int hyperdos_win32_directory_disk_load_directory_disk_image(hyperdos_pc_d
                                                                    uint8_t                 isHardDisk)
 {
     static const hyperdos_win32_directory_disk_format floppyFormats[] = {
-        {2880u,  0u, 224u, 9u, 18u, 2u, 1u, 0xF0u, HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12},
-        {5760u,  0u, 240u, 9u, 36u, 2u, 2u, 0xF0u, HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12},
-        {11520u, 0u, 224u, 9u, 72u, 2u, 4u, 0xF0u, HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12}
+        {
+            .totalSectorCount              = 2880u,
+            .hiddenSectorCount             = 0u,
+            .rootDirectoryEntryCount       = 224u,
+            .sectorsPerFileAllocationTable = 9u,
+            .sectorsPerTrack               = 18u,
+            .headCount                     = 2u,
+            .sectorsPerCluster             = 1u,
+            .mediaDescriptor               = 0xF0u,
+            .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
+        },
+        {
+            .totalSectorCount              = 5760u,
+            .hiddenSectorCount             = 0u,
+            .rootDirectoryEntryCount       = 240u,
+            .sectorsPerFileAllocationTable = 9u,
+            .sectorsPerTrack               = 36u,
+            .headCount                     = 2u,
+            .sectorsPerCluster             = 2u,
+            .mediaDescriptor               = 0xF0u,
+            .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
+        },
+        {
+            .totalSectorCount              = 11520u,
+            .hiddenSectorCount             = 0u,
+            .rootDirectoryEntryCount       = 224u,
+            .sectorsPerFileAllocationTable = 9u,
+            .sectorsPerTrack               = 72u,
+            .headCount                     = 2u,
+            .sectorsPerCluster             = 4u,
+            .mediaDescriptor               = 0xF0u,
+            .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
+        },
     };
     hyperdos_win32_directory_disk_entry_list entryList;
     hyperdos_win32_directory_disk_format     selectedFormat;

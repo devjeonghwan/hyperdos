@@ -196,11 +196,31 @@ static uint32_t globalGraphicsPixels[HYPERDOS_MONITOR_GRAPHICS_PIXEL_CAPACITY];
 static HWND     globalStatusBarWindowHandle;
 
 static const hyperdos_monitor_processor_clock_option globalProcessorClockOptions[] = {
-    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ, HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ, "4.77 MHz"},
-    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ,    8000000u,                                      "8 MHz"   },
-    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ,   10000000u,                                     "10 MHz"  },
-    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ,   12000000u,                                     "12 MHz"  },
-    {HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ,   16000000u,                                     "16 MHz"  }
+    {
+        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ,
+        .processorFrequencyHertz = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ,
+        .menuText                = "4.77 MHz",
+    },
+    {
+        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ,
+        .processorFrequencyHertz = 8000000u,
+        .menuText                = "8 MHz",
+    },
+    {
+        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ,
+        .processorFrequencyHertz = 10000000u,
+        .menuText                = "10 MHz",
+    },
+    {
+        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ,
+        .processorFrequencyHertz = 12000000u,
+        .menuText                = "12 MHz",
+    },
+    {
+        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ,
+        .processorFrequencyHertz = 16000000u,
+        .menuText                = "16 MHz",
+    },
 };
 
 static int floppy_drive_contains_media(const hyperdos_win32_boot_state* bootState, uint8_t driveNumber);
@@ -594,8 +614,11 @@ static void notify_monitor_window_execution_stopped(void* callbackContext)
     PostMessageA((HWND)callbackContext, HYPERDOS_MONITOR_USER_EXECUTION_STOPPED_MESSAGE, 0, 0);
 }
 
-static const hyperdos_win32_pc_monitor_runtime_callbacks globalRuntimeCallbacks =
-        {request_monitor_window_render, request_monitor_window_reset, notify_monitor_window_execution_stopped};
+static const hyperdos_win32_pc_monitor_runtime_callbacks globalRuntimeCallbacks = {
+    .requestRender           = request_monitor_window_render,
+    .requestReset            = request_monitor_window_reset,
+    .notifyExecutionStopped  = notify_monitor_window_execution_stopped,
+};
 
 static void write_text_screen_dump_file(const hyperdos_win32_boot_state* bootState);
 
@@ -2503,7 +2526,12 @@ static int initialize_code_page_437_glyph_rows(HDC referenceDeviceContext)
     HBITMAP glyphBitmap        = NULL;
     HGDIOBJ previousBitmap     = NULL;
     HFONT   previousFont       = NULL;
-    RECT    glyphRectangle     = {0, 0, GLYPH_BITMAP_WIDTH, GLYPH_BITMAP_HEIGHT};
+    RECT    glyphRectangle     = {
+        .left   = 0,
+        .top    = 0,
+        .right  = GLYPH_BITMAP_WIDTH,
+        .bottom = GLYPH_BITMAP_HEIGHT,
+    };
     size_t  characterIndex     = 0u;
 
     if (referenceDeviceContext == NULL || globalCodePage437TextFontHandle == NULL)
@@ -2530,7 +2558,10 @@ static int initialize_code_page_437_glyph_rows(HDC referenceDeviceContext)
     for (characterIndex = 0u; characterIndex < HYPERDOS_MONITOR_CHARACTER_COUNT; ++characterIndex)
     {
         WCHAR character    = (WCHAR)hyperdos_pc_text_code_page_437_unicode_character((uint8_t)characterIndex);
-        SIZE  glyphSize    = {HYPERDOS_MONITOR_CHARACTER_WIDTH, HYPERDOS_MONITOR_CHARACTER_HEIGHT};
+        SIZE  glyphSize    = {
+            .cx = HYPERDOS_MONITOR_CHARACTER_WIDTH,
+            .cy = HYPERDOS_MONITOR_CHARACTER_HEIGHT,
+        };
         int   sourceWidth  = HYPERDOS_MONITOR_CHARACTER_WIDTH;
         int   sourceHeight = HYPERDOS_MONITOR_CHARACTER_HEIGHT;
         int   targetRow    = 0;
@@ -2822,14 +2853,38 @@ static void write_planar_video_graphics_array_color_index_dump(FILE* videoStateD
         uint32_t column;
         uint32_t row;
     } samples[] = {
-        {16u,  16u },
-        {32u,  72u },
-        {120u, 120u},
-        {240u, 180u},
-        {400u, 180u},
-        {520u, 220u},
-        {80u,  420u},
-        {560u, 420u},
+        {
+            .column = 16u,
+            .row    = 16u,
+        },
+        {
+            .column = 32u,
+            .row    = 72u,
+        },
+        {
+            .column = 120u,
+            .row    = 120u,
+        },
+        {
+            .column = 240u,
+            .row    = 180u,
+        },
+        {
+            .column = 400u,
+            .row    = 180u,
+        },
+        {
+            .column = 520u,
+            .row    = 220u,
+        },
+        {
+            .column = 80u,
+            .row    = 420u,
+        },
+        {
+            .column = 560u,
+            .row    = 420u,
+        },
     };
 
     if (videoStateDumpFile == NULL || adapter == NULL || sourceWidth == 0u || sourceHeight == 0u)

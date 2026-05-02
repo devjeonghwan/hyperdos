@@ -180,10 +180,12 @@ static void hyperdos_win32_file_disk_destroy(void* userContext)
 
 static int hyperdos_win32_load_file_disk_image(hyperdos_pc_disk_image* diskImage, const char* path, uint8_t isHardDisk)
 {
-    static const hyperdos_pc_disk_operations fileDiskOperations = {hyperdos_win32_file_disk_read_sectors,
-                                                                   hyperdos_win32_file_disk_write_sectors,
-                                                                   hyperdos_win32_file_disk_flush,
-                                                                   hyperdos_win32_file_disk_destroy};
+    static const hyperdos_pc_disk_operations fileDiskOperations = {
+        .readSectors  = hyperdos_win32_file_disk_read_sectors,
+        .writeSectors = hyperdos_win32_file_disk_write_sectors,
+        .flush        = hyperdos_win32_file_disk_flush,
+        .destroy      = hyperdos_win32_file_disk_destroy,
+    };
     hyperdos_win32_file_disk_context*        fileDiskContext    = NULL;
     FILE*                                    file               = NULL;
     uint64_t                                 byteCount          = 0u;

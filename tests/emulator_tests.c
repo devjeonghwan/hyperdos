@@ -1081,24 +1081,31 @@ static void test_80186_enter_for_model(hyperdos_x86_processor_model processorMod
         0x02u,
         0xF4u,
     };
-    static const uint8_t* programs[] = {
-        levelZeroProgram,
-        levelOneProgram,
-        levelTwoProgram,
+    static const struct
+    {
+        const uint8_t* program;
+        size_t         programSize;
+        uint16_t       expectedStackPointer;
+    } testCases[] = {
+        {
+         .program              = levelZeroProgram,
+         .programSize          = sizeof(levelZeroProgram),
+         .expectedStackPointer = 0x01FAu,
+         },
+        {
+         .program              = levelOneProgram,
+         .programSize          = sizeof(levelOneProgram),
+         .expectedStackPointer = 0x01FAu,
+         },
+        {
+         .program              = levelTwoProgram,
+         .programSize          = sizeof(levelTwoProgram),
+         .expectedStackPointer = 0x01FAu,
+         },
     };
-    static const size_t programSizes[] = {
-        sizeof(levelZeroProgram),
-        sizeof(levelOneProgram),
-        sizeof(levelTwoProgram),
-    };
-    static const uint16_t expectedStackPointers[] = {
-        0x01FAu,
-        0x01FAu,
-        0x01FAu,
-    };
-    size_t programIndex = 0u;
+    size_t testCaseIndex = 0u;
 
-    for (programIndex = 0u; programIndex < sizeof(programs) / sizeof(programs[0]); ++programIndex)
+    for (testCaseIndex = 0u; testCaseIndex < sizeof(testCases) / sizeof(testCases[0]); ++testCaseIndex)
     {
         uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
         hyperdos_x86_processor        processor;
@@ -1110,12 +1117,12 @@ static void test_80186_enter_for_model(hyperdos_x86_processor_model processorMod
                HYPERDOS_X86_EXECUTION_OK);
         hyperdos_x86_set_processor_model(&processor, processorModel);
         assert(hyperdos_x86_load_dos_program(&processor,
-                                             programs[programIndex],
-                                             programSizes[programIndex],
+                                             testCases[testCaseIndex].program,
+                                             testCases[testCaseIndex].programSize,
                                              HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
                                              "",
                                              0u) == HYPERDOS_X86_EXECUTION_OK);
-        if (programIndex == 2u)
+        if (testCaseIndex == 2u)
         {
             assert(hyperdos_x86_write_memory_byte(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, 0x02FEu, 0xEFu) ==
                    HYPERDOS_X86_EXECUTION_OK);
@@ -1127,17 +1134,17 @@ static void test_80186_enter_for_model(hyperdos_x86_processor_model processorMod
         assert(result == HYPERDOS_X86_EXECUTION_HALTED);
         assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER) == 0x01FEu);
         assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
-               expectedStackPointers[programIndex]);
+               testCases[testCaseIndex].expectedStackPointer);
 
         stackBase = processor.segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_STACK];
         assert(memory[(stackBase + 0x01FEu) & HYPERDOS_X86_ADDRESS_MASK] == 0x00u);
         assert(memory[(stackBase + 0x01FFu) & HYPERDOS_X86_ADDRESS_MASK] == 0x03u);
-        if (programIndex == 1u)
+        if (testCaseIndex == 1u)
         {
             assert(memory[(stackBase + 0x01FCu) & HYPERDOS_X86_ADDRESS_MASK] == 0xFEu);
             assert(memory[(stackBase + 0x01FDu) & HYPERDOS_X86_ADDRESS_MASK] == 0x01u);
         }
-        if (programIndex == 2u)
+        if (testCaseIndex == 2u)
         {
             assert(memory[(stackBase + 0x01FCu) & HYPERDOS_X86_ADDRESS_MASK] == 0xEFu);
             assert(memory[(stackBase + 0x01FDu) & HYPERDOS_X86_ADDRESS_MASK] == 0xBEu);
@@ -1428,15 +1435,42 @@ static void test_80186_unused_operation_code_interrupt_for_model(hyperdos_x86_pr
         const uint8_t* program;
         size_t         programSize;
     } programs[] = {
-        {operationCode0FProgram,           sizeof(operationCode0FProgram)          },
-        {operationCode63Program,           sizeof(operationCode63Program)          },
-        {operationCode64Program,           sizeof(operationCode64Program)          },
-        {operationCode65Program,           sizeof(operationCode65Program)          },
-        {operationCode66Program,           sizeof(operationCode66Program)          },
-        {operationCode67Program,           sizeof(operationCode67Program)          },
-        {operationCodeF1Program,           sizeof(operationCodeF1Program)          },
-        {operationCodeFEGroupSevenProgram, sizeof(operationCodeFEGroupSevenProgram)},
-        {operationCodeFFGroupSevenProgram, sizeof(operationCodeFFGroupSevenProgram)},
+        {
+         .program     = operationCode0FProgram,
+         .programSize = sizeof(operationCode0FProgram),
+         },
+        {
+         .program     = operationCode63Program,
+         .programSize = sizeof(operationCode63Program),
+         },
+        {
+         .program     = operationCode64Program,
+         .programSize = sizeof(operationCode64Program),
+         },
+        {
+         .program     = operationCode65Program,
+         .programSize = sizeof(operationCode65Program),
+         },
+        {
+         .program     = operationCode66Program,
+         .programSize = sizeof(operationCode66Program),
+         },
+        {
+         .program     = operationCode67Program,
+         .programSize = sizeof(operationCode67Program),
+         },
+        {
+         .program     = operationCodeF1Program,
+         .programSize = sizeof(operationCodeF1Program),
+         },
+        {
+         .program     = operationCodeFEGroupSevenProgram,
+         .programSize = sizeof(operationCodeFEGroupSevenProgram),
+         },
+        {
+         .program     = operationCodeFFGroupSevenProgram,
+         .programSize = sizeof(operationCodeFFGroupSevenProgram),
+         },
     };
     size_t programIndex = 0u;
 

@@ -454,10 +454,12 @@ static int hyperdos_pc_disk_image_initialize_memory(hyperdos_pc_disk_image* disk
                                                     uint8_t                 isHardDisk,
                                                     uint8_t                 readOnly)
 {
-    static const hyperdos_pc_disk_operations memoryDiskOperations = {hyperdos_pc_memory_disk_read_sectors,
-                                                                     hyperdos_pc_memory_disk_write_sectors,
-                                                                     hyperdos_pc_memory_disk_flush,
-                                                                     hyperdos_pc_memory_disk_destroy};
+    static const hyperdos_pc_disk_operations memoryDiskOperations = {
+        .readSectors  = hyperdos_pc_memory_disk_read_sectors,
+        .writeSectors = hyperdos_pc_memory_disk_write_sectors,
+        .flush        = hyperdos_pc_memory_disk_flush,
+        .destroy      = hyperdos_pc_memory_disk_destroy,
+    };
     hyperdos_pc_memory_disk_context*         memoryDiskContext    = NULL;
 
     if (bytes == NULL || byteCount == 0u || byteCount % HYPERDOS_PC_DISK_IMAGE_DEFAULT_SECTOR_SIZE != 0u)
