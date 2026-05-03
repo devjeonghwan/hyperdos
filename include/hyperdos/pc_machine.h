@@ -35,6 +35,7 @@ typedef struct hyperdos_pc_machine_boot_configuration
     uint8_t                                                floppyDriveCount;
     uint8_t                                                fixedDiskDriveCount;
     uint8_t                                                coprocessorEnabled;
+    hyperdos_x87_model                                     coprocessorModel;
     uint8_t                                                divideErrorReturnsToFaultingInstruction;
     hyperdos_pc_keyboard_bios_lock_function                lockKeyboard;
     hyperdos_pc_keyboard_bios_lock_function                unlockKeyboard;

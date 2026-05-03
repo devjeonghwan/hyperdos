@@ -41,6 +41,13 @@
 #define HYPERDOS_8087_TAG_WORD_DEFAULT                                            0xFFFFu
 #define HYPERDOS_8087_REGISTER_COUNT                                              8u
 
+typedef enum hyperdos_x87_model
+{
+    HYPERDOS_X87_MODEL_NONE = 0,
+    HYPERDOS_X87_MODEL_8087,
+    HYPERDOS_X87_MODEL_80287
+} hyperdos_x87_model;
+
 typedef struct hyperdos_random_access_memory
 {
     uint8_t* bytes;
@@ -191,16 +198,18 @@ typedef struct hyperdos_color_graphics_adapter
 
 typedef struct hyperdos_8087
 {
-    long double registers[HYPERDOS_8087_REGISTER_COUNT];
-    uint8_t     registerTags[HYPERDOS_8087_REGISTER_COUNT];
-    uint16_t    controlWord;
-    uint16_t    statusWord;
-    uint16_t    tagWord;
-    uint16_t    lastInstructionOffset;
-    uint16_t    lastInstructionSegment;
-    uint16_t    lastOperandOffset;
-    uint16_t    lastOperandSegment;
-    uint8_t     stackTop;
+    long double        registers[HYPERDOS_8087_REGISTER_COUNT];
+    uint8_t            registerTags[HYPERDOS_8087_REGISTER_COUNT];
+    hyperdos_x87_model model;
+    uint16_t           controlWord;
+    uint16_t           statusWord;
+    uint16_t           tagWord;
+    uint16_t           lastInstructionOffset;
+    uint16_t           lastInstructionSegment;
+    uint16_t           lastOperandOffset;
+    uint16_t           lastOperandSegment;
+    uint8_t            stackTop;
+    uint8_t            protectedModeEnabled;
 } hyperdos_8087;
 
 void hyperdos_random_access_memory_initialize(hyperdos_random_access_memory* memory,
@@ -328,6 +337,18 @@ uint8_t hyperdos_color_graphics_adapter_read_input_output_byte(void* device, uin
 void hyperdos_color_graphics_adapter_write_input_output_byte(void* device, uint16_t port, uint8_t value);
 
 const uint8_t* hyperdos_color_graphics_adapter_get_text_memory(const hyperdos_color_graphics_adapter* adapter);
+
+void hyperdos_x87_initialize(hyperdos_8087* coprocessor, hyperdos_x87_model model);
+
+hyperdos_x87_model hyperdos_x87_get_model(const hyperdos_8087* coprocessor);
+
+int hyperdos_x87_is_protected_mode_enabled(const hyperdos_8087* coprocessor);
+
+hyperdos_x86_execution_result hyperdos_x87_wait(hyperdos_x86_processor* processor, void* userContext);
+
+hyperdos_x86_execution_result hyperdos_x87_escape(hyperdos_x86_processor*                     processor,
+                                                  const hyperdos_x86_coprocessor_instruction* instruction,
+                                                  void*                                       userContext);
 
 void hyperdos_8087_initialize(hyperdos_8087* coprocessor);
 

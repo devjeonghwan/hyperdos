@@ -5,13 +5,34 @@ enum
     HYPERDOS_PC_MACHINE_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE = 2u
 };
 
+static hyperdos_x87_model hyperdos_pc_machine_get_coprocessor_model(
+        const hyperdos_pc_machine_boot_configuration* configuration)
+{
+    if (configuration->coprocessorModel != HYPERDOS_X87_MODEL_NONE)
+    {
+        return configuration->coprocessorModel;
+    }
+    if (configuration->coprocessorEnabled == 0u)
+    {
+        return HYPERDOS_X87_MODEL_NONE;
+    }
+    if (configuration->processorModel == HYPERDOS_X86_PROCESSOR_MODEL_80286)
+    {
+        return HYPERDOS_X87_MODEL_80287;
+    }
+    return HYPERDOS_X87_MODEL_8087;
+}
+
 int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                          machine,
                                             const hyperdos_pc_machine_boot_configuration* configuration)
 {
+    hyperdos_x87_model coprocessorModel = HYPERDOS_X87_MODEL_NONE;
+
     if (machine == NULL || configuration == NULL)
     {
         return 0;
     }
+    coprocessorModel = hyperdos_pc_machine_get_coprocessor_model(configuration);
 
     hyperdos_pc_keyboard_bios_reset(&machine->keyboardBios);
     hyperdos_pc_system_bios_reset(&machine->systemBios);
@@ -96,14 +117,22 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
                                         &machine->keyboardBiosInterface,
                                         &machine->diskBiosInterface,
                                         &machine->videoBiosInterface,
-                                        configuration->coprocessorEnabled,
+                                        (uint8_t)(coprocessorModel != HYPERDOS_X87_MODEL_NONE),
                                         configuration->drainKeyboardInput,
                                         configuration->traceDiskBios,
                                         configuration->userContext);
 
-    if (!configuration->coprocessorEnabled)
+    if (coprocessorModel == HYPERDOS_X87_MODEL_NONE)
     {
         hyperdos_x86_attach_coprocessor(&machine->pc.processor, NULL, NULL, NULL);
+    }
+    else
+    {
+        hyperdos_x87_initialize(&machine->pc.floatingPointUnit, coprocessorModel);
+        hyperdos_x86_attach_coprocessor(&machine->pc.processor,
+                                        hyperdos_x87_wait,
+                                        hyperdos_x87_escape,
+                                        &machine->pc.floatingPointUnit);
     }
     machine->pc.processor.divideErrorReturnsToFaultingInstruction =
             configuration->divideErrorReturnsToFaultingInstruction;

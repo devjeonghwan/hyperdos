@@ -153,6 +153,11 @@ typedef struct test_coprocessor_escape_context
     size_t escapeCallCount;
 } test_coprocessor_escape_context;
 
+typedef struct test_coprocessor_wait_context
+{
+    size_t waitCallCount;
+} test_coprocessor_wait_context;
+
 static void test_configure_assertion_reporting(void)
 {
 #if defined(_MSC_VER)
@@ -201,6 +206,19 @@ static hyperdos_x86_execution_result test_coprocessor_escape_records_call(
     if (context != NULL)
     {
         ++context->escapeCallCount;
+    }
+    return HYPERDOS_X86_EXECUTION_OK;
+}
+
+static hyperdos_x86_execution_result test_coprocessor_wait_records_call(hyperdos_x86_processor* processor,
+                                                                        void*                   userContext)
+{
+    test_coprocessor_wait_context* context = (test_coprocessor_wait_context*)userContext;
+
+    (void)processor;
+    if (context != NULL)
+    {
+        ++context->waitCallCount;
     }
     return HYPERDOS_X86_EXECUTION_OK;
 }
@@ -451,6 +469,7 @@ static void test_80186_shift_rotate_immediate_count(void)
     static const hyperdos_x86_processor_model supportedProcessorModels[] = {
         HYPERDOS_X86_PROCESSOR_MODEL_80186,
         HYPERDOS_X86_PROCESSOR_MODEL_80188,
+        HYPERDOS_X86_PROCESSOR_MODEL_80286,
     };
     size_t processorModelIndex = 0u;
 
@@ -698,6 +717,7 @@ static void test_80186_shift_rotate_immediate_matrix(void)
 {
     test_80186_shift_rotate_immediate_matrix_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_shift_rotate_immediate_matrix_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_shift_rotate_immediate_matrix_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_segment_boundary_word_write(hyperdos_x86_processor_model processorModel, int wrapsAtSegmentBoundary)
@@ -754,6 +774,7 @@ static void test_segment_boundary_word_write_policy(void)
     test_segment_boundary_word_write(HYPERDOS_X86_PROCESSOR_MODEL_8088, 1);
     test_segment_boundary_word_write(HYPERDOS_X86_PROCESSOR_MODEL_80186, 0);
     test_segment_boundary_word_write(HYPERDOS_X86_PROCESSOR_MODEL_80188, 0);
+    test_segment_boundary_word_write(HYPERDOS_X86_PROCESSOR_MODEL_80286, 0);
 }
 
 static void test_push_stack_pointer_program(hyperdos_x86_processor_model processorModel,
@@ -816,6 +837,7 @@ static void test_push_stack_pointer_model_policy(void)
     test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_8088, 0x01FEu);
     test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186, 0x01FEu);
     test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188, 0x01FEu);
+    test_push_stack_pointer_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286, 0x0200u);
 }
 
 static void test_80186_basic_stack_instructions_for_model(hyperdos_x86_processor_model processorModel)
@@ -865,6 +887,7 @@ static void test_80186_basic_stack_instructions(void)
 {
     test_80186_basic_stack_instructions_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_basic_stack_instructions_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_basic_stack_instructions_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_80186_immediate_signed_multiply_program(hyperdos_x86_processor_model        processorModel,
@@ -982,6 +1005,7 @@ static void test_80186_immediate_signed_multiply(void)
 {
     test_80186_immediate_signed_multiply_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_immediate_signed_multiply_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_immediate_signed_multiply_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_80186_bound_passes_for_model(hyperdos_x86_processor_model processorModel)
@@ -1078,8 +1102,10 @@ static void test_80186_bound_instruction(void)
 {
     test_80186_bound_passes_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_bound_passes_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_bound_passes_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
     test_80186_bound_failure_uses_interrupt_vector_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_bound_failure_uses_interrupt_vector_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_bound_failure_uses_interrupt_vector_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_80186_enter_for_model(hyperdos_x86_processor_model processorModel)
@@ -1201,6 +1227,7 @@ static void test_80186_enter_instruction(void)
 {
     test_80186_enter_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_enter_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_enter_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_80186_input_string_for_model(hyperdos_x86_processor_model processorModel)
@@ -1363,8 +1390,10 @@ static void test_80186_input_output_string_instructions(void)
 {
     test_80186_input_string_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_input_string_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_input_string_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
     test_80186_output_string_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_output_string_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_output_string_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_install_offset_capture_interrupt_handler(uint8_t* memory, uint8_t interruptNumber)
@@ -1505,10 +1534,22 @@ static void test_80186_bound_fault_interrupt_does_not_dispatch_single_step_for_m
 
 static void test_80186_fault_interrupts_do_not_dispatch_single_step(void)
 {
+    static const uint8_t unusedOperationCodeProgram[] = {
+        0x63u,
+        0xF4u,
+    };
+
     test_80186_fault_interrupts_do_not_dispatch_single_step_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_fault_interrupts_do_not_dispatch_single_step_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_fault_interrupt_does_not_dispatch_single_step_for_program(HYPERDOS_X86_PROCESSOR_MODEL_80286,
+                                                                   6u,
+                                                                   unusedOperationCodeProgram,
+                                                                   sizeof(unusedOperationCodeProgram),
+                                                                   HYPERDOS_X86_DOS_PROGRAM_OFFSET,
+                                                                   0);
     test_80186_bound_fault_interrupt_does_not_dispatch_single_step_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_bound_fault_interrupt_does_not_dispatch_single_step_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_bound_fault_interrupt_does_not_dispatch_single_step_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_8086_pop_code_segment_operation_code_for_model(hyperdos_x86_processor_model processorModel)
@@ -1642,6 +1683,7 @@ static void test_80186_unused_operation_code_interrupt(void)
 {
     test_80186_unused_operation_code_interrupt_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
     test_80186_unused_operation_code_interrupt_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+    test_80186_unused_operation_code_interrupt_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286);
 }
 
 static void test_80186_escape_trap_interrupt_for_model(hyperdos_x86_processor_model processorModel)
@@ -1746,6 +1788,57 @@ static void test_80186_escape_trap_interrupt(void)
     test_80186_escape_trap_precedes_coprocessor_handler();
 }
 
+static void test_80186_relocation_register_escape_trap_bit_for_model(hyperdos_x86_processor_model processorModel)
+{
+    enum
+    {
+        TEST_80186_RELOCATION_REGISTER_RESET_VALUE = 0x20FFu,
+        TEST_80186_RELOCATION_REGISTER_ESCAPE_TRAP = 0x4000u
+    };
+    static const uint8_t escapeTrapProgram[] = {
+        0xD8u,
+        0xC0u,
+        0xF4u,
+    };
+    uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor        processor;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, processorModel);
+    assert(hyperdos_x86_get_relocation_register(&processor) == TEST_80186_RELOCATION_REGISTER_RESET_VALUE);
+
+    hyperdos_x86_set_escape_trap_enabled(&processor, 1);
+    assert((hyperdos_x86_get_relocation_register(&processor) & TEST_80186_RELOCATION_REGISTER_ESCAPE_TRAP) != 0u);
+    hyperdos_x86_set_escape_trap_enabled(&processor, 0);
+    assert((hyperdos_x86_get_relocation_register(&processor) & TEST_80186_RELOCATION_REGISTER_ESCAPE_TRAP) == 0u);
+
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         escapeTrapProgram,
+                                         sizeof(escapeTrapProgram),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    test_install_offset_capture_interrupt_handler(memory, 7u);
+    hyperdos_x86_set_relocation_register(&processor,
+                                         (uint16_t)(TEST_80186_RELOCATION_REGISTER_RESET_VALUE |
+                                                    TEST_80186_RELOCATION_REGISTER_ESCAPE_TRAP));
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           HYPERDOS_X86_DOS_PROGRAM_OFFSET);
+    free(memory);
+}
+
+static void test_80186_relocation_register_escape_trap_bit(void)
+{
+    test_80186_relocation_register_escape_trap_bit_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80186);
+    test_80186_relocation_register_escape_trap_bit_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188);
+}
+
 static void test_8086_flags_reserved_bits_are_fixed(void)
 {
     static const uint8_t program[] = {
@@ -1775,6 +1868,2261 @@ static void test_8086_flags_reserved_bits_are_fixed(void)
     assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
            HYPERDOS_X86_FLAG_RESERVED);
     free(memory);
+}
+
+static void test_80286_flags_high_bits_are_zero(void)
+{
+    static const uint8_t program[] = {
+        0xB8u,
+        0xD5u,
+        0xF0u,
+        0x50u,
+        0x9Du,
+        0x9Cu,
+        0x58u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x00D7u);
+    free(memory);
+}
+
+static void test_80286_real_mode_physical_address_uses_24_bits(void)
+{
+    uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor        processor;
+    uint32_t                      physicalAddress = 0u;
+    hyperdos_x86_execution_result result          = HYPERDOS_X86_EXECUTION_OK;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    hyperdos_x86_set_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0xFFFFu);
+
+    result = hyperdos_x86_translate_logical_to_physical_address(&processor,
+                                                                HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                                                0xFFFFu,
+                                                                &physicalAddress);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(physicalAddress == 0x10FFEFu);
+    free(memory);
+}
+
+static void test_80286_descriptor_table_instructions(void)
+{
+    static const uint8_t program[] = {
+        0xC7u, 0x06u, 0x00u, 0x02u, 0x34u, 0x12u, 0xC6u, 0x06u, 0x02u, 0x02u, 0x78u, 0xC6u, 0x06u, 0x03u, 0x02u,
+        0x56u, 0xC6u, 0x06u, 0x04u, 0x02u, 0x34u, 0xC6u, 0x06u, 0x05u, 0x02u, 0xAAu, 0x0Fu, 0x01u, 0x16u, 0x00u,
+        0x02u, 0x0Fu, 0x01u, 0x06u, 0x08u, 0x02u, 0xC7u, 0x06u, 0x10u, 0x02u, 0xBCu, 0x9Au, 0xC6u, 0x06u, 0x12u,
+        0x02u, 0xF0u, 0xC6u, 0x06u, 0x13u, 0x02u, 0xDEu, 0xC6u, 0x06u, 0x14u, 0x02u, 0xBCu, 0xC6u, 0x06u, 0x15u,
+        0x02u, 0x11u, 0x0Fu, 0x01u, 0x1Eu, 0x10u, 0x02u, 0x0Fu, 0x01u, 0x0Eu, 0x18u, 0x02u, 0xF4u,
+    };
+    static const uint8_t   expectedGlobalDescriptorBytes[]    = {0x34u, 0x12u, 0x78u, 0x56u, 0x34u, 0xFFu};
+    static const uint8_t   expectedInterruptDescriptorBytes[] = {0xBCu, 0x9Au, 0xF0u, 0xDEu, 0xBCu, 0xFFu};
+    uint8_t*               memory                             = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    size_t                 byteIndex = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    for (byteIndex = 0u; byteIndex < sizeof(expectedGlobalDescriptorBytes); ++byteIndex)
+    {
+        uint8_t byteValue = 0u;
+        assert(hyperdos_x86_read_memory_byte(&processor,
+                                             HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                             (uint16_t)(0x0208u + byteIndex),
+                                             &byteValue) == HYPERDOS_X86_EXECUTION_OK);
+        assert(byteValue == expectedGlobalDescriptorBytes[byteIndex]);
+    }
+    for (byteIndex = 0u; byteIndex < sizeof(expectedInterruptDescriptorBytes); ++byteIndex)
+    {
+        uint8_t byteValue = 0u;
+        assert(hyperdos_x86_read_memory_byte(&processor,
+                                             HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                             (uint16_t)(0x0218u + byteIndex),
+                                             &byteValue) == HYPERDOS_X86_EXECUTION_OK);
+        assert(byteValue == expectedInterruptDescriptorBytes[byteIndex]);
+    }
+    free(memory);
+}
+
+static void test_80286_descriptor_table_instruction_segment_override(void)
+{
+    static const uint8_t program[] = {
+        0x26u,
+        0x0Fu,
+        0x01u,
+        0x16u,
+        0x00u,
+        0x02u,
+        0x0Fu,
+        0x01u,
+        0x06u,
+        0x08u,
+        0x02u,
+        0xF4u,
+    };
+    static const uint8_t   sourceDescriptorBytes[]   = {0x78u, 0x56u, 0x34u, 0x12u, 0xF0u, 0x00u};
+    static const uint8_t   expectedDescriptorBytes[] = {0x78u, 0x56u, 0x34u, 0x12u, 0xF0u, 0xFFu};
+    uint8_t*               memory                    = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    size_t                 byteIndex = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, 0x2000u);
+    for (byteIndex = 0u; byteIndex < sizeof(sourceDescriptorBytes); ++byteIndex)
+    {
+        assert(hyperdos_x86_write_memory_byte(&processor,
+                                              HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                              (uint16_t)(0x0200u + byteIndex),
+                                              sourceDescriptorBytes[byteIndex]) == HYPERDOS_X86_EXECUTION_OK);
+    }
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    for (byteIndex = 0u; byteIndex < sizeof(expectedDescriptorBytes); ++byteIndex)
+    {
+        uint8_t byteValue = 0u;
+        assert(hyperdos_x86_read_memory_byte(&processor,
+                                             HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                             (uint16_t)(0x0208u + byteIndex),
+                                             &byteValue) == HYPERDOS_X86_EXECUTION_OK);
+        assert(byteValue == expectedDescriptorBytes[byteIndex]);
+    }
+    free(memory);
+}
+
+static void test_80286_machine_status_word_instructions(void)
+{
+    static const uint8_t program[] = {
+        0xB8u,
+        0x0Eu,
+        0x00u,
+        0x0Fu,
+        0x01u,
+        0xF0u,
+        0x0Fu,
+        0x06u,
+        0x0Fu,
+        0x01u,
+        0xE3u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 0x0006u);
+    free(memory);
+}
+
+static void test_write_80286_segment_descriptor(uint8_t* memory,
+                                                uint32_t descriptorAddress,
+                                                uint32_t baseAddress,
+                                                uint16_t limit,
+                                                uint8_t  access)
+{
+    memory[descriptorAddress + 0u] = (uint8_t)(limit & HYPERDOS_X86_BYTE_MASK);
+    memory[descriptorAddress + 1u] = (uint8_t)(limit >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    memory[descriptorAddress + 2u] = (uint8_t)(baseAddress & HYPERDOS_X86_BYTE_MASK);
+    memory[descriptorAddress + 3u] = (uint8_t)((baseAddress >> HYPERDOS_X86_BYTE_BIT_COUNT) & HYPERDOS_X86_BYTE_MASK);
+    memory[descriptorAddress + 4u] = (uint8_t)((baseAddress >> HYPERDOS_X86_WORD_BIT_COUNT) & HYPERDOS_X86_BYTE_MASK);
+    memory[descriptorAddress + 5u] = access;
+}
+
+static void test_write_80286_interrupt_gate(uint8_t* memory,
+                                            uint32_t gateAddress,
+                                            uint16_t targetOffset,
+                                            uint16_t targetSelector,
+                                            uint8_t  access)
+{
+    memory[gateAddress + 0u] = (uint8_t)(targetOffset & HYPERDOS_X86_BYTE_MASK);
+    memory[gateAddress + 1u] = (uint8_t)(targetOffset >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    memory[gateAddress + 2u] = (uint8_t)(targetSelector & HYPERDOS_X86_BYTE_MASK);
+    memory[gateAddress + 3u] = (uint8_t)(targetSelector >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    memory[gateAddress + 5u] = access;
+}
+
+static void test_write_80286_call_gate(uint8_t* memory,
+                                       uint32_t gateAddress,
+                                       uint16_t targetOffset,
+                                       uint16_t targetSelector,
+                                       uint8_t  parameterWordCount,
+                                       uint8_t  access)
+{
+    memory[gateAddress + 0u] = (uint8_t)(targetOffset & HYPERDOS_X86_BYTE_MASK);
+    memory[gateAddress + 1u] = (uint8_t)(targetOffset >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    memory[gateAddress + 2u] = (uint8_t)(targetSelector & HYPERDOS_X86_BYTE_MASK);
+    memory[gateAddress + 3u] = (uint8_t)(targetSelector >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    memory[gateAddress + 4u] = parameterWordCount;
+    memory[gateAddress + 5u] = access;
+}
+
+static void test_write_80286_task_gate(uint8_t* memory, uint32_t gateAddress, uint16_t targetSelector, uint8_t access)
+{
+    memory[gateAddress + 2u] = (uint8_t)(targetSelector & HYPERDOS_X86_BYTE_MASK);
+    memory[gateAddress + 3u] = (uint8_t)(targetSelector >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    memory[gateAddress + 5u] = access;
+}
+
+static void test_write_80286_task_state_word(uint8_t* memory,
+                                             uint32_t taskStateSegmentAddress,
+                                             uint16_t taskStateSegmentOffset,
+                                             uint16_t value)
+{
+    memory[taskStateSegmentAddress + taskStateSegmentOffset]      = (uint8_t)(value & HYPERDOS_X86_BYTE_MASK);
+    memory[taskStateSegmentAddress + taskStateSegmentOffset + 1u] = (uint8_t)(value >> HYPERDOS_X86_BYTE_BIT_COUNT);
+}
+
+static void test_write_80286_minimal_task_state(uint8_t* memory,
+                                                uint32_t taskStateSegmentAddress,
+                                                uint16_t instructionPointer,
+                                                uint16_t flags,
+                                                uint16_t stackPointer,
+                                                uint16_t codeSelector,
+                                                uint16_t stackSelector,
+                                                uint16_t dataSelector)
+{
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x000Eu, instructionPointer);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x0010u, flags);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x001Au, stackPointer);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x0022u, 0u);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x0024u, codeSelector);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x0026u, stackSelector);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x0028u, dataSelector);
+    test_write_80286_task_state_word(memory, taskStateSegmentAddress, 0x002Au, 0u);
+}
+
+static uint16_t test_read_memory_word(const hyperdos_x86_processor*       processor,
+                                      hyperdos_x86_segment_register_index segmentRegister,
+                                      uint16_t                            offset);
+
+static void test_80286_machine_status_word_can_enter_protected_mode(void)
+{
+    static const uint8_t program[] = {
+        0xB8u,
+        0x01u,
+        0x00u,
+        0x0Fu,
+        0x01u,
+        0xF0u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert((processor.machineStatusWord & 0x0001u) != 0u);
+    free(memory);
+}
+
+static void test_80286_protected_mode_segment_descriptor_loads(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_DATA_DESCRIPTOR_ADDRESS         = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_DATA_DESCRIPTOR_BASE            = 0x1234u,
+        TEST_DATA_DESCRIPTOR_LIMIT           = 0x000Fu,
+        TEST_DATA_DESCRIPTOR_ACCESS          = 0x92u,
+        TEST_DATA_DESCRIPTOR_ACCESSED_ACCESS = 0x93u,
+        TEST_DATA_SELECTOR                   = 0x0008u
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint32_t               linearAddress = 0u;
+    uint8_t                byteValue     = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    hyperdos_x86_set_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, 0u);
+    processor.globalDescriptorTable.base  = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit = 0x000Fu;
+    processor.machineStatusWord           = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_DATA_DESCRIPTOR_ADDRESS,
+                                        TEST_DATA_DESCRIPTOR_BASE,
+                                        TEST_DATA_DESCRIPTOR_LIMIT,
+                                        TEST_DATA_DESCRIPTOR_ACCESS);
+
+    hyperdos_x86_set_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_DATA_SELECTOR);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA) == TEST_DATA_SELECTOR);
+    assert(hyperdos_x86_get_segment_base(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA) == TEST_DATA_DESCRIPTOR_BASE);
+    assert(hyperdos_x86_get_segment_limit(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA) ==
+           TEST_DATA_DESCRIPTOR_LIMIT);
+    assert(hyperdos_x86_get_segment_attributes(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA) ==
+           TEST_DATA_DESCRIPTOR_ACCESSED_ACCESS);
+    assert(memory[TEST_DATA_DESCRIPTOR_ADDRESS + 5u] == TEST_DATA_DESCRIPTOR_ACCESSED_ACCESS);
+
+    assert(hyperdos_x86_translate_logical_to_linear_address(&processor,
+                                                            HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                                            TEST_DATA_DESCRIPTOR_LIMIT,
+                                                            &linearAddress) == HYPERDOS_X86_EXECUTION_OK);
+    assert(linearAddress == TEST_DATA_DESCRIPTOR_BASE + TEST_DATA_DESCRIPTOR_LIMIT);
+    assert(hyperdos_x86_translate_logical_to_linear_address(&processor,
+                                                            HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                                            TEST_DATA_DESCRIPTOR_LIMIT + 1u,
+                                                            &linearAddress) ==
+           HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION);
+    assert(hyperdos_x86_write_memory_byte(&processor,
+                                          HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                          TEST_DATA_DESCRIPTOR_LIMIT,
+                                          0x5Au) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_read_memory_byte(&processor,
+                                         HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                         TEST_DATA_DESCRIPTOR_LIMIT,
+                                         &byteValue) == HYPERDOS_X86_EXECUTION_OK);
+    assert(byteValue == 0x5Au);
+    assert(hyperdos_x86_write_memory_byte(&processor,
+                                          HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                          TEST_DATA_DESCRIPTOR_LIMIT + 1u,
+                                          0xA5u) == HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION);
+    free(memory);
+}
+
+static void test_80286_protected_mode_interrupt_gate_dispatch(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0400u,
+        TEST_CODE_DESCRIPTOR_ADDRESS         = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_INTERRUPT_GATE_ADDRESS          = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 3u * 8u,
+        TEST_PROTECTED_CODE_SELECTOR         = 0x0008u,
+        TEST_PROTECTED_HANDLER_OFFSET        = 0x0200u,
+        TEST_CODE_DESCRIPTOR_ACCESS          = 0x9Au,
+        TEST_INTERRUPT_GATE_ACCESS           = 0x86u
+    };
+    static const uint8_t program[] = {
+        0xB8u,
+        0x01u,
+        0x00u,
+        0x0Fu,
+        0x01u,
+        0xF0u,
+        0xCCu,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_write_memory_byte(&processor,
+                                          HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                          TEST_PROTECTED_HANDLER_OFFSET,
+                                          0xF4u) == HYPERDOS_X86_EXECUTION_OK);
+
+    processor.globalDescriptorTable.base     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit    = 0x000Fu;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 3u * 8u + 7u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_CODE_DESCRIPTOR_ADDRESS,
+                                        HYPERDOS_X86_DEFAULT_DOS_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        TEST_CODE_DESCRIPTOR_ACCESS);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_INTERRUPT_GATE_ADDRESS,
+                                    TEST_PROTECTED_HANDLER_OFFSET,
+                                    TEST_PROTECTED_CODE_SELECTOR,
+                                    TEST_INTERRUPT_GATE_ACCESS);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_PROTECTED_CODE_SELECTOR);
+    assert(hyperdos_x86_get_instruction_pointer_word(&processor) == TEST_PROTECTED_HANDLER_OFFSET + 1u);
+    assert((hyperdos_x86_get_flags_word(&processor) & HYPERDOS_X86_FLAG_INTERRUPT_ENABLE) == 0u);
+    free(memory);
+}
+
+static void test_80286_protected_system_instructions(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE   = 0x0300u,
+        TEST_DATA_DESCRIPTOR_ADDRESS        = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_LOCAL_TABLE_DESCRIPTOR_ADDRESS = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_TASK_DESCRIPTOR_ADDRESS        = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_DATA_SELECTOR                  = 0x0008u,
+        TEST_LOCAL_TABLE_SELECTOR           = 0x0010u,
+        TEST_TASK_SELECTOR                  = 0x0018u,
+        TEST_DATA_DESCRIPTOR_LIMIT          = 0x0042u,
+        TEST_DATA_DESCRIPTOR_ACCESS         = 0x92u,
+        TEST_LOCAL_TABLE_DESCRIPTOR_ACCESS  = 0x82u,
+        TEST_TASK_DESCRIPTOR_ACCESS         = 0x81u
+    };
+    static const uint8_t program[] = {
+        0xB8u, 0x01u, 0x00u, 0x0Fu, 0x01u, 0xF0u, 0xB8u, 0x10u, 0x00u, 0x0Fu, 0x00u, 0xD0u, 0xB8u, 0x18u, 0x00u, 0x0Fu,
+        0x00u, 0xD8u, 0x0Fu, 0x00u, 0xC0u, 0x89u, 0x06u, 0x00u, 0x02u, 0x0Fu, 0x00u, 0xC8u, 0x89u, 0x06u, 0x02u, 0x02u,
+        0xB8u, 0x08u, 0x00u, 0x0Fu, 0x00u, 0xE0u, 0x9Cu, 0x58u, 0x89u, 0x06u, 0x04u, 0x02u, 0xB8u, 0x08u, 0x00u, 0x0Fu,
+        0x00u, 0xE8u, 0x9Cu, 0x58u, 0x89u, 0x06u, 0x06u, 0x02u, 0xB8u, 0x08u, 0x00u, 0x0Fu, 0x02u, 0xC0u, 0x89u, 0x06u,
+        0x08u, 0x02u, 0xB8u, 0x08u, 0x00u, 0x0Fu, 0x03u, 0xC0u, 0x89u, 0x06u, 0x0Au, 0x02u, 0xB8u, 0x08u, 0x00u, 0xBBu,
+        0x0Bu, 0x00u, 0x63u, 0xD8u, 0x89u, 0x06u, 0x0Cu, 0x02u, 0x9Cu, 0x58u, 0x89u, 0x06u, 0x0Eu, 0x02u, 0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    processor.globalDescriptorTable.base  = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit = 0x001Fu;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_DATA_DESCRIPTOR_ADDRESS,
+                                        0x1234u,
+                                        TEST_DATA_DESCRIPTOR_LIMIT,
+                                        TEST_DATA_DESCRIPTOR_ACCESS);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_LOCAL_TABLE_DESCRIPTOR_ADDRESS,
+                                        0x0500u,
+                                        0x0017u,
+                                        TEST_LOCAL_TABLE_DESCRIPTOR_ACCESS);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TASK_DESCRIPTOR_ADDRESS,
+                                        0x0600u,
+                                        0x002Bu,
+                                        TEST_TASK_DESCRIPTOR_ACCESS);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0200u) == TEST_LOCAL_TABLE_SELECTOR);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0202u) == TEST_TASK_SELECTOR);
+    assert((test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0204u) & HYPERDOS_X86_FLAG_ZERO) !=
+           0u);
+    assert((test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0206u) & HYPERDOS_X86_FLAG_ZERO) !=
+           0u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0208u) ==
+           (uint16_t)(TEST_DATA_DESCRIPTOR_ACCESS << HYPERDOS_X86_BYTE_BIT_COUNT));
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x020Au) ==
+           TEST_DATA_DESCRIPTOR_LIMIT);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x020Cu) == 0x000Bu);
+    assert((test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x020Eu) & HYPERDOS_X86_FLAG_ZERO) !=
+           0u);
+    assert(memory[TEST_TASK_DESCRIPTOR_ADDRESS + 5u] == 0x83u);
+    free(memory);
+}
+
+static void test_prepare_80286_protected_execution_state(hyperdos_x86_processor* processor,
+                                                         uint8_t*                memory,
+                                                         uint16_t                codeSelector,
+                                                         uint8_t                 codeAccess,
+                                                         uint16_t                stackSelector,
+                                                         uint8_t                 stackAccess)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE = 0x0300u,
+        TEST_CODE_DESCRIPTOR_ADDRESS      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_STACK_DESCRIPTOR_ADDRESS     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_CODE_BASE                    = 0x2000u,
+        TEST_STACK_BASE                   = 0x4000u
+    };
+
+    processor->globalDescriptorTable.base  = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor->globalDescriptorTable.limit = 0x0017u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_CODE_DESCRIPTOR_ADDRESS,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        codeAccess);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_STACK_DESCRIPTOR_ADDRESS,
+                                        TEST_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        stackAccess);
+    processor->machineStatusWord                                             = 0x0001u;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = codeSelector;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = codeAccess;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = stackSelector;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_STACK_BASE;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = stackAccess;
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER, 0x0800u);
+}
+
+static void test_80286_protected_mode_pop_flags_preserves_system_bits_at_privilege_zero(void)
+{
+    enum
+    {
+        TEST_CODE_BASE      = 0x2000u,
+        TEST_CODE_SELECTOR  = 0x0008u,
+        TEST_STACK_SELECTOR = 0x0010u
+    };
+    static const uint8_t program[] = {
+        0xB8u,
+        0xD5u,
+        0x70u,
+        0x50u,
+        0x9Du,
+        0x9Cu,
+        0x58u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x70D7u);
+    free(memory);
+}
+
+static void test_80286_direct_far_jump_uses_protected_code_descriptor(void)
+{
+    enum
+    {
+        TEST_CODE_BASE            = 0x2000u,
+        TEST_SOURCE_CODE_SELECTOR = 0x0008u,
+        TEST_STACK_SELECTOR       = 0x0010u,
+        TEST_TARGET_CODE_SELECTOR = 0x0018u,
+        TEST_TARGET_DESCRIPTOR    = 0x0300u + 0x0018u,
+        TEST_TARGET_OFFSET        = 0x0100u
+    };
+    static const uint8_t program[] = {
+        0xEAu,
+        (uint8_t)(TEST_TARGET_OFFSET & 0x00FFu),
+        (uint8_t)(TEST_TARGET_OFFSET / 0x0100u),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR / 0x0100u),
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0x34u,
+        0x12u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_TARGET_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_SOURCE_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit = 0x001Fu;
+    test_write_80286_segment_descriptor(memory, TEST_TARGET_DESCRIPTOR, TEST_CODE_BASE, HYPERDOS_X86_WORD_MASK, 0x9Au);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_TARGET_CODE_SELECTOR);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x1234u);
+    free(memory);
+}
+
+static void test_80286_direct_far_call_pushes_protected_return_address(void)
+{
+    enum
+    {
+        TEST_CODE_BASE            = 0x2000u,
+        TEST_SOURCE_CODE_SELECTOR = 0x0008u,
+        TEST_STACK_SELECTOR       = 0x0010u,
+        TEST_TARGET_CODE_SELECTOR = 0x0018u,
+        TEST_TARGET_DESCRIPTOR    = 0x0300u + 0x0018u,
+        TEST_TARGET_OFFSET        = 0x0100u,
+        TEST_RETURN_OFFSET        = 0x0005u
+    };
+    static const uint8_t program[] = {
+        0x9Au,
+        (uint8_t)(TEST_TARGET_OFFSET & 0x00FFu),
+        (uint8_t)(TEST_TARGET_OFFSET / 0x0100u),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR / 0x0100u),
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0x78u,
+        0x56u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_TARGET_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_SOURCE_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit = 0x001Fu;
+    test_write_80286_segment_descriptor(memory, TEST_TARGET_DESCRIPTOR, TEST_CODE_BASE, HYPERDOS_X86_WORD_MASK, 0x9Au);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x5678u);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == TEST_RETURN_OFFSET);
+    assert(test_read_memory_word(&processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_STACK,
+                                 (uint16_t)(stackPointer + HYPERDOS_X86_WORD_SIZE)) == TEST_SOURCE_CODE_SELECTOR);
+    free(memory);
+}
+
+static void test_80286_call_gate_transfers_to_same_privilege_code(void)
+{
+    enum
+    {
+        TEST_CODE_BASE            = 0x2000u,
+        TEST_CODE_SELECTOR        = 0x0008u,
+        TEST_STACK_SELECTOR       = 0x0010u,
+        TEST_CALL_GATE_SELECTOR   = 0x0018u,
+        TEST_CALL_GATE_DESCRIPTOR = 0x0300u + 0x0018u,
+        TEST_TARGET_OFFSET        = 0x0100u,
+        TEST_RETURN_OFFSET        = 0x0005u
+    };
+    static const uint8_t program[] = {
+        0x9Au,
+        0x00u,
+        0x00u,
+        (uint8_t)(TEST_CALL_GATE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_CALL_GATE_SELECTOR / 0x0100u),
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0xADu,
+        0xDEu,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_TARGET_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit = 0x001Fu;
+    test_write_80286_call_gate(memory, TEST_CALL_GATE_DESCRIPTOR, TEST_TARGET_OFFSET, TEST_CODE_SELECTOR, 0u, 0x84u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xDEADu);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == TEST_RETURN_OFFSET);
+    assert(test_read_memory_word(&processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_STACK,
+                                 (uint16_t)(stackPointer + HYPERDOS_X86_WORD_SIZE)) == TEST_CODE_SELECTOR);
+    free(memory);
+}
+
+static void test_80286_io_privilege_violation_dispatches_general_protection_fault(void)
+{
+    enum
+    {
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_CODE_SELECTOR                   = 0x000Bu,
+        TEST_STACK_SELECTOR                  = 0x0013u,
+        TEST_HANDLER_OFFSET                  = 0x0100u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u
+    };
+    static const uint8_t program[] = {
+        0xFAu,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0xCDu,
+        0xABu,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0xFAu,
+                                                 TEST_STACK_SELECTOR,
+                                                 0xF2u);
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 13u * 8u + 7u;
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_GENERAL_PROTECTION_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0xE6u);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, 2u) == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xABCDu);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == 0x0000u);
+    free(memory);
+}
+
+static void test_80286_interrupt_to_inner_privilege_switches_stack(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_RING_THREE_STACK_BASE           = 0x4000u,
+        TEST_RING_ZERO_STACK_BASE            = 0x5000u,
+        TEST_TASK_STATE_SEGMENT_BASE         = 0x0600u,
+        TEST_RING_THREE_CODE_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_RING_THREE_STACK_DESCRIPTOR     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_RING_ZERO_CODE_DESCRIPTOR       = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_RING_ZERO_STACK_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_TASK_STATE_SEGMENT_DESCRIPTOR   = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0028u,
+        TEST_RING_THREE_CODE_SELECTOR        = 0x000Bu,
+        TEST_RING_THREE_STACK_SELECTOR       = 0x0013u,
+        TEST_RING_ZERO_CODE_SELECTOR         = 0x0018u,
+        TEST_RING_ZERO_STACK_SELECTOR        = 0x0020u,
+        TEST_TASK_STATE_SEGMENT_SELECTOR     = 0x0028u,
+        TEST_RING_THREE_STACK_POINTER        = 0x0800u,
+        TEST_RING_ZERO_STACK_POINTER         = 0x0900u,
+        TEST_HANDLER_OFFSET                  = 0x0100u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u
+    };
+    static const uint8_t program[] = {
+        0xFAu,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0x57u,
+        0x13u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    processor.globalDescriptorTable.base     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit    = 0x002Fu;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 13u * 8u + 7u;
+    processor.machineStatusWord              = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xFAu);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_STACK_DESCRIPTOR,
+                                        TEST_RING_THREE_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xF2u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x9Au);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_STACK_DESCRIPTOR,
+                                        TEST_RING_ZERO_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x92u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TASK_STATE_SEGMENT_DESCRIPTOR,
+                                        TEST_TASK_STATE_SEGMENT_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_GENERAL_PROTECTION_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_RING_ZERO_CODE_SELECTOR,
+                                    0x86u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 2u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 3u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER / 0x0100u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 4u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 5u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR / 0x0100u);
+    processor.taskRegisterSelector            = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.selector           = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.base               = TEST_TASK_STATE_SEGMENT_BASE;
+    processor.taskRegister.limit              = 0x002Bu;
+    processor.taskRegister.attributes         = 0x81u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = TEST_RING_THREE_CODE_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = 0xFAu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = TEST_RING_THREE_STACK_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_RING_THREE_STACK_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = 0xF2u;
+    hyperdos_x86_set_instruction_pointer_word(&processor, 0u);
+    hyperdos_x86_set_general_register_word(&processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_RING_THREE_STACK_POINTER);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, 2u) == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x1357u);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_RING_ZERO_CODE_SELECTOR);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK) ==
+           TEST_RING_ZERO_STACK_SELECTOR);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(stackPointer == TEST_RING_ZERO_STACK_POINTER - 12u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == 0x0000u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, (uint16_t)(stackPointer + 10u)) ==
+           TEST_RING_THREE_STACK_SELECTOR);
+    free(memory);
+}
+
+static void test_80286_call_gate_to_inner_privilege_switches_stack_and_copies_parameters(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE  = 0x0300u,
+        TEST_CODE_BASE                     = 0x2000u,
+        TEST_RING_THREE_STACK_BASE         = 0x4000u,
+        TEST_RING_ZERO_STACK_BASE          = 0x5000u,
+        TEST_TASK_STATE_SEGMENT_BASE       = 0x0600u,
+        TEST_RING_THREE_CODE_DESCRIPTOR    = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_RING_THREE_STACK_DESCRIPTOR   = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_RING_ZERO_CODE_DESCRIPTOR     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_RING_ZERO_STACK_DESCRIPTOR    = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_TASK_STATE_SEGMENT_DESCRIPTOR = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0028u,
+        TEST_CALL_GATE_DESCRIPTOR          = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0030u,
+        TEST_RING_THREE_CODE_SELECTOR      = 0x000Bu,
+        TEST_RING_THREE_STACK_SELECTOR     = 0x0013u,
+        TEST_RING_ZERO_CODE_SELECTOR       = 0x0018u,
+        TEST_RING_ZERO_STACK_SELECTOR      = 0x0020u,
+        TEST_TASK_STATE_SEGMENT_SELECTOR   = 0x0028u,
+        TEST_CALL_GATE_SELECTOR            = 0x0033u,
+        TEST_RING_THREE_STACK_POINTER      = 0x0800u,
+        TEST_RING_ZERO_STACK_POINTER       = 0x0900u,
+        TEST_HANDLER_OFFSET                = 0x0100u,
+        TEST_RETURN_OFFSET                 = 0x000Bu
+    };
+    static const uint8_t program[] = {
+        0x68u,
+        0x11u,
+        0x11u,
+        0x68u,
+        0x22u,
+        0x22u,
+        0x9Au,
+        0x00u,
+        0x00u,
+        (uint8_t)(TEST_CALL_GATE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_CALL_GATE_SELECTOR / 0x0100u),
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0x9Au,
+        0xBCu,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    processor.globalDescriptorTable.base  = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit = 0x0037u;
+    processor.machineStatusWord           = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xFAu);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_STACK_DESCRIPTOR,
+                                        TEST_RING_THREE_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xF2u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x9Au);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_STACK_DESCRIPTOR,
+                                        TEST_RING_ZERO_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x92u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TASK_STATE_SEGMENT_DESCRIPTOR,
+                                        TEST_TASK_STATE_SEGMENT_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_call_gate(memory,
+                               TEST_CALL_GATE_DESCRIPTOR,
+                               TEST_HANDLER_OFFSET,
+                               TEST_RING_ZERO_CODE_SELECTOR,
+                               2u,
+                               0xE4u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 2u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 3u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER / 0x0100u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 4u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 5u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR / 0x0100u);
+    processor.taskRegisterSelector            = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.selector           = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.base               = TEST_TASK_STATE_SEGMENT_BASE;
+    processor.taskRegister.limit              = 0x002Bu;
+    processor.taskRegister.attributes         = 0x81u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = TEST_RING_THREE_CODE_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = 0xFAu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = TEST_RING_THREE_STACK_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_RING_THREE_STACK_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = 0xF2u;
+    hyperdos_x86_set_instruction_pointer_word(&processor, 0u);
+    hyperdos_x86_set_general_register_word(&processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_RING_THREE_STACK_POINTER);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xBC9Au);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_RING_ZERO_CODE_SELECTOR);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK) ==
+           TEST_RING_ZERO_STACK_SELECTOR);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(stackPointer == TEST_RING_ZERO_STACK_POINTER - 12u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == TEST_RETURN_OFFSET);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, (uint16_t)(stackPointer + 2u)) ==
+           TEST_RING_THREE_CODE_SELECTOR);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, (uint16_t)(stackPointer + 4u)) ==
+           0x2222u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, (uint16_t)(stackPointer + 6u)) ==
+           0x1111u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, (uint16_t)(stackPointer + 8u)) ==
+           TEST_RING_THREE_STACK_POINTER - 4u);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, (uint16_t)(stackPointer + 10u)) ==
+           TEST_RING_THREE_STACK_SELECTOR);
+    free(memory);
+}
+
+static void test_80286_far_return_to_same_privilege_uses_protected_descriptor(void)
+{
+    enum
+    {
+        TEST_CODE_BASE            = 0x2000u,
+        TEST_CODE_SELECTOR        = 0x0008u,
+        TEST_STACK_SELECTOR       = 0x0010u,
+        TEST_TARGET_CODE_SELECTOR = 0x0018u,
+        TEST_TARGET_DESCRIPTOR    = 0x0300u + 0x0018u,
+        TEST_TARGET_OFFSET        = 0x0100u
+    };
+    static const uint8_t program[] = {
+        0x9Au,
+        (uint8_t)(TEST_TARGET_OFFSET & 0x00FFu),
+        (uint8_t)(TEST_TARGET_OFFSET / 0x0100u),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR / 0x0100u),
+        0xB8u,
+        0x34u,
+        0x12u,
+        0xF4u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0xADu,
+        0xDEu,
+        0xCBu,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_TARGET_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit = 0x001Fu;
+    test_write_80286_segment_descriptor(memory, TEST_TARGET_DESCRIPTOR, TEST_CODE_BASE, HYPERDOS_X86_WORD_MASK, 0x9Au);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x1234u);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) == TEST_CODE_SELECTOR);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) == 0x0800u);
+    free(memory);
+}
+
+static void test_80286_far_return_to_outer_privilege_restores_stack(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE  = 0x0300u,
+        TEST_CODE_BASE                     = 0x2000u,
+        TEST_RING_THREE_STACK_BASE         = 0x4000u,
+        TEST_RING_ZERO_STACK_BASE          = 0x5000u,
+        TEST_TASK_STATE_SEGMENT_BASE       = 0x0600u,
+        TEST_RING_THREE_CODE_DESCRIPTOR    = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_RING_THREE_STACK_DESCRIPTOR   = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_RING_ZERO_CODE_DESCRIPTOR     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_RING_ZERO_STACK_DESCRIPTOR    = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_TASK_STATE_SEGMENT_DESCRIPTOR = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0028u,
+        TEST_CALL_GATE_DESCRIPTOR          = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0030u,
+        TEST_RING_THREE_CODE_SELECTOR      = 0x000Bu,
+        TEST_RING_THREE_STACK_SELECTOR     = 0x0013u,
+        TEST_RING_ZERO_CODE_SELECTOR       = 0x0018u,
+        TEST_RING_ZERO_STACK_SELECTOR      = 0x0020u,
+        TEST_TASK_STATE_SEGMENT_SELECTOR   = 0x0028u,
+        TEST_CALL_GATE_SELECTOR            = 0x0033u,
+        TEST_RING_THREE_STACK_POINTER      = 0x0800u,
+        TEST_RING_ZERO_STACK_POINTER       = 0x0900u,
+        TEST_HANDLER_OFFSET                = 0x0100u
+    };
+    static const uint8_t program[] = {
+        0x68u,
+        0x11u,
+        0x11u,
+        0x68u,
+        0x22u,
+        0x22u,
+        0x9Au,
+        0x00u,
+        0x00u,
+        (uint8_t)(TEST_CALL_GATE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_CALL_GATE_SELECTOR / 0x0100u),
+        0xB8u,
+        0x68u,
+        0x24u,
+        0xF4u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xCAu,
+        0x04u,
+        0x00u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    processor.globalDescriptorTable.base  = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit = 0x0037u;
+    processor.machineStatusWord           = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xFAu);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_STACK_DESCRIPTOR,
+                                        TEST_RING_THREE_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xF2u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x9Au);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_STACK_DESCRIPTOR,
+                                        TEST_RING_ZERO_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x92u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TASK_STATE_SEGMENT_DESCRIPTOR,
+                                        TEST_TASK_STATE_SEGMENT_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_call_gate(memory,
+                               TEST_CALL_GATE_DESCRIPTOR,
+                               TEST_HANDLER_OFFSET,
+                               TEST_RING_ZERO_CODE_SELECTOR,
+                               2u,
+                               0xE4u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 2u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 3u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER / 0x0100u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 4u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 5u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR / 0x0100u);
+    processor.taskRegisterSelector            = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.selector           = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.base               = TEST_TASK_STATE_SEGMENT_BASE;
+    processor.taskRegister.limit              = 0x002Bu;
+    processor.taskRegister.attributes         = 0x81u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = TEST_RING_THREE_CODE_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = 0xFAu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = TEST_RING_THREE_STACK_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_RING_THREE_STACK_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = 0xF2u;
+    hyperdos_x86_set_instruction_pointer_word(&processor, 0u);
+    hyperdos_x86_set_general_register_word(&processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_RING_THREE_STACK_POINTER);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, 5u) == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x2468u);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_RING_THREE_CODE_SELECTOR);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK) ==
+           TEST_RING_THREE_STACK_SELECTOR);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_RING_THREE_STACK_POINTER);
+    free(memory);
+}
+
+static void test_80286_interrupt_return_to_outer_privilege_restores_stack(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_RING_THREE_STACK_BASE           = 0x4000u,
+        TEST_RING_ZERO_STACK_BASE            = 0x5000u,
+        TEST_TASK_STATE_SEGMENT_BASE         = 0x0600u,
+        TEST_RING_THREE_CODE_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_RING_THREE_STACK_DESCRIPTOR     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_RING_ZERO_CODE_DESCRIPTOR       = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_RING_ZERO_STACK_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_TASK_STATE_SEGMENT_DESCRIPTOR   = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0028u,
+        TEST_RING_THREE_CODE_SELECTOR        = 0x000Bu,
+        TEST_RING_THREE_STACK_SELECTOR       = 0x0013u,
+        TEST_RING_ZERO_CODE_SELECTOR         = 0x0018u,
+        TEST_RING_ZERO_STACK_SELECTOR        = 0x0020u,
+        TEST_TASK_STATE_SEGMENT_SELECTOR     = 0x0028u,
+        TEST_RING_THREE_STACK_POINTER        = 0x0800u,
+        TEST_RING_ZERO_STACK_POINTER         = 0x0900u,
+        TEST_HANDLER_OFFSET                  = 0x0100u,
+        TEST_SOFTWARE_INTERRUPT_NUMBER       = 0x30u,
+        TEST_SOFTWARE_INTERRUPT_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE +
+                                               TEST_SOFTWARE_INTERRUPT_NUMBER * 8u
+    };
+    static const uint8_t program[] = {
+        0xCDu,
+        TEST_SOFTWARE_INTERRUPT_NUMBER,
+        0xB8u,
+        0x78u,
+        0x56u,
+        0xF4u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xCFu,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    processor.globalDescriptorTable.base     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit    = 0x002Fu;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = TEST_SOFTWARE_INTERRUPT_NUMBER * 8u + 7u;
+    processor.machineStatusWord              = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xFAu);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_STACK_DESCRIPTOR,
+                                        TEST_RING_THREE_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xF2u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x9Au);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_STACK_DESCRIPTOR,
+                                        TEST_RING_ZERO_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x92u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TASK_STATE_SEGMENT_DESCRIPTOR,
+                                        TEST_TASK_STATE_SEGMENT_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_SOFTWARE_INTERRUPT_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_RING_ZERO_CODE_SELECTOR,
+                                    0xE6u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 2u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 3u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER / 0x0100u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 4u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 5u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR / 0x0100u);
+    processor.taskRegisterSelector            = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.selector           = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.base               = TEST_TASK_STATE_SEGMENT_BASE;
+    processor.taskRegister.limit              = 0x002Bu;
+    processor.taskRegister.attributes         = 0x81u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = TEST_RING_THREE_CODE_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = 0xFAu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = TEST_RING_THREE_STACK_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_RING_THREE_STACK_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = 0xF2u;
+    hyperdos_x86_set_instruction_pointer_word(&processor, 0u);
+    hyperdos_x86_set_general_register_word(&processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_RING_THREE_STACK_POINTER);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, 3u) == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x5678u);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_RING_THREE_CODE_SELECTOR);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK) ==
+           TEST_RING_THREE_STACK_SELECTOR);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_RING_THREE_STACK_POINTER);
+    free(memory);
+}
+
+static void test_80286_far_jump_to_task_state_segment_switches_task(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE = 0x0300u,
+        TEST_CODE_BASE                    = 0x2000u,
+        TEST_STACK_BASE                   = 0x4000u,
+        TEST_CURRENT_TASK_STATE_BASE      = 0x0600u,
+        TEST_TARGET_TASK_STATE_BASE       = 0x0700u,
+        TEST_CODE_DESCRIPTOR              = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_STACK_DESCRIPTOR             = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_CURRENT_TASK_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_TARGET_TASK_DESCRIPTOR       = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_CODE_SELECTOR                = 0x0008u,
+        TEST_STACK_SELECTOR               = 0x0010u,
+        TEST_CURRENT_TASK_SELECTOR        = 0x0018u,
+        TEST_TARGET_TASK_SELECTOR         = 0x0020u,
+        TEST_TARGET_OFFSET                = 0x0100u,
+        TEST_TARGET_STACK_POINTER         = 0x0900u
+    };
+    static const uint8_t program[] = {
+        0xEAu,
+        0x00u,
+        0x00u,
+        (uint8_t)(TEST_TARGET_TASK_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_TARGET_TASK_SELECTOR / 0x0100u),
+    };
+    static const uint8_t targetProgram[] = {
+        0xB8u,
+        0x57u,
+        0x13u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_TARGET_OFFSET, targetProgram, sizeof(targetProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit = 0x0027u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_CURRENT_TASK_DESCRIPTOR,
+                                        TEST_CURRENT_TASK_STATE_BASE,
+                                        0x002Bu,
+                                        0x83u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TARGET_TASK_DESCRIPTOR,
+                                        TEST_TARGET_TASK_STATE_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_minimal_task_state(memory,
+                                        TEST_TARGET_TASK_STATE_BASE,
+                                        TEST_TARGET_OFFSET,
+                                        0x0002u,
+                                        TEST_TARGET_STACK_POINTER,
+                                        TEST_CODE_SELECTOR,
+                                        TEST_STACK_SELECTOR,
+                                        TEST_STACK_SELECTOR);
+    processor.taskRegisterSelector                                        = TEST_CURRENT_TASK_SELECTOR;
+    processor.taskRegister.selector                                       = TEST_CURRENT_TASK_SELECTOR;
+    processor.taskRegister.base                                           = TEST_CURRENT_TASK_STATE_BASE;
+    processor.taskRegister.limit                                          = 0x002Bu;
+    processor.taskRegister.attributes                                     = 0x83u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA].selector = 0u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_DATA].selector  = 0u;
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x1357u);
+    assert(processor.taskRegisterSelector == TEST_TARGET_TASK_SELECTOR);
+    assert(memory[TEST_CURRENT_TASK_DESCRIPTOR + 5u] == 0x81u);
+    assert(memory[TEST_TARGET_TASK_DESCRIPTOR + 5u] == 0x83u);
+    assert(memory[TEST_CURRENT_TASK_STATE_BASE + 0x000Eu] == 0x05u);
+    free(memory);
+}
+
+static void test_80286_task_gate_call_and_nested_task_return(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE = 0x0300u,
+        TEST_CODE_BASE                    = 0x2000u,
+        TEST_STACK_BASE                   = 0x4000u,
+        TEST_CURRENT_TASK_STATE_BASE      = 0x0600u,
+        TEST_TARGET_TASK_STATE_BASE       = 0x0700u,
+        TEST_CODE_DESCRIPTOR              = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_STACK_DESCRIPTOR             = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_CURRENT_TASK_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_TARGET_TASK_DESCRIPTOR       = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_TASK_GATE_DESCRIPTOR         = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0028u,
+        TEST_CODE_SELECTOR                = 0x0008u,
+        TEST_STACK_SELECTOR               = 0x0010u,
+        TEST_CURRENT_TASK_SELECTOR        = 0x0018u,
+        TEST_TARGET_TASK_SELECTOR         = 0x0020u,
+        TEST_TASK_GATE_SELECTOR           = 0x0028u,
+        TEST_TARGET_OFFSET                = 0x0100u,
+        TEST_TARGET_STACK_POINTER         = 0x0900u
+    };
+    static const uint8_t program[] = {
+        0x9Au,
+        0x00u,
+        0x00u,
+        (uint8_t)(TEST_TASK_GATE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_TASK_GATE_SELECTOR / 0x0100u),
+        0xB8u,
+        0xFEu,
+        0xCAu,
+        0xF4u,
+    };
+    static const uint8_t targetProgram[] = {
+        0xCFu,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_TARGET_OFFSET, targetProgram, sizeof(targetProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit = 0x002Fu;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_CURRENT_TASK_DESCRIPTOR,
+                                        TEST_CURRENT_TASK_STATE_BASE,
+                                        0x002Bu,
+                                        0x83u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TARGET_TASK_DESCRIPTOR,
+                                        TEST_TARGET_TASK_STATE_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_task_gate(memory, TEST_TASK_GATE_DESCRIPTOR, TEST_TARGET_TASK_SELECTOR, 0x85u);
+    test_write_80286_minimal_task_state(memory,
+                                        TEST_TARGET_TASK_STATE_BASE,
+                                        TEST_TARGET_OFFSET,
+                                        0x0002u,
+                                        TEST_TARGET_STACK_POINTER,
+                                        TEST_CODE_SELECTOR,
+                                        TEST_STACK_SELECTOR,
+                                        TEST_STACK_SELECTOR);
+    processor.taskRegisterSelector                                        = TEST_CURRENT_TASK_SELECTOR;
+    processor.taskRegister.selector                                       = TEST_CURRENT_TASK_SELECTOR;
+    processor.taskRegister.base                                           = TEST_CURRENT_TASK_STATE_BASE;
+    processor.taskRegister.limit                                          = 0x002Bu;
+    processor.taskRegister.attributes                                     = 0x83u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA].selector = 0u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_DATA].selector  = 0u;
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xCAFEu);
+    assert(processor.taskRegisterSelector == TEST_CURRENT_TASK_SELECTOR);
+    assert(memory[TEST_CURRENT_TASK_DESCRIPTOR + 5u] == 0x83u);
+    assert(memory[TEST_TARGET_TASK_DESCRIPTOR + 5u] == 0x81u);
+    assert(memory[TEST_TARGET_TASK_STATE_BASE + 0x0000u] ==
+           (uint8_t)((uint16_t)TEST_CURRENT_TASK_SELECTOR & HYPERDOS_X86_BYTE_MASK));
+    assert(memory[TEST_CURRENT_TASK_STATE_BASE + 0x000Eu] == 0x05u);
+    free(memory);
+}
+
+static void test_80286_software_interrupt_checks_gate_privilege(void)
+{
+    enum
+    {
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_CODE_SELECTOR                   = 0x000Bu,
+        TEST_STACK_SELECTOR                  = 0x0013u,
+        TEST_HANDLER_OFFSET                  = 0x0100u,
+        TEST_SOFTWARE_INTERRUPT_NUMBER       = 0x30u,
+        TEST_SOFTWARE_INTERRUPT_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE +
+                                               TEST_SOFTWARE_INTERRUPT_NUMBER * 8u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u
+    };
+    static const uint8_t program[] = {
+        0xCDu,
+        TEST_SOFTWARE_INTERRUPT_NUMBER,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0xEFu,
+        0xBEu,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0xFAu,
+                                                 TEST_STACK_SELECTOR,
+                                                 0xF2u);
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = TEST_SOFTWARE_INTERRUPT_NUMBER * 8u + 7u;
+    test_write_80286_interrupt_gate(memory, TEST_SOFTWARE_INTERRUPT_GATE_ADDRESS, 0x0200u, TEST_CODE_SELECTOR, 0x86u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_GENERAL_PROTECTION_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0xE6u);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, 2u) == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xBEEFu);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) ==
+           (uint16_t)(TEST_SOFTWARE_INTERRUPT_NUMBER * 8u + 2u));
+    free(memory);
+}
+
+static void test_80286_protected_data_limit_fault_pushes_error_code(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0400u,
+        TEST_DATA_DESCRIPTOR_ADDRESS         = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_CODE_DESCRIPTOR_ADDRESS         = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u,
+        TEST_DATA_SELECTOR                   = 0x0008u,
+        TEST_CODE_SELECTOR                   = 0x0010u,
+        TEST_HANDLER_OFFSET                  = 0x0300u
+    };
+    static const uint8_t program[] = {
+        0xB8u,
+        0x01u,
+        0x00u,
+        0x0Fu,
+        0x01u,
+        0xF0u,
+        0xB8u,
+        0x08u,
+        0x00u,
+        0x8Eu,
+        0xD8u,
+        0xA0u,
+        0x02u,
+        0x00u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_write_memory_byte(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_HANDLER_OFFSET, 0xF4u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    processor.globalDescriptorTable.base     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit    = 0x0017u;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 13u * 8u + 7u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_DATA_DESCRIPTOR_ADDRESS,
+                                        HYPERDOS_X86_DEFAULT_DOS_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT,
+                                        0x0001u,
+                                        0x92u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_CODE_DESCRIPTOR_ADDRESS,
+                                        HYPERDOS_X86_DEFAULT_DOS_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x9Au);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_GENERAL_PROTECTION_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0x86u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == 0x0000u);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) == TEST_CODE_SELECTOR);
+    assert(hyperdos_x86_get_instruction_pointer_word(&processor) == TEST_HANDLER_OFFSET + 1u);
+    free(memory);
+}
+
+static void test_80286_exception_delivery_fault_dispatches_double_fault(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_RING_THREE_STACK_BASE           = 0x4000u,
+        TEST_RING_ZERO_STACK_BASE            = 0x5000u,
+        TEST_TASK_STATE_SEGMENT_BASE         = 0x0600u,
+        TEST_RING_THREE_CODE_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_RING_THREE_STACK_DESCRIPTOR     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_RING_ZERO_CODE_DESCRIPTOR       = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0018u,
+        TEST_RING_ZERO_STACK_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0020u,
+        TEST_TASK_STATE_SEGMENT_DESCRIPTOR   = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0028u,
+        TEST_RING_THREE_CODE_SELECTOR        = 0x000Bu,
+        TEST_RING_THREE_STACK_SELECTOR       = 0x0013u,
+        TEST_RING_ZERO_CODE_SELECTOR         = 0x0018u,
+        TEST_RING_ZERO_STACK_SELECTOR        = 0x0020u,
+        TEST_TASK_STATE_SEGMENT_SELECTOR     = 0x0028u,
+        TEST_RING_THREE_STACK_POINTER        = 0x0800u,
+        TEST_RING_ZERO_STACK_POINTER         = 0x0900u,
+        TEST_DOUBLE_FAULT_HANDLER_OFFSET     = 0x0100u,
+        TEST_DOUBLE_FAULT_GATE_ADDRESS       = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 8u * 8u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u
+    };
+    static const uint8_t program[] = {
+        0xFAu,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xB8u,
+        0xDFu,
+        0xDFu,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_DOUBLE_FAULT_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    processor.globalDescriptorTable.base     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit    = 0x002Fu;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 13u * 8u + 7u;
+    processor.machineStatusWord              = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xFAu);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_STACK_DESCRIPTOR,
+                                        TEST_RING_THREE_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xF2u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x9Au);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_ZERO_STACK_DESCRIPTOR,
+                                        TEST_RING_ZERO_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0x92u);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_TASK_STATE_SEGMENT_DESCRIPTOR,
+                                        TEST_TASK_STATE_SEGMENT_BASE,
+                                        0x002Bu,
+                                        0x81u);
+    test_write_80286_interrupt_gate(memory, TEST_GENERAL_PROTECTION_GATE_ADDRESS, 0u, 0u, 0x86u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_DOUBLE_FAULT_GATE_ADDRESS,
+                                    TEST_DOUBLE_FAULT_HANDLER_OFFSET,
+                                    TEST_RING_ZERO_CODE_SELECTOR,
+                                    0x86u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 2u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 3u] = (uint8_t)(TEST_RING_ZERO_STACK_POINTER / 0x0100u);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 4u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR & 0x00FFu);
+    memory[TEST_TASK_STATE_SEGMENT_BASE + 5u] = (uint8_t)(TEST_RING_ZERO_STACK_SELECTOR / 0x0100u);
+    processor.taskRegisterSelector            = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.selector           = TEST_TASK_STATE_SEGMENT_SELECTOR;
+    processor.taskRegister.base               = TEST_TASK_STATE_SEGMENT_BASE;
+    processor.taskRegister.limit              = 0x002Bu;
+    processor.taskRegister.attributes         = 0x81u;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = TEST_RING_THREE_CODE_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = 0xFAu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = TEST_RING_THREE_STACK_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_RING_THREE_STACK_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = 0xF2u;
+    hyperdos_x86_set_instruction_pointer_word(&processor, 0u);
+    hyperdos_x86_set_general_register_word(&processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_RING_THREE_STACK_POINTER);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xDFDFu);
+    assert(hyperdos_x86_get_segment_register(&processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE) ==
+           TEST_RING_ZERO_CODE_SELECTOR);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(stackPointer == TEST_RING_ZERO_STACK_POINTER - 6u * HYPERDOS_X86_WORD_SIZE);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == 0x0000u);
+    free(memory);
+}
+
+static void test_80286_double_fault_delivery_fault_shuts_down_processor(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE    = 0x0300u,
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_RING_THREE_STACK_BASE           = 0x4000u,
+        TEST_RING_THREE_CODE_DESCRIPTOR      = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_RING_THREE_STACK_DESCRIPTOR     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_RING_THREE_CODE_SELECTOR        = 0x000Bu,
+        TEST_RING_THREE_STACK_SELECTOR       = 0x0013u,
+        TEST_RING_THREE_STACK_POINTER        = 0x0800u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u
+    };
+    static const uint8_t program[] = {
+        0xFAu,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    processor.globalDescriptorTable.base     = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor.globalDescriptorTable.limit    = 0x0017u;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 13u * 8u + 7u;
+    processor.machineStatusWord              = 0x0001u;
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_CODE_DESCRIPTOR,
+                                        TEST_CODE_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xFAu);
+    test_write_80286_segment_descriptor(memory,
+                                        TEST_RING_THREE_STACK_DESCRIPTOR,
+                                        TEST_RING_THREE_STACK_BASE,
+                                        HYPERDOS_X86_WORD_MASK,
+                                        0xF2u);
+    test_write_80286_interrupt_gate(memory, TEST_GENERAL_PROTECTION_GATE_ADDRESS, 0u, 0u, 0x86u);
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector    = TEST_RING_THREE_CODE_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base        = TEST_CODE_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit       = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes  = 0xFAu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector   = TEST_RING_THREE_STACK_SELECTOR;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].base       = TEST_RING_THREE_STACK_BASE;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit      = HYPERDOS_X86_WORD_MASK;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].attributes = 0xF2u;
+    hyperdos_x86_set_instruction_pointer_word(&processor, 0u);
+    hyperdos_x86_set_general_register_word(&processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_RING_THREE_STACK_POINTER);
+    hyperdos_x86_set_flags_word(&processor, 0x0002u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) ==
+           HYPERDOS_X86_EXECUTION_PROCESSOR_SHUTDOWN);
+    assert(processor.processorShutdownActive != 0u);
+    free(memory);
+}
+
+static void test_80286_not_present_segment_error_code_masks_requested_privilege_level(void)
+{
+    enum
+    {
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE  = 0x0500u,
+        TEST_CODE_BASE                        = 0x2000u,
+        TEST_CODE_SELECTOR                    = 0x0008u,
+        TEST_STACK_SELECTOR                   = 0x0010u,
+        TEST_DATA_SELECTOR                    = 0x001Bu,
+        TEST_DATA_DESCRIPTOR_ADDRESS          = 0x0300u + 0x0018u,
+        TEST_HANDLER_OFFSET                   = 0x0100u,
+        TEST_SEGMENT_NOT_PRESENT_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 11u * 8u
+    };
+    static const uint8_t program[] = {
+        0xB8u,
+        (uint8_t)(TEST_DATA_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_DATA_SELECTOR / 0x0100u),
+        0x8Eu,
+        0xD8u,
+        0xF4u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit    = 0x001Fu;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 11u * 8u + 7u;
+    test_write_80286_segment_descriptor(memory, TEST_DATA_DESCRIPTOR_ADDRESS, 0x6000u, HYPERDOS_X86_WORD_MASK, 0x12u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_SEGMENT_NOT_PRESENT_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0x86u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == 0x0018u);
+    free(memory);
+}
+
+static void test_80286_external_interrupt_descriptor_fault_sets_external_error_code(void)
+{
+    enum
+    {
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_CODE_SELECTOR                   = 0x0008u,
+        TEST_STACK_SELECTOR                  = 0x0010u,
+        TEST_EXTERNAL_INTERRUPT_NUMBER       = 0x30u,
+        TEST_HANDLER_OFFSET                  = 0x0100u,
+        TEST_EXTERNAL_INTERRUPT_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE +
+                                               TEST_EXTERNAL_INTERRUPT_NUMBER * 8u,
+        TEST_SEGMENT_NOT_PRESENT_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 11u * 8u,
+        TEST_EXPECTED_ERROR_CODE              = TEST_EXTERNAL_INTERRUPT_NUMBER * 8u + 0x0003u
+    };
+    static const uint8_t program[] = {
+        0x90u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = TEST_EXTERNAL_INTERRUPT_NUMBER * 8u + 7u;
+    test_write_80286_interrupt_gate(memory, TEST_EXTERNAL_INTERRUPT_GATE_ADDRESS, 0u, TEST_CODE_SELECTOR, 0x06u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_SEGMENT_NOT_PRESENT_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0x86u);
+    hyperdos_x86_set_flags_word(&processor, HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_INTERRUPT_ENABLE);
+
+    assert(hyperdos_x86_request_maskable_interrupt(&processor, TEST_EXTERNAL_INTERRUPT_NUMBER) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) ==
+           TEST_EXPECTED_ERROR_CODE);
+    free(memory);
+}
+
+static void test_80286_direct_far_call_stack_fault_keeps_stack_pointer(void)
+{
+    enum
+    {
+        TEST_CODE_BASE            = 0x2000u,
+        TEST_CODE_SELECTOR        = 0x0008u,
+        TEST_STACK_SELECTOR       = 0x0010u,
+        TEST_TARGET_CODE_SELECTOR = 0x0018u,
+        TEST_TARGET_DESCRIPTOR    = 0x0300u + 0x0018u,
+        TEST_TARGET_OFFSET        = 0x0100u,
+        TEST_STACK_POINTER        = 0x0002u
+    };
+    static const uint8_t program[] = {
+        0x9Au,
+        (uint8_t)(TEST_TARGET_OFFSET & 0x00FFu),
+        (uint8_t)(TEST_TARGET_OFFSET / 0x0100u),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_TARGET_CODE_SELECTOR / 0x0100u),
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit                              = 0x001Fu;
+    processor.segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].limit = 0x0003u;
+    hyperdos_x86_set_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER, TEST_STACK_POINTER);
+    test_write_80286_segment_descriptor(memory, TEST_TARGET_DESCRIPTOR, TEST_CODE_BASE, HYPERDOS_X86_WORD_MASK, 0x9Au);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) ==
+           HYPERDOS_X86_EXECUTION_PROCESSOR_SHUTDOWN);
+    assert(hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_STACK_POINTER);
+    free(memory);
+}
+
+static void test_80286_task_register_invalid_selector_dispatches_general_protection_fault(void)
+{
+    enum
+    {
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE = 0x0500u,
+        TEST_CODE_BASE                       = 0x2000u,
+        TEST_CODE_SELECTOR                   = 0x0008u,
+        TEST_STACK_SELECTOR                  = 0x0010u,
+        TEST_HANDLER_OFFSET                  = 0x0100u,
+        TEST_GENERAL_PROTECTION_GATE_ADDRESS = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 13u * 8u
+    };
+    static const uint8_t program[] = {
+        0xB8u,
+        (uint8_t)(TEST_STACK_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_STACK_SELECTOR / 0x0100u),
+        0x0Fu,
+        0x00u,
+        0xD8u,
+        0xF4u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 13u * 8u + 7u;
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_GENERAL_PROTECTION_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0x86u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) == TEST_STACK_SELECTOR);
+    free(memory);
+}
+
+static void test_80286_local_descriptor_table_not_present_dispatches_segment_not_present_fault(void)
+{
+    enum
+    {
+        TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE   = 0x0500u,
+        TEST_CODE_BASE                         = 0x2000u,
+        TEST_CODE_SELECTOR                     = 0x0008u,
+        TEST_STACK_SELECTOR                    = 0x0010u,
+        TEST_LOCAL_DESCRIPTOR_TABLE_SELECTOR   = 0x0018u,
+        TEST_LOCAL_DESCRIPTOR_TABLE_DESCRIPTOR = 0x0300u + 0x0018u,
+        TEST_HANDLER_OFFSET                    = 0x0100u,
+        TEST_SEGMENT_NOT_PRESENT_GATE_ADDRESS  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE + 11u * 8u
+    };
+    static const uint8_t program[] = {
+        0xB8u,
+        (uint8_t)(TEST_LOCAL_DESCRIPTOR_TABLE_SELECTOR & 0x00FFu),
+        (uint8_t)(TEST_LOCAL_DESCRIPTOR_TABLE_SELECTOR / 0x0100u),
+        0x0Fu,
+        0x00u,
+        0xD0u,
+        0xF4u,
+    };
+    static const uint8_t handlerProgram[] = {
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint16_t               stackPointer = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    memcpy(memory + TEST_CODE_BASE, program, sizeof(program));
+    memcpy(memory + TEST_CODE_BASE + TEST_HANDLER_OFFSET, handlerProgram, sizeof(handlerProgram));
+    test_prepare_80286_protected_execution_state(&processor,
+                                                 memory,
+                                                 TEST_CODE_SELECTOR,
+                                                 0x9Au,
+                                                 TEST_STACK_SELECTOR,
+                                                 0x92u);
+    processor.globalDescriptorTable.limit    = 0x001Fu;
+    processor.interruptDescriptorTable.base  = TEST_INTERRUPT_DESCRIPTOR_TABLE_BASE;
+    processor.interruptDescriptorTable.limit = 11u * 8u + 7u;
+    test_write_80286_segment_descriptor(memory, TEST_LOCAL_DESCRIPTOR_TABLE_DESCRIPTOR, 0x6000u, 0x0017u, 0x02u);
+    test_write_80286_interrupt_gate(memory,
+                                    TEST_SEGMENT_NOT_PRESENT_GATE_ADDRESS,
+                                    TEST_HANDLER_OFFSET,
+                                    TEST_CODE_SELECTOR,
+                                    0x86u);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    stackPointer = hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, stackPointer) ==
+           TEST_LOCAL_DESCRIPTOR_TABLE_SELECTOR);
+    free(memory);
+}
+
+static void test_80286_processor_extension_fault_for_program(uint16_t       machineStatusWord,
+                                                             const uint8_t* program,
+                                                             size_t         programSize)
+{
+    uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor        processor;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor, program, programSize, HYPERDOS_X86_DEFAULT_DOS_SEGMENT, "", 0u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    test_install_offset_capture_interrupt_handler(memory, 7u);
+    processor.machineStatusWord = machineStatusWord;
+    hyperdos_x86_set_flags_word(&processor, HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_TRAP);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           HYPERDOS_X86_DOS_PROGRAM_OFFSET);
+    free(memory);
+}
+
+static void test_80286_processor_extension_faults(void)
+{
+    enum
+    {
+        TEST_80286_MACHINE_STATUS_WORD_EMULATE_PROCESSOR             = 0x0004u,
+        TEST_80286_MACHINE_STATUS_WORD_MONITOR_PROCESSOR_TASK_SWITCH = 0x000Au
+    };
+    static const uint8_t escapeTrapProgram[] = {
+        0xD8u,
+        0xC0u,
+        0xF4u,
+    };
+    static const uint8_t waitTrapProgram[] = {
+        0x9Bu,
+        0xF4u,
+    };
+
+    test_80286_processor_extension_fault_for_program(TEST_80286_MACHINE_STATUS_WORD_EMULATE_PROCESSOR,
+                                                     escapeTrapProgram,
+                                                     sizeof(escapeTrapProgram));
+    test_80286_processor_extension_fault_for_program(TEST_80286_MACHINE_STATUS_WORD_MONITOR_PROCESSOR_TASK_SWITCH,
+                                                     waitTrapProgram,
+                                                     sizeof(waitTrapProgram));
+}
+
+static void test_80286_processor_extension_trap_precedes_coprocessor_handler(void)
+{
+    enum
+    {
+        TEST_80286_MACHINE_STATUS_WORD_EMULATE_PROCESSOR = 0x0004u
+    };
+    static const uint8_t program[] = {
+        0xD8u,
+        0xC0u,
+        0xF4u,
+    };
+    uint8_t*                        memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor          processor;
+    test_coprocessor_escape_context context;
+
+    assert(memory != NULL);
+    memset(&context, 0, sizeof(context));
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    test_install_offset_capture_interrupt_handler(memory, 7u);
+    processor.machineStatusWord = TEST_80286_MACHINE_STATUS_WORD_EMULATE_PROCESSOR;
+    hyperdos_x86_attach_coprocessor(&processor, NULL, test_coprocessor_escape_records_call, &context);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(context.escapeCallCount == 0u);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           HYPERDOS_X86_DOS_PROGRAM_OFFSET);
+    free(memory);
+}
+
+static void test_80286_wait_uses_coprocessor_when_task_switched_without_monitor_processor(void)
+{
+    enum
+    {
+        TEST_80286_MACHINE_STATUS_WORD_TASK_SWITCHED = 0x0008u
+    };
+    static const uint8_t program[] = {
+        0x9Bu,
+        0xF4u,
+    };
+    uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor        processor;
+    test_coprocessor_wait_context context;
+
+    assert(memory != NULL);
+    memset(&context, 0, sizeof(context));
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    processor.machineStatusWord = TEST_80286_MACHINE_STATUS_WORD_TASK_SWITCHED;
+    hyperdos_x86_attach_coprocessor(&processor, test_coprocessor_wait_records_call, NULL, &context);
+
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(context.waitCallCount == 1u);
+    free(memory);
+}
+
+static uint64_t test_external_bus_word_read_cycle_count_for_model(hyperdos_x86_processor_model processorModel)
+{
+    static const uint8_t program[] = {
+        0xA1u,
+        0x00u,
+        0x02u,
+        0xF4u,
+    };
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+    uint64_t               externalBusCycleCount = 0u;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, processorModel);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_write_memory_byte(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0200u, 0x34u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_write_memory_byte(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0201u, 0x12u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+
+    hyperdos_x86_reset_external_bus_cycle_count(&processor);
+    assert(hyperdos_x86_get_external_bus_cycle_count(&processor) == 0u);
+    assert(hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT) == HYPERDOS_X86_EXECUTION_HALTED);
+    externalBusCycleCount = hyperdos_x86_get_external_bus_cycle_count(&processor);
+    assert(hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0x1234u);
+    free(memory);
+    return externalBusCycleCount;
+}
+
+static void test_external_bus_cycle_count_profiles(void)
+{
+    uint64_t processor8086CycleCount = test_external_bus_word_read_cycle_count_for_model(
+            HYPERDOS_X86_PROCESSOR_MODEL_8086);
+    uint64_t processor8088CycleCount = test_external_bus_word_read_cycle_count_for_model(
+            HYPERDOS_X86_PROCESSOR_MODEL_8088);
+    uint64_t processor80186CycleCount = test_external_bus_word_read_cycle_count_for_model(
+            HYPERDOS_X86_PROCESSOR_MODEL_80186);
+    uint64_t processor80188CycleCount = test_external_bus_word_read_cycle_count_for_model(
+            HYPERDOS_X86_PROCESSOR_MODEL_80188);
+
+    assert(processor8086CycleCount < processor8088CycleCount);
+    assert(processor80186CycleCount < processor80188CycleCount);
+    assert(processor8086CycleCount == processor80186CycleCount);
+    assert(processor8088CycleCount == processor80188CycleCount);
 }
 
 static void test_x86_general_register_word_operations_preserve_upper_word(void)
@@ -3145,6 +5493,8 @@ static void test_signed_divide_minimum_negative_quotient_policy(void)
                                                            HYPERDOS_X86_EXECUTION_HALTED);
     test_signed_divide_minimum_negative_quotient_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80188,
                                                            HYPERDOS_X86_EXECUTION_HALTED);
+    test_signed_divide_minimum_negative_quotient_for_model(HYPERDOS_X86_PROCESSOR_MODEL_80286,
+                                                           HYPERDOS_X86_EXECUTION_HALTED);
 }
 
 static void test_divide_error_uses_interrupt_vector(void)
@@ -4283,6 +6633,78 @@ static void test_8087_single_precision_add(void)
     free(memory);
 }
 
+static void test_80287_set_protected_mode_instruction(void)
+{
+    static const uint8_t setProtectedModeProgram[] = {
+        0xDBu,
+        0xE4u,
+        0xF4u,
+    };
+    uint8_t*                      memory = NULL;
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    hyperdos_x87_initialize(&floatingPointUnit, HYPERDOS_X87_MODEL_80287);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_x87_wait, hyperdos_x87_escape, &floatingPointUnit);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         setProtectedModeProgram,
+                                         sizeof(setProtectedModeProgram),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x87_get_model(&floatingPointUnit) == HYPERDOS_X87_MODEL_80287);
+    assert(hyperdos_x87_is_protected_mode_enabled(&floatingPointUnit));
+    free(memory);
+}
+
+static void test_80287_initialize_instruction_preserves_protected_mode(void)
+{
+    static const uint8_t initializeProgram[] = {
+        0xDBu,
+        0xE4u,
+        0xDBu,
+        0xE3u,
+        0xF4u,
+    };
+    uint8_t*                      memory = NULL;
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+    hyperdos_x87_initialize(&floatingPointUnit, HYPERDOS_X87_MODEL_80287);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_x87_wait, hyperdos_x87_escape, &floatingPointUnit);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         initializeProgram,
+                                         sizeof(initializeProgram),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x87_is_protected_mode_enabled(&floatingPointUnit));
+    assert(floatingPointUnit.controlWord == HYPERDOS_8087_CONTROL_WORD_DEFAULT);
+    assert(floatingPointUnit.statusWord == HYPERDOS_8087_STATUS_WORD_DEFAULT);
+    assert(floatingPointUnit.tagWord == HYPERDOS_8087_TAG_WORD_DEFAULT);
+    hyperdos_x87_initialize(&floatingPointUnit, HYPERDOS_X87_MODEL_80287);
+    assert(!hyperdos_x87_is_protected_mode_enabled(&floatingPointUnit));
+    free(memory);
+}
+
 static void test_pc_text_code_pages(void)
 {
     assert(hyperdos_pc_text_code_page_437_unicode_character('A') == 'A');
@@ -4317,6 +6739,40 @@ static void test_pc_machine_initializes_core_devices(void)
     assert(machine->biosRuntime.videoBiosInterface == &machine->videoBiosInterface);
     assert(hyperdos_pc_system_bios_get_model_identifier(&machine->systemBios) ==
            HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_XT);
+    free(machine);
+}
+
+static void test_pc_machine_selects_80287_for_80286_coprocessor(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel     = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel            = HYPERDOS_PC_MODEL_AT;
+    configuration.coprocessorEnabled = 1u;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert(hyperdos_x87_get_model(&machine->pc.floatingPointUnit) == HYPERDOS_X87_MODEL_80287);
+    assert(machine->biosRuntime.coprocessorEnabled != 0u);
+    free(machine);
+}
+
+static void test_pc_machine_uses_explicit_coprocessor_model(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel   = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel          = HYPERDOS_PC_MODEL_AT;
+    configuration.coprocessorModel = HYPERDOS_X87_MODEL_8087;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert(hyperdos_x87_get_model(&machine->pc.floatingPointUnit) == HYPERDOS_X87_MODEL_8087);
+    assert(machine->biosRuntime.coprocessorEnabled != 0u);
     free(machine);
 }
 
@@ -5003,8 +7459,43 @@ int main(void)
     test_8086_pop_code_segment_operation_code();
     test_80186_unused_operation_code_interrupt();
     test_80186_escape_trap_interrupt();
+    test_80186_relocation_register_escape_trap_bit();
     test_80186_fault_interrupts_do_not_dispatch_single_step();
     test_8086_flags_reserved_bits_are_fixed();
+    test_80286_flags_high_bits_are_zero();
+    test_80286_real_mode_physical_address_uses_24_bits();
+    test_80286_descriptor_table_instructions();
+    test_80286_descriptor_table_instruction_segment_override();
+    test_80286_machine_status_word_instructions();
+    test_80286_machine_status_word_can_enter_protected_mode();
+    test_80286_protected_mode_segment_descriptor_loads();
+    test_80286_protected_mode_interrupt_gate_dispatch();
+    test_80286_protected_system_instructions();
+    test_80286_protected_mode_pop_flags_preserves_system_bits_at_privilege_zero();
+    test_80286_direct_far_jump_uses_protected_code_descriptor();
+    test_80286_direct_far_call_pushes_protected_return_address();
+    test_80286_call_gate_transfers_to_same_privilege_code();
+    test_80286_io_privilege_violation_dispatches_general_protection_fault();
+    test_80286_interrupt_to_inner_privilege_switches_stack();
+    test_80286_call_gate_to_inner_privilege_switches_stack_and_copies_parameters();
+    test_80286_far_return_to_same_privilege_uses_protected_descriptor();
+    test_80286_far_return_to_outer_privilege_restores_stack();
+    test_80286_interrupt_return_to_outer_privilege_restores_stack();
+    test_80286_far_jump_to_task_state_segment_switches_task();
+    test_80286_task_gate_call_and_nested_task_return();
+    test_80286_software_interrupt_checks_gate_privilege();
+    test_80286_protected_data_limit_fault_pushes_error_code();
+    test_80286_exception_delivery_fault_dispatches_double_fault();
+    test_80286_double_fault_delivery_fault_shuts_down_processor();
+    test_80286_not_present_segment_error_code_masks_requested_privilege_level();
+    test_80286_external_interrupt_descriptor_fault_sets_external_error_code();
+    test_80286_direct_far_call_stack_fault_keeps_stack_pointer();
+    test_80286_task_register_invalid_selector_dispatches_general_protection_fault();
+    test_80286_local_descriptor_table_not_present_dispatches_segment_not_present_fault();
+    test_80286_processor_extension_faults();
+    test_80286_processor_extension_trap_precedes_coprocessor_handler();
+    test_80286_wait_uses_coprocessor_when_task_switched_without_monitor_processor();
+    test_external_bus_cycle_count_profiles();
     test_x86_general_register_word_operations_preserve_upper_word();
     test_load_data_segment_pointer();
     test_repeated_byte_move();
@@ -5059,7 +7550,11 @@ int main(void)
     test_wait_and_escape_coprocessor();
     test_8087_environment_instructions();
     test_8087_single_precision_add();
+    test_80287_set_protected_mode_instruction();
+    test_80287_initialize_instruction_preserves_protected_mode();
     test_pc_text_code_pages();
     test_pc_machine_initializes_core_devices();
+    test_pc_machine_selects_80287_for_80286_coprocessor();
+    test_pc_machine_uses_explicit_coprocessor_model();
     return 0;
 }

@@ -390,7 +390,7 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
         return 0;
     }
     hyperdos_x86_attach_bus(&pc->processor, &pc->bus);
-    hyperdos_x86_attach_coprocessor(&pc->processor, hyperdos_8087_wait, hyperdos_8087_escape, &pc->floatingPointUnit);
+    hyperdos_x86_attach_coprocessor(&pc->processor, hyperdos_x87_wait, hyperdos_x87_escape, &pc->floatingPointUnit);
     return 1;
 }
 

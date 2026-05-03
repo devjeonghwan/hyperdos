@@ -36,7 +36,8 @@ typedef enum hyperdos_x86_execution_result
     HYPERDOS_X86_EXECUTION_PROGRAM_TOO_LARGE,
     HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION,
     HYPERDOS_X86_EXECUTION_INTERRUPT_NOT_HANDLED,
-    HYPERDOS_X86_EXECUTION_DIVIDE_ERROR
+    HYPERDOS_X86_EXECUTION_DIVIDE_ERROR,
+    HYPERDOS_X86_EXECUTION_PROCESSOR_SHUTDOWN
 } hyperdos_x86_execution_result;
 
 typedef enum hyperdos_x86_general_register_index
@@ -78,7 +79,8 @@ typedef enum hyperdos_x86_processor_model
     HYPERDOS_X86_PROCESSOR_MODEL_8086  = 0,
     HYPERDOS_X86_PROCESSOR_MODEL_8088  = 1,
     HYPERDOS_X86_PROCESSOR_MODEL_80186 = 2,
-    HYPERDOS_X86_PROCESSOR_MODEL_80188 = 3
+    HYPERDOS_X86_PROCESSOR_MODEL_80188 = 3,
+    HYPERDOS_X86_PROCESSOR_MODEL_80286 = 4
 } hyperdos_x86_processor_model;
 
 typedef struct hyperdos_x86_segment_state
@@ -88,6 +90,12 @@ typedef struct hyperdos_x86_segment_state
     uint32_t limit;
     uint16_t attributes;
 } hyperdos_x86_segment_state;
+
+typedef struct hyperdos_x86_descriptor_table_state
+{
+    uint32_t base;
+    uint16_t limit;
+} hyperdos_x86_descriptor_table_state;
 
 struct hyperdos_x86_processor;
 struct hyperdos_bus;
@@ -119,19 +127,34 @@ typedef struct hyperdos_x86_processor
 {
     uint32_t                                generalRegisters[8];
     hyperdos_x86_segment_state              segmentStates[4];
+    hyperdos_x86_descriptor_table_state     globalDescriptorTable;
+    hyperdos_x86_descriptor_table_state     localDescriptorTable;
+    hyperdos_x86_descriptor_table_state     interruptDescriptorTable;
+    hyperdos_x86_segment_state              taskRegister;
     uint32_t                                instructionPointer;
     uint32_t                                flags;
+    uint16_t                                machineStatusWord;
+    uint16_t                                relocationRegister;
+    uint16_t                                localDescriptorTableSelector;
+    uint16_t                                taskRegisterSelector;
     uint8_t*                                memory;
     size_t                                  memorySize;
     uint64_t                                executedInstructionCount;
+    uint64_t                                externalBusCycleCount;
     uint8_t                                 halted;
     uint8_t                                 maskableInterruptInhibitCount;
+    uint8_t                                 pendingExceptionActive;
+    uint8_t                                 pendingExceptionType;
+    uint8_t                                 pendingExceptionHasErrorCode;
+    uint16_t                                pendingExceptionErrorCode;
+    uint8_t                                 exceptionDeliveryActive;
+    uint8_t                                 exceptionDeliveryType;
+    uint8_t                                 processorShutdownActive;
     uint8_t                                 lastOperationCode;
     uint16_t                                lastInstructionSegment;
     uint32_t                                lastInstructionOffset;
     uint8_t                                 processorModel;
     uint8_t                                 divideErrorReturnsToFaultingInstruction;
-    uint8_t                                 escapeTrapEnabled;
     struct hyperdos_bus*                    bus;
     hyperdos_x86_interrupt_handler          interruptHandler;
     void*                                   userContext;
@@ -159,6 +182,10 @@ void hyperdos_x86_attach_coprocessor(hyperdos_x86_processor*                 pro
 
 void hyperdos_x86_set_escape_trap_enabled(hyperdos_x86_processor* processor, int enabled);
 
+uint16_t hyperdos_x86_get_relocation_register(const hyperdos_x86_processor* processor);
+
+void hyperdos_x86_set_relocation_register(hyperdos_x86_processor* processor, uint16_t value);
+
 void hyperdos_x86_attach_bus(hyperdos_x86_processor* processor, struct hyperdos_bus* bus);
 
 hyperdos_x86_execution_result hyperdos_x86_load_dos_program(hyperdos_x86_processor* processor,
@@ -169,6 +196,10 @@ hyperdos_x86_execution_result hyperdos_x86_load_dos_program(hyperdos_x86_process
                                                             size_t                  commandTailLength);
 
 hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* processor, uint64_t instructionLimit);
+
+uint64_t hyperdos_x86_get_external_bus_cycle_count(const hyperdos_x86_processor* processor);
+
+void hyperdos_x86_reset_external_bus_cycle_count(hyperdos_x86_processor* processor);
 
 int hyperdos_x86_processor_accepts_maskable_interrupt(const hyperdos_x86_processor* processor);
 

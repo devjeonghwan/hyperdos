@@ -232,6 +232,7 @@ enum
     HYPERDOS_8087_ESCAPE_DF                                          = 0xDFu,
     HYPERDOS_8087_REGISTER_MEMORY_INITIALIZE                         = 0xE3u,
     HYPERDOS_8087_REGISTER_MEMORY_CLEAR_EXCEPTIONS                   = 0xE2u,
+    HYPERDOS_8087_REGISTER_MEMORY_SET_PROTECTED_MODE                 = 0xE4u,
     HYPERDOS_8087_REGISTER_MEMORY_STORE_STATUS_ACCUMULATOR           = 0xE0u,
     HYPERDOS_8087_REGISTER_MEMORY_MASK                               = 0x07u,
     HYPERDOS_8087_REGISTER_MEMORY_GROUP_MASK                         = 0xF8u,
@@ -292,6 +293,26 @@ static void hyperdos_8087_update_environment_words(hyperdos_8087* coprocessor)
 {
     hyperdos_8087_update_tag_word(coprocessor);
     hyperdos_8087_update_status_top(coprocessor);
+}
+
+static void hyperdos_8087_initialize_programming_state(hyperdos_8087* coprocessor)
+{
+    size_t registerIndex = 0;
+
+    memset(coprocessor->registers, 0, sizeof(coprocessor->registers));
+    for (registerIndex = 0; registerIndex < HYPERDOS_8087_REGISTER_COUNT; ++registerIndex)
+    {
+        coprocessor->registerTags[registerIndex] = HYPERDOS_8087_STACK_TAG_EMPTY;
+    }
+    coprocessor->controlWord            = HYPERDOS_8087_CONTROL_WORD_DEFAULT;
+    coprocessor->statusWord             = HYPERDOS_8087_STATUS_WORD_DEFAULT;
+    coprocessor->tagWord                = HYPERDOS_8087_TAG_WORD_DEFAULT;
+    coprocessor->lastInstructionOffset  = 0u;
+    coprocessor->lastInstructionSegment = 0u;
+    coprocessor->lastOperandOffset      = 0u;
+    coprocessor->lastOperandSegment     = 0u;
+    coprocessor->stackTop               = 0u;
+    hyperdos_8087_update_environment_words(coprocessor);
 }
 
 static size_t hyperdos_8087_physical_stack_register(const hyperdos_8087* coprocessor, uint8_t stackIndex)
@@ -806,7 +827,7 @@ static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_processor*    
         else if (instruction->operationIndex == 6u)
         {
             hyperdos_8087_store_environment(processor, instruction, coprocessor);
-            hyperdos_8087_initialize(coprocessor);
+            hyperdos_8087_initialize_programming_state(coprocessor);
         }
         else if (instruction->operationIndex == 7u)
         {
@@ -928,7 +949,12 @@ static void hyperdos_8087_execute_register_instruction(hyperdos_x86_processor*  
         }
         else if (instruction->registerMemoryByte == HYPERDOS_8087_REGISTER_MEMORY_INITIALIZE)
         {
-            hyperdos_8087_initialize(coprocessor);
+            hyperdos_8087_initialize_programming_state(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == HYPERDOS_8087_REGISTER_MEMORY_SET_PROTECTED_MODE &&
+                 coprocessor->model == HYPERDOS_X87_MODEL_80287)
+        {
+            coprocessor->protectedModeEnabled = 1u;
         }
         break;
     case HYPERDOS_8087_ESCAPE_DC:
@@ -3292,37 +3318,47 @@ const uint8_t* hyperdos_color_graphics_adapter_get_text_memory(const hyperdos_co
     return adapter->memory;
 }
 
-void hyperdos_8087_initialize(hyperdos_8087* coprocessor)
+void hyperdos_x87_initialize(hyperdos_8087* coprocessor, hyperdos_x87_model model)
 {
-    size_t registerIndex = 0;
-
     if (coprocessor == NULL)
     {
         return;
     }
 
     memset(coprocessor, 0, sizeof(*coprocessor));
-    for (registerIndex = 0; registerIndex < HYPERDOS_8087_REGISTER_COUNT; ++registerIndex)
-    {
-        coprocessor->registerTags[registerIndex] = HYPERDOS_8087_STACK_TAG_EMPTY;
-    }
-    coprocessor->controlWord = HYPERDOS_8087_CONTROL_WORD_DEFAULT;
-    coprocessor->statusWord  = HYPERDOS_8087_STATUS_WORD_DEFAULT;
-    coprocessor->tagWord     = HYPERDOS_8087_TAG_WORD_DEFAULT;
-    coprocessor->stackTop    = 0u;
-    hyperdos_8087_update_environment_words(coprocessor);
+    coprocessor->model = model;
+    hyperdos_8087_initialize_programming_state(coprocessor);
 }
 
-hyperdos_x86_execution_result hyperdos_8087_wait(hyperdos_x86_processor* processor, void* userContext)
+hyperdos_x87_model hyperdos_x87_get_model(const hyperdos_8087* coprocessor)
+{
+    if (coprocessor == NULL)
+    {
+        return HYPERDOS_X87_MODEL_NONE;
+    }
+    return coprocessor->model;
+}
+
+int hyperdos_x87_is_protected_mode_enabled(const hyperdos_8087* coprocessor)
+{
+    return coprocessor != NULL && coprocessor->protectedModeEnabled != 0u;
+}
+
+void hyperdos_8087_initialize(hyperdos_8087* coprocessor)
+{
+    hyperdos_x87_initialize(coprocessor, HYPERDOS_X87_MODEL_8087);
+}
+
+hyperdos_x86_execution_result hyperdos_x87_wait(hyperdos_x86_processor* processor, void* userContext)
 {
     (void)processor;
     (void)userContext;
     return HYPERDOS_X86_EXECUTION_OK;
 }
 
-hyperdos_x86_execution_result hyperdos_8087_escape(hyperdos_x86_processor*                     processor,
-                                                   const hyperdos_x86_coprocessor_instruction* instruction,
-                                                   void*                                       userContext)
+hyperdos_x86_execution_result hyperdos_x87_escape(hyperdos_x86_processor*                     processor,
+                                                  const hyperdos_x86_coprocessor_instruction* instruction,
+                                                  void*                                       userContext)
 {
     hyperdos_8087* coprocessor = (hyperdos_8087*)userContext;
 
@@ -3351,4 +3387,16 @@ hyperdos_x86_execution_result hyperdos_8087_escape(hyperdos_x86_processor*      
 
     hyperdos_8087_update_environment_words(coprocessor);
     return HYPERDOS_X86_EXECUTION_OK;
+}
+
+hyperdos_x86_execution_result hyperdos_8087_wait(hyperdos_x86_processor* processor, void* userContext)
+{
+    return hyperdos_x87_wait(processor, userContext);
+}
+
+hyperdos_x86_execution_result hyperdos_8087_escape(hyperdos_x86_processor*                     processor,
+                                                   const hyperdos_x86_coprocessor_instruction* instruction,
+                                                   void*                                       userContext)
+{
+    return hyperdos_x87_escape(processor, instruction, userContext);
 }

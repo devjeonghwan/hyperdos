@@ -96,8 +96,10 @@ enum
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8088                    = 2102u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186                   = 2103u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188                   = 2104u,
+    HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80286                   = 2105u,
     HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE                        = 2111u,
     HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087                        = 2112u,
+    HYPERDOS_MONITOR_COMMAND_COPROCESSOR_80287                       = 2113u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT                             = 2201u,
     HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT                             = 2202u,
     HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ                = 2301u,
@@ -140,7 +142,8 @@ typedef enum hyperdos_monitor_display_resize_mode
 typedef enum hyperdos_monitor_coprocessor_model
 {
     HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE = 0,
-    HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087
+    HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087,
+    HYPERDOS_MONITOR_COPROCESSOR_MODEL_80287
 } hyperdos_monitor_coprocessor_model;
 
 typedef struct hyperdos_monitor_processor_clock_option
@@ -284,6 +287,8 @@ static UINT get_processor_model_menu_command(hyperdos_x86_processor_model proces
         return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186;
     case HYPERDOS_X86_PROCESSOR_MODEL_80188:
         return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188;
+    case HYPERDOS_X86_PROCESSOR_MODEL_80286:
+        return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80286;
     }
     return HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186;
 }
@@ -300,6 +305,8 @@ static const char* get_processor_model_text(hyperdos_x86_processor_model process
         return "80186";
     case HYPERDOS_X86_PROCESSOR_MODEL_80188:
         return "80188";
+    case HYPERDOS_X86_PROCESSOR_MODEL_80286:
+        return "80286";
     }
     return "80186";
 }
@@ -323,11 +330,43 @@ static int coprocessor_model_is_present(hyperdos_monitor_coprocessor_model copro
     return coprocessorModel != HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
 }
 
+static hyperdos_x87_model get_machine_coprocessor_model(hyperdos_monitor_coprocessor_model coprocessorModel)
+{
+    switch (coprocessorModel)
+    {
+    case HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087:
+        return HYPERDOS_X87_MODEL_8087;
+    case HYPERDOS_MONITOR_COPROCESSOR_MODEL_80287:
+        return HYPERDOS_X87_MODEL_80287;
+    case HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE:
+        break;
+    }
+    return HYPERDOS_X87_MODEL_NONE;
+}
+
+static UINT get_coprocessor_model_menu_command(hyperdos_monitor_coprocessor_model coprocessorModel)
+{
+    switch (coprocessorModel)
+    {
+    case HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087:
+        return HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087;
+    case HYPERDOS_MONITOR_COPROCESSOR_MODEL_80287:
+        return HYPERDOS_MONITOR_COMMAND_COPROCESSOR_80287;
+    case HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE:
+        break;
+    }
+    return HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE;
+}
+
 static const char* get_coprocessor_status_bar_text(void)
 {
     if (globalCoprocessorModel == HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087)
     {
         return "8087";
+    }
+    if (globalCoprocessorModel == HYPERDOS_MONITOR_COPROCESSOR_MODEL_80287)
+    {
+        return "80287";
     }
     return "";
 }
@@ -2196,6 +2235,7 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     machineConfiguration.floppyDriveCount        = (uint8_t)bootState->floppyDriveCount;
     machineConfiguration.fixedDiskDriveCount     = HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT;
     machineConfiguration.coprocessorEnabled      = (uint8_t)coprocessor_model_is_present(globalCoprocessorModel);
+    machineConfiguration.coprocessorModel        = get_machine_coprocessor_model(globalCoprocessorModel);
     machineConfiguration.divideErrorReturnsToFaultingInstruction = (uint8_t)
             globalDivideErrorReturnsToFaultingInstruction;
     machineConfiguration.lockKeyboard                         = lock_keyboard_for_bios;
@@ -5068,7 +5108,7 @@ static void update_machine_model_menu(HWND windowHandle)
     }
     CheckMenuRadioItem(menuHandle,
                        HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8086,
-                       HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188,
+                       HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80286,
                        get_processor_model_menu_command(globalProcessorModel),
                        MF_BYCOMMAND);
     CheckMenuRadioItem(menuHandle,
@@ -5079,10 +5119,8 @@ static void update_machine_model_menu(HWND windowHandle)
                        MF_BYCOMMAND);
     CheckMenuRadioItem(menuHandle,
                        HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE,
-                       HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087,
-                       globalCoprocessorModel == HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087
-                               ? HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087
-                               : HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE,
+                       HYPERDOS_MONITOR_COMMAND_COPROCESSOR_80287,
+                       get_coprocessor_model_menu_command(globalCoprocessorModel),
                        MF_BYCOMMAND);
 }
 
@@ -5333,12 +5371,14 @@ HMENU hyperdos_win32_pc_monitor_create_menu(void)
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_8088, "8088");
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80186, "80186");
     AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188, "80188");
+    AppendMenuA(processorModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80286, "80286");
     AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)processorModelMenuHandle, "Processor");
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT, "XT");
     AppendMenuA(pcModelMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_PC_MODEL_AT, "AT");
     AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)pcModelMenuHandle, "PC Model");
     AppendMenuA(coprocessorMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE, "None");
     AppendMenuA(coprocessorMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087, "8087");
+    AppendMenuA(coprocessorMenuHandle, MF_STRING, HYPERDOS_MONITOR_COMMAND_COPROCESSOR_80287, "80287");
     AppendMenuA(machineMenuHandle, MF_POPUP, (UINT_PTR)coprocessorMenuHandle, "Coprocessor");
     for (processorClockOptionIndex = 0u;
          processorClockOptionIndex < sizeof(globalProcessorClockOptions) / sizeof(globalProcessorClockOptions[0]);
@@ -5546,11 +5586,17 @@ LRESULT CALLBACK hyperdos_win32_pc_monitor_window_procedure(HWND   windowHandle,
         case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80188:
             set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_PROCESSOR_MODEL_80188);
             return 0;
+        case HYPERDOS_MONITOR_COMMAND_PROCESSOR_MODEL_80286:
+            set_processor_model(windowHandle, &globalBootState, HYPERDOS_X86_PROCESSOR_MODEL_80286);
+            return 0;
         case HYPERDOS_MONITOR_COMMAND_COPROCESSOR_NONE:
             set_coprocessor_model(windowHandle, &globalBootState, HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_COPROCESSOR_8087:
             set_coprocessor_model(windowHandle, &globalBootState, HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087);
+            return 0;
+        case HYPERDOS_MONITOR_COMMAND_COPROCESSOR_80287:
+            set_coprocessor_model(windowHandle, &globalBootState, HYPERDOS_MONITOR_COPROCESSOR_MODEL_80287);
             return 0;
         case HYPERDOS_MONITOR_COMMAND_PC_MODEL_XT:
             set_pc_model(windowHandle, &globalBootState, HYPERDOS_PC_MODEL_XT);
@@ -6117,6 +6163,11 @@ static int parse_processor_model_text(const char* text, hyperdos_x86_processor_m
         *processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80188;
         return 1;
     }
+    if (_stricmp(text, "80286") == 0)
+    {
+        *processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+        return 1;
+    }
     return 0;
 }
 
@@ -6244,13 +6295,18 @@ int hyperdos_win32_pc_monitor_configure_from_command_line(const char* commandLin
             globalCoprocessorModel = HYPERDOS_MONITOR_COPROCESSOR_MODEL_8087;
             continue;
         }
-        if (strcmp(argument, "--no-8087") == 0)
+        if (strcmp(argument, "--80287") == 0)
+        {
+            globalCoprocessorModel = HYPERDOS_MONITOR_COPROCESSOR_MODEL_80287;
+            continue;
+        }
+        if (strcmp(argument, "--no-8087") == 0 || strcmp(argument, "--no-coprocessor") == 0)
         {
             globalCoprocessorModel = HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
             continue;
         }
         if (strcmp(argument, "--8086") == 0 || strcmp(argument, "--8088") == 0 || strcmp(argument, "--80186") == 0 ||
-            strcmp(argument, "--80188") == 0)
+            strcmp(argument, "--80188") == 0 || strcmp(argument, "--80286") == 0)
         {
             hyperdos_x86_processor_model processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80186;
             if (!parse_processor_model_text(argument + 2u, &processorModel))
