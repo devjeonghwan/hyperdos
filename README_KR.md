@@ -11,7 +11,7 @@ HyperDOS는 DOS 시대의 운영체제와 소프트웨어를 실행하고 분석
 
 ## 스크린샷
 
-![HyperDOS에서 실행 중인 한국어 MS-DOS](.resources/1_msdos_kr.png)
+![HyperDOS에서 실행 중인 한국어 MS-DOS](.resources/1_msdos.png)
 
 ![HyperDOS에서 실행 중인 한국어 Windows 3.0](.resources/2_win30kr.png)
 

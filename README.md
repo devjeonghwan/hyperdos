@@ -11,7 +11,7 @@ The project is still under active development. Correct hardware and BIOS behavio
 
 ## Screenshots
 
-![Korean MS-DOS running in HyperDOS](.resources/1_msdos_kr.png)
+![Korean MS-DOS running in HyperDOS](.resources/1_msdos.png)
 
 ![Korean Windows 3.0 running in HyperDOS](.resources/2_win30kr.png)
 
