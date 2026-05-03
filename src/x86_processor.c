@@ -39,6 +39,8 @@ enum
     HYPERDOS_X86_FAR_POINTER_SEGMENT_OFFSET               = 2u,
     HYPERDOS_X86_RESET_CODE_SEGMENT                       = 0xFFFFu,
     HYPERDOS_X86_RESET_INSTRUCTION_POINTER                = 0x0000u,
+    HYPERDOS_X86_REAL_MODE_SEGMENT_LIMIT                  = 0xFFFFu,
+    HYPERDOS_X86_REAL_MODE_SEGMENT_ATTRIBUTES             = 0x0000u,
     HYPERDOS_X86_DOS_PROGRAM_MAXIMUM_SIZE                 = 0xFF00u,
     HYPERDOS_X86_DOS_STACK_POINTER                        = 0xFFFEu,
     HYPERDOS_X86_DOS_TERMINATE_STUB_OFFSET                = 0x0000u,
@@ -287,30 +289,6 @@ typedef enum hyperdos_x86_architecture_generation
     HYPERDOS_X86_ARCHITECTURE_GENERATION_80186
 } hyperdos_x86_architecture_generation;
 
-typedef enum hyperdos_x86_execution_mode
-{
-    HYPERDOS_X86_EXECUTION_MODE_REAL = 0u
-} hyperdos_x86_execution_mode;
-
-typedef enum hyperdos_x86_external_bus_profile
-{
-    HYPERDOS_X86_EXTERNAL_BUS_PROFILE_8086 = 0u,
-    HYPERDOS_X86_EXTERNAL_BUS_PROFILE_8088,
-    HYPERDOS_X86_EXTERNAL_BUS_PROFILE_80186,
-    HYPERDOS_X86_EXTERNAL_BUS_PROFILE_80188
-} hyperdos_x86_external_bus_profile;
-
-typedef enum hyperdos_x86_operand_address_profile
-{
-    HYPERDOS_X86_OPERAND_ADDRESS_PROFILE_REAL_MODE_16_BIT = 0u
-} hyperdos_x86_operand_address_profile;
-
-typedef enum hyperdos_x86_exception_model
-{
-    HYPERDOS_X86_EXCEPTION_MODEL_8086 = 0u,
-    HYPERDOS_X86_EXCEPTION_MODEL_80186
-} hyperdos_x86_exception_model;
-
 typedef enum hyperdos_x86_shift_rotate_count_policy
 {
     HYPERDOS_X86_SHIFT_ROTATE_COUNT_POLICY_RAW = 0u,
@@ -346,10 +324,6 @@ typedef enum hyperdos_x86_operation_code_validity_action
 typedef struct hyperdos_x86_processor_descriptor
 {
     hyperdos_x86_architecture_generation        architectureGeneration;
-    hyperdos_x86_execution_mode                 executionMode;
-    hyperdos_x86_external_bus_profile           externalBusProfile;
-    hyperdos_x86_operand_address_profile        operandAddressProfile;
-    hyperdos_x86_exception_model                exceptionModel;
     hyperdos_x86_shift_rotate_count_policy      shiftRotateCountPolicy;
     hyperdos_x86_signed_divide_quotient_policy  signedDivideQuotientPolicy;
     hyperdos_x86_segment_boundary_access_policy segmentBoundaryAccessPolicy;
@@ -363,6 +337,20 @@ typedef struct hyperdos_x86_operation_code_validity_rule
     hyperdos_x86_operation_code_validity_action action80186;
 } hyperdos_x86_operation_code_validity_rule;
 
+typedef struct hyperdos_x86_decoded_instruction
+{
+    uint8_t                             operationCode;
+    uint8_t                             operationMap;
+    uint8_t                             hasRegisterMemoryByte;
+    uint8_t                             registerMemoryByte;
+    uint8_t                             operandSize;
+    uint8_t                             addressSize;
+    uint8_t                             segmentOverrideActive;
+    hyperdos_x86_segment_register_index segmentOverride;
+    hyperdos_x86_repeat_mode            repeatMode;
+    uint8_t                             lockPrefixActive;
+} hyperdos_x86_decoded_instruction;
+
 typedef struct hyperdos_x86_decoded_operand
 {
     uint8_t                             isRegister;
@@ -375,10 +363,6 @@ typedef struct hyperdos_x86_decoded_operand
 static const hyperdos_x86_processor_descriptor hyperdos_x86_processor_descriptors[] = {
     [HYPERDOS_X86_PROCESSOR_MODEL_8086] = {
         .architectureGeneration        = HYPERDOS_X86_ARCHITECTURE_GENERATION_8086,
-        .executionMode                 = HYPERDOS_X86_EXECUTION_MODE_REAL,
-        .externalBusProfile            = HYPERDOS_X86_EXTERNAL_BUS_PROFILE_8086,
-        .operandAddressProfile         = HYPERDOS_X86_OPERAND_ADDRESS_PROFILE_REAL_MODE_16_BIT,
-        .exceptionModel                = HYPERDOS_X86_EXCEPTION_MODEL_8086,
         .shiftRotateCountPolicy        = HYPERDOS_X86_SHIFT_ROTATE_COUNT_POLICY_RAW,
         .signedDivideQuotientPolicy    = HYPERDOS_X86_SIGNED_DIVIDE_QUOTIENT_POLICY_EXCLUDE_MINIMUM_NEGATIVE,
         .segmentBoundaryAccessPolicy   = HYPERDOS_X86_SEGMENT_BOUNDARY_ACCESS_POLICY_WRAP_OFFSET,
@@ -386,10 +370,6 @@ static const hyperdos_x86_processor_descriptor hyperdos_x86_processor_descriptor
     },
     [HYPERDOS_X86_PROCESSOR_MODEL_8088] = {
         .architectureGeneration        = HYPERDOS_X86_ARCHITECTURE_GENERATION_8086,
-        .executionMode                 = HYPERDOS_X86_EXECUTION_MODE_REAL,
-        .externalBusProfile            = HYPERDOS_X86_EXTERNAL_BUS_PROFILE_8088,
-        .operandAddressProfile         = HYPERDOS_X86_OPERAND_ADDRESS_PROFILE_REAL_MODE_16_BIT,
-        .exceptionModel                = HYPERDOS_X86_EXCEPTION_MODEL_8086,
         .shiftRotateCountPolicy        = HYPERDOS_X86_SHIFT_ROTATE_COUNT_POLICY_RAW,
         .signedDivideQuotientPolicy    = HYPERDOS_X86_SIGNED_DIVIDE_QUOTIENT_POLICY_EXCLUDE_MINIMUM_NEGATIVE,
         .segmentBoundaryAccessPolicy   = HYPERDOS_X86_SEGMENT_BOUNDARY_ACCESS_POLICY_WRAP_OFFSET,
@@ -397,10 +377,6 @@ static const hyperdos_x86_processor_descriptor hyperdos_x86_processor_descriptor
     },
     [HYPERDOS_X86_PROCESSOR_MODEL_80186] = {
         .architectureGeneration        = HYPERDOS_X86_ARCHITECTURE_GENERATION_80186,
-        .executionMode                 = HYPERDOS_X86_EXECUTION_MODE_REAL,
-        .externalBusProfile            = HYPERDOS_X86_EXTERNAL_BUS_PROFILE_80186,
-        .operandAddressProfile         = HYPERDOS_X86_OPERAND_ADDRESS_PROFILE_REAL_MODE_16_BIT,
-        .exceptionModel                = HYPERDOS_X86_EXCEPTION_MODEL_80186,
         .shiftRotateCountPolicy        = HYPERDOS_X86_SHIFT_ROTATE_COUNT_POLICY_MASK_TO_FIVE_BITS,
         .signedDivideQuotientPolicy    = HYPERDOS_X86_SIGNED_DIVIDE_QUOTIENT_POLICY_ALLOW_MINIMUM_NEGATIVE,
         .segmentBoundaryAccessPolicy   = HYPERDOS_X86_SEGMENT_BOUNDARY_ACCESS_POLICY_LINEAR_NEXT_BYTE,
@@ -408,10 +384,6 @@ static const hyperdos_x86_processor_descriptor hyperdos_x86_processor_descriptor
     },
     [HYPERDOS_X86_PROCESSOR_MODEL_80188] = {
         .architectureGeneration        = HYPERDOS_X86_ARCHITECTURE_GENERATION_80186,
-        .executionMode                 = HYPERDOS_X86_EXECUTION_MODE_REAL,
-        .externalBusProfile            = HYPERDOS_X86_EXTERNAL_BUS_PROFILE_80188,
-        .operandAddressProfile         = HYPERDOS_X86_OPERAND_ADDRESS_PROFILE_REAL_MODE_16_BIT,
-        .exceptionModel                = HYPERDOS_X86_EXCEPTION_MODEL_80186,
         .shiftRotateCountPolicy        = HYPERDOS_X86_SHIFT_ROTATE_COUNT_POLICY_MASK_TO_FIVE_BITS,
         .signedDivideQuotientPolicy    = HYPERDOS_X86_SIGNED_DIVIDE_QUOTIENT_POLICY_ALLOW_MINIMUM_NEGATIVE,
         .segmentBoundaryAccessPolicy   = HYPERDOS_X86_SEGMENT_BOUNDARY_ACCESS_POLICY_LINEAR_NEXT_BYTE,
@@ -422,40 +394,40 @@ static const hyperdos_x86_processor_descriptor hyperdos_x86_processor_descriptor
 
 static const hyperdos_x86_operation_code_validity_rule hyperdos_x86_operation_code_validity_rules[] = {
     {
-        .operationCode = HYPERDOS_X86_OPERATION_CODE_POP_CODE_SEGMENT,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_POP_CODE_SEGMENT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = HYPERDOS_X86_OPERATION_CODE_POP_CODE_SEGMENT,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_POP_CODE_SEGMENT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
     {
-        .operationCode = 0x63u,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = 0x63u,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
     {
-        .operationCode = 0x64u,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = 0x64u,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
     {
-        .operationCode = 0x65u,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = 0x65u,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
     {
-        .operationCode = 0x66u,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = 0x66u,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
     {
-        .operationCode = 0x67u,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = 0x67u,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
     {
-        .operationCode = 0xF1u,
-        .action8086   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
-        .action80186  = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
-    },
+     .operationCode = 0xF1u,
+     .action8086    = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNSUPPORTED_RESULT,
+     .action80186   = HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT,
+     },
 };
 
 static inline int hyperdos_x86_operation_code_is_in_range(uint8_t operationCode,
@@ -490,6 +462,73 @@ static inline int hyperdos_x86_operation_code_is_input_output_string(uint8_t ope
     return hyperdos_x86_operation_code_is_in_range(operationCode,
                                                    HYPERDOS_X86_OPERATION_CODE_INPUT_STRING_BYTE,
                                                    HYPERDOS_X86_OPERATION_CODE_OUTPUT_STRING_WORD);
+}
+
+static inline uint8_t hyperdos_x86_fetch_instruction_byte(hyperdos_x86_processor* processor);
+
+static void hyperdos_x86_initialize_decoded_instruction(hyperdos_x86_decoded_instruction* instruction)
+{
+    memset(instruction, 0, sizeof(*instruction));
+    instruction->operandSize     = HYPERDOS_X86_WORD_BIT_COUNT;
+    instruction->addressSize     = HYPERDOS_X86_WORD_BIT_COUNT;
+    instruction->segmentOverride = HYPERDOS_X86_SEGMENT_REGISTER_DATA;
+    instruction->repeatMode      = HYPERDOS_X86_REPEAT_NONE;
+}
+
+static hyperdos_x86_execution_result hyperdos_x86_decode_next_instruction(hyperdos_x86_processor*           processor,
+                                                                          hyperdos_x86_decoded_instruction* instruction)
+{
+    if (processor == NULL || instruction == NULL)
+    {
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
+    }
+
+    hyperdos_x86_initialize_decoded_instruction(instruction);
+    for (;;)
+    {
+        instruction->operationCode = hyperdos_x86_fetch_instruction_byte(processor);
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_EXTRA_SEGMENT)
+        {
+            instruction->segmentOverrideActive = 1u;
+            instruction->segmentOverride       = HYPERDOS_X86_SEGMENT_REGISTER_EXTRA;
+            continue;
+        }
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_CODE_SEGMENT)
+        {
+            instruction->segmentOverrideActive = 1u;
+            instruction->segmentOverride       = HYPERDOS_X86_SEGMENT_REGISTER_CODE;
+            continue;
+        }
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_STACK_SEGMENT)
+        {
+            instruction->segmentOverrideActive = 1u;
+            instruction->segmentOverride       = HYPERDOS_X86_SEGMENT_REGISTER_STACK;
+            continue;
+        }
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_DATA_SEGMENT)
+        {
+            instruction->segmentOverrideActive = 1u;
+            instruction->segmentOverride       = HYPERDOS_X86_SEGMENT_REGISTER_DATA;
+            continue;
+        }
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_REPEAT_WHILE_NOT_EQUAL)
+        {
+            instruction->repeatMode = HYPERDOS_X86_REPEAT_WHILE_NOT_EQUAL;
+            continue;
+        }
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_REPEAT)
+        {
+            instruction->repeatMode = HYPERDOS_X86_REPEAT_WHILE_EQUAL;
+            continue;
+        }
+        if (instruction->operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_LOCK)
+        {
+            instruction->lockPrefixActive = 1u;
+            continue;
+        }
+        break;
+    }
+    return HYPERDOS_X86_EXECUTION_OK;
 }
 
 static inline uint16_t hyperdos_x86_normalize_flags(uint16_t flags)
@@ -579,12 +618,19 @@ static inline uint32_t hyperdos_x86_physical_address_from_base(uint32_t segmentB
     return (segmentBase + offset) & HYPERDOS_X86_ADDRESS_MASK;
 }
 
-static inline void hyperdos_x86_store_segment_base(hyperdos_x86_processor*             processor,
-                                                   hyperdos_x86_segment_register_index segmentRegister)
+static inline uint32_t hyperdos_x86_real_mode_segment_base(uint16_t selector)
 {
-    processor->segmentBases[segmentRegister] = ((uint32_t)processor->segmentRegisters[segmentRegister]
-                                                << HYPERDOS_X86_SEGMENT_SHIFT) &
-                                               HYPERDOS_X86_ADDRESS_MASK;
+    return ((uint32_t)selector << HYPERDOS_X86_SEGMENT_SHIFT) & HYPERDOS_X86_ADDRESS_MASK;
+}
+
+static inline void hyperdos_x86_load_real_mode_segment(hyperdos_x86_processor*             processor,
+                                                       hyperdos_x86_segment_register_index segmentRegister,
+                                                       uint16_t                            selector)
+{
+    processor->segmentStates[segmentRegister].selector   = selector;
+    processor->segmentStates[segmentRegister].base       = hyperdos_x86_real_mode_segment_base(selector);
+    processor->segmentStates[segmentRegister].limit      = HYPERDOS_X86_REAL_MODE_SEGMENT_LIMIT;
+    processor->segmentStates[segmentRegister].attributes = HYPERDOS_X86_REAL_MODE_SEGMENT_ATTRIBUTES;
 }
 
 static inline uint16_t hyperdos_x86_read_general_register_word(const hyperdos_x86_processor*       processor,
@@ -617,7 +663,7 @@ static inline uint16_t hyperdos_x86_read_flags_word(const hyperdos_x86_processor
 
 static inline void hyperdos_x86_write_flags_word(hyperdos_x86_processor* processor, uint16_t value)
 {
-    processor->flags = value;
+    processor->flags = hyperdos_x86_normalize_flags(value);
 }
 
 static inline uint8_t hyperdos_x86_read_physical_byte(const hyperdos_x86_processor* processor, uint32_t physicalAddress)
@@ -661,7 +707,7 @@ static inline uint8_t hyperdos_x86_read_memory_byte_fast(const hyperdos_x86_proc
                                                          hyperdos_x86_segment_register_index segmentRegister,
                                                          uint16_t                            offset)
 {
-    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentBases[segmentRegister],
+    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentStates[segmentRegister].base,
                                                                        offset);
     return hyperdos_x86_read_physical_byte(processor, physicalAddress);
 }
@@ -671,7 +717,7 @@ static inline void hyperdos_x86_write_memory_byte_fast(hyperdos_x86_processor*  
                                                        uint16_t                            offset,
                                                        uint8_t                             value)
 {
-    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentBases[segmentRegister],
+    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentStates[segmentRegister].base,
                                                                        offset);
     hyperdos_x86_write_physical_byte(processor, physicalAddress, value);
 }
@@ -687,7 +733,7 @@ static inline uint16_t hyperdos_x86_read_memory_word_fast(const hyperdos_x86_pro
         return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
     }
 
-    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentBases[segmentRegister],
+    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentStates[segmentRegister].base,
                                                                        offset);
     return hyperdos_x86_read_physical_word(processor, physicalAddress);
 }
@@ -710,7 +756,7 @@ static inline void hyperdos_x86_write_memory_word_fast(hyperdos_x86_processor*  
         return;
     }
 
-    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentBases[segmentRegister],
+    uint32_t physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentStates[segmentRegister].base,
                                                                        offset);
     hyperdos_x86_write_physical_word(processor, physicalAddress, value);
 }
@@ -1229,9 +1275,19 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_interrupt_with_return_
         uint16_t                returnSegment,
         uint16_t                returnOffset);
 
-static hyperdos_x86_execution_result hyperdos_x86_execute_unused_operation_code_interrupt(
-        hyperdos_x86_processor* processor)
+static void hyperdos_x86_mark_instruction_faulted(int* instructionCompleted)
 {
+    if (instructionCompleted != NULL)
+    {
+        *instructionCompleted = 0;
+    }
+}
+
+static hyperdos_x86_execution_result hyperdos_x86_execute_unused_operation_code_interrupt(
+        hyperdos_x86_processor* processor,
+        int*                    instructionCompleted)
+{
+    hyperdos_x86_mark_instruction_faulted(instructionCompleted);
     return hyperdos_x86_execute_interrupt_with_return_address(processor,
                                                               HYPERDOS_X86_INTERRUPT_TYPE_UNUSED_OPERATION_CODE,
                                                               processor->lastInstructionSegment,
@@ -1239,8 +1295,10 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_unused_operation_code_
 }
 
 static hyperdos_x86_execution_result hyperdos_x86_execute_escape_operation_code_interrupt(
-        hyperdos_x86_processor* processor)
+        hyperdos_x86_processor* processor,
+        int*                    instructionCompleted)
 {
+    hyperdos_x86_mark_instruction_faulted(instructionCompleted);
     return hyperdos_x86_execute_interrupt_with_return_address(processor,
                                                               HYPERDOS_X86_INTERRUPT_TYPE_ESCAPE_OPERATION_CODE,
                                                               processor->lastInstructionSegment,
@@ -1249,7 +1307,8 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_escape_operation_code_
 
 static int hyperdos_x86_execute_operation_code_validity_action(hyperdos_x86_processor*        processor,
                                                                uint8_t                        operationCode,
-                                                               hyperdos_x86_execution_result* result)
+                                                               hyperdos_x86_execution_result* result,
+                                                               int*                           instructionCompleted)
 {
     hyperdos_x86_operation_code_validity_action
             action = hyperdos_x86_find_operation_code_validity_action(processor, operationCode);
@@ -1262,7 +1321,7 @@ static int hyperdos_x86_execute_operation_code_validity_action(hyperdos_x86_proc
         *result = HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION;
         return 1;
     case HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_UNUSED_OPERATION_CODE_INTERRUPT:
-        *result = hyperdos_x86_execute_unused_operation_code_interrupt(processor);
+        *result = hyperdos_x86_execute_unused_operation_code_interrupt(processor, instructionCompleted);
         return 1;
     case HYPERDOS_X86_OPERATION_CODE_VALIDITY_ACTION_POP_CODE_SEGMENT:
         hyperdos_x86_set_segment_register(processor,
@@ -1277,7 +1336,8 @@ static int hyperdos_x86_execute_operation_code_validity_action(hyperdos_x86_proc
 static hyperdos_x86_execution_result hyperdos_x86_execute_bound_instruction(
         hyperdos_x86_processor*             processor,
         int                                 hasSegmentOverride,
-        hyperdos_x86_segment_register_index segmentOverride)
+        hyperdos_x86_segment_register_index segmentOverride,
+        int*                                instructionCompleted)
 {
     uint8_t                      registerMemoryByte = hyperdos_x86_fetch_instruction_byte(processor);
     uint8_t                      registerIndex = (uint8_t)((registerMemoryByte >> HYPERDOS_X86_MODRM_REGISTER_SHIFT) &
@@ -1302,6 +1362,7 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_bound_instruction(
     upperBound  = (int16_t)hyperdos_x86_read_memory_word_fast(processor, operand.segmentRegister, upperOffset);
     if (value < lowerBound || value > upperBound)
     {
+        hyperdos_x86_mark_instruction_faulted(instructionCompleted);
         return hyperdos_x86_execute_interrupt_with_return_address(processor,
                                                                   HYPERDOS_X86_INTERRUPT_TYPE_BOUND_RANGE_EXCEEDED,
                                                                   processor->lastInstructionSegment,
@@ -1369,7 +1430,7 @@ static int hyperdos_x86_can_use_contiguous_physical_range(const hyperdos_x86_pro
                                                           size_t                              byteCount,
                                                           uint32_t*                           physicalAddress)
 {
-    *physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentBases[segmentRegister], offset);
+    *physicalAddress = hyperdos_x86_physical_address_from_base(processor->segmentStates[segmentRegister].base, offset);
     if (byteCount == 0u)
     {
         return 1;
@@ -1439,11 +1500,11 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_interrupt_with_return_
 static hyperdos_x86_execution_result hyperdos_x86_execute_interrupt(hyperdos_x86_processor* processor,
                                                                     uint8_t                 interruptNumber)
 {
-    return hyperdos_x86_execute_interrupt_with_return_address(processor,
-                                                              interruptNumber,
-                                                              processor->segmentRegisters
-                                                                      [HYPERDOS_X86_SEGMENT_REGISTER_CODE],
-                                                              hyperdos_x86_read_instruction_pointer_word(processor));
+    return hyperdos_x86_execute_interrupt_with_return_address(
+            processor,
+            interruptNumber,
+            processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector,
+            hyperdos_x86_read_instruction_pointer_word(processor));
 }
 
 static hyperdos_x86_execution_result hyperdos_x86_execute_arithmetic_logic_instruction(
@@ -2324,7 +2385,8 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_ascii_adjust_multiply_
 static hyperdos_x86_execution_result hyperdos_x86_execute_escape_coprocessor_instruction(
         hyperdos_x86_processor*             processor,
         int                                 hasSegmentOverride,
-        hyperdos_x86_segment_register_index segmentOverride)
+        hyperdos_x86_segment_register_index segmentOverride,
+        int*                                instructionCompleted)
 {
     uint8_t                              registerMemoryByte = hyperdos_x86_fetch_instruction_byte(processor);
     hyperdos_x86_decoded_operand         operand            = hyperdos_x86_decode_register_memory_operand(processor,
@@ -2342,13 +2404,13 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_escape_coprocessor_ins
     instruction.segmentRegister    = operand.segmentRegister;
     instruction.offset             = operand.offset;
 
+    if (processor->escapeTrapEnabled && hyperdos_x86_supports_80186_instructions(processor))
+    {
+        return hyperdos_x86_execute_escape_operation_code_interrupt(processor, instructionCompleted);
+    }
     if (processor->coprocessorEscapeHandler != NULL)
     {
         return processor->coprocessorEscapeHandler(processor, &instruction, processor->coprocessorContext);
-    }
-    if (processor->escapeTrapEnabled && hyperdos_x86_supports_80186_instructions(processor))
-    {
-        return hyperdos_x86_execute_escape_operation_code_interrupt(processor);
     }
     return HYPERDOS_X86_EXECUTION_OK;
 }
@@ -2584,7 +2646,8 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_multiply_divide_instru
 static hyperdos_x86_execution_result hyperdos_x86_execute_group_five_instruction(
         hyperdos_x86_processor*             processor,
         int                                 hasSegmentOverride,
-        hyperdos_x86_segment_register_index segmentOverride)
+        hyperdos_x86_segment_register_index segmentOverride,
+        int*                                instructionCompleted)
 {
     uint8_t                      registerMemoryByte = hyperdos_x86_fetch_instruction_byte(processor);
     uint8_t                      operation = (uint8_t)((registerMemoryByte >> HYPERDOS_X86_MODRM_REGISTER_SHIFT) &
@@ -2594,7 +2657,7 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_group_five_instruction
 
     if (operation == HYPERDOS_X86_GROUP_FIVE_UNUSED && hyperdos_x86_supports_80186_instructions(processor))
     {
-        return hyperdos_x86_execute_unused_operation_code_interrupt(processor);
+        return hyperdos_x86_execute_unused_operation_code_interrupt(processor, instructionCompleted);
     }
 
     operand = hyperdos_x86_decode_register_memory_operand(processor,
@@ -2636,7 +2699,7 @@ static hyperdos_x86_execution_result hyperdos_x86_execute_group_five_instruction
                                                      operand.segmentRegister,
                                                      (uint16_t)(operand.offset +
                                                                 HYPERDOS_X86_FAR_POINTER_SEGMENT_OFFSET));
-        hyperdos_x86_push_word(processor, processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE]);
+        hyperdos_x86_push_word(processor, processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector);
         hyperdos_x86_push_word(processor, hyperdos_x86_read_instruction_pointer_word(processor));
         hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, segment);
         hyperdos_x86_write_instruction_pointer_word(processor, value);
@@ -2725,12 +2788,11 @@ void hyperdos_x86_reset_processor(hyperdos_x86_processor* processor)
     processor->processorModel                          = processorModel;
     processor->divideErrorReturnsToFaultingInstruction = divideErrorReturnsToFaultingInstruction;
     hyperdos_x86_write_flags_word(processor, hyperdos_x86_normalize_flags(HYPERDOS_X86_FLAG_INTERRUPT_ENABLE));
-    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE] = HYPERDOS_X86_RESET_CODE_SEGMENT;
+    hyperdos_x86_load_real_mode_segment(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, HYPERDOS_X86_RESET_CODE_SEGMENT);
     hyperdos_x86_write_instruction_pointer_word(processor, HYPERDOS_X86_RESET_INSTRUCTION_POINTER);
-    hyperdos_x86_store_segment_base(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA);
-    hyperdos_x86_store_segment_base(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE);
-    hyperdos_x86_store_segment_base(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK);
-    hyperdos_x86_store_segment_base(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA);
+    hyperdos_x86_load_real_mode_segment(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, 0u);
+    hyperdos_x86_load_real_mode_segment(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, 0u);
+    hyperdos_x86_load_real_mode_segment(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0u);
 }
 
 void hyperdos_x86_set_processor_model(hyperdos_x86_processor* processor, hyperdos_x86_processor_model model)
@@ -2826,7 +2888,7 @@ hyperdos_x86_execution_result hyperdos_x86_load_dos_program(hyperdos_x86_process
                                              HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
                                              HYPERDOS_X86_DOS_STACK_POINTER);
 
-    programBase = processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_CODE];
+    programBase = processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base;
     memset(processor->memory + programBase, 0, HYPERDOS_X86_SEGMENT_BYTE_COUNT);
     hyperdos_x86_write_physical_byte(processor,
                                      programBase + HYPERDOS_X86_DOS_TERMINATE_STUB_OFFSET,
@@ -2860,72 +2922,43 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
 
     while (!processor->halted)
     {
-        uint16_t instructionStartOffset            = hyperdos_x86_read_instruction_pointer_word(processor);
-        uint16_t instructionStartSegment           = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE];
-        uint8_t  operationCode                     = 0;
-        int      hasSegmentOverride                = 0;
-        int      maskableInterruptInhibitWasActive = processor->maskableInterruptInhibitCount != 0u;
-        int      trapWasEnabled                    = (processor->flags & HYPERDOS_X86_FLAG_TRAP) != 0u;
-        int      startMaskableInterruptInhibit     = 0;
-        int      suppressTrapAfterInstruction      = 0;
-        hyperdos_x86_segment_register_index segmentOverride = HYPERDOS_X86_SEGMENT_REGISTER_DATA;
-        hyperdos_x86_repeat_mode            repeatMode      = HYPERDOS_X86_REPEAT_NONE;
-        hyperdos_x86_execution_result       result          = HYPERDOS_X86_EXECUTION_OK;
+        uint16_t instructionStartOffset  = hyperdos_x86_read_instruction_pointer_word(processor);
+        uint16_t instructionStartSegment = processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector;
+        hyperdos_x86_decoded_instruction    decodedInstruction;
+        uint8_t                             operationCode      = 0;
+        int                                 hasSegmentOverride = 0;
+        hyperdos_x86_segment_register_index segmentOverride    = HYPERDOS_X86_SEGMENT_REGISTER_DATA;
+        hyperdos_x86_repeat_mode            repeatMode         = HYPERDOS_X86_REPEAT_NONE;
+        int maskableInterruptInhibitWasActive                  = processor->maskableInterruptInhibitCount != 0u;
+        int trapWasEnabled                                     = (processor->flags & HYPERDOS_X86_FLAG_TRAP) != 0u;
+        int startMaskableInterruptInhibit                      = 0;
+        int suppressTrapAfterInstruction                       = 0;
+        int instructionCompleted                               = 1;
+        hyperdos_x86_execution_result result                   = HYPERDOS_X86_EXECUTION_OK;
 
         if (instructionLimit != 0u && processor->executedInstructionCount >= instructionLimit)
         {
             return HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED;
         }
 
-        for (;;)
+        result = hyperdos_x86_decode_next_instruction(processor, &decodedInstruction);
+        if (result != HYPERDOS_X86_EXECUTION_OK)
         {
-            operationCode = hyperdos_x86_fetch_instruction_byte(processor);
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_EXTRA_SEGMENT)
-            {
-                hasSegmentOverride = 1;
-                segmentOverride    = HYPERDOS_X86_SEGMENT_REGISTER_EXTRA;
-                continue;
-            }
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_CODE_SEGMENT)
-            {
-                hasSegmentOverride = 1;
-                segmentOverride    = HYPERDOS_X86_SEGMENT_REGISTER_CODE;
-                continue;
-            }
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_STACK_SEGMENT)
-            {
-                hasSegmentOverride = 1;
-                segmentOverride    = HYPERDOS_X86_SEGMENT_REGISTER_STACK;
-                continue;
-            }
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_DATA_SEGMENT)
-            {
-                hasSegmentOverride = 1;
-                segmentOverride    = HYPERDOS_X86_SEGMENT_REGISTER_DATA;
-                continue;
-            }
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_REPEAT_WHILE_NOT_EQUAL)
-            {
-                repeatMode = HYPERDOS_X86_REPEAT_WHILE_NOT_EQUAL;
-                continue;
-            }
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_REPEAT)
-            {
-                repeatMode = HYPERDOS_X86_REPEAT_WHILE_EQUAL;
-                continue;
-            }
-            if (operationCode == HYPERDOS_X86_OPERATION_CODE_PREFIX_LOCK)
-            {
-                continue;
-            }
-            break;
+            return result;
         }
+        operationCode      = decodedInstruction.operationCode;
+        hasSegmentOverride = decodedInstruction.segmentOverrideActive != 0u;
+        segmentOverride    = decodedInstruction.segmentOverride;
+        repeatMode         = decodedInstruction.repeatMode;
 
         processor->lastOperationCode      = operationCode;
         processor->lastInstructionSegment = instructionStartSegment;
         processor->lastInstructionOffset  = instructionStartOffset;
 
-        if (hyperdos_x86_execute_operation_code_validity_action(processor, operationCode, &result))
+        if (hyperdos_x86_execute_operation_code_validity_action(processor,
+                                                                operationCode,
+                                                                &result,
+                                                                &instructionCompleted))
         {
         }
         else if (hyperdos_x86_operation_code_is_in_range(operationCode,
@@ -3022,7 +3055,10 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
             }
             else
             {
-                result = hyperdos_x86_execute_bound_instruction(processor, hasSegmentOverride, segmentOverride);
+                result = hyperdos_x86_execute_bound_instruction(processor,
+                                                                hasSegmentOverride,
+                                                                segmentOverride,
+                                                                &instructionCompleted);
             }
         }
         else if (operationCode == HYPERDOS_X86_OPERATION_CODE_PUSH_IMMEDIATE_WORD)
@@ -3147,7 +3183,8 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
         {
             result = hyperdos_x86_execute_escape_coprocessor_instruction(processor,
                                                                          hasSegmentOverride,
-                                                                         segmentOverride);
+                                                                         segmentOverride,
+                                                                         &instructionCompleted);
         }
         else if (hyperdos_x86_operation_code_is_in_range(
                          operationCode,
@@ -3203,7 +3240,8 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
             switch (operationCode)
             {
             case HYPERDOS_X86_OPERATION_CODE_PUSH_EXTRA_SEGMENT:
-                hyperdos_x86_push_word(processor, processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA]);
+                hyperdos_x86_push_word(processor,
+                                       processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA].selector);
                 break;
             case HYPERDOS_X86_OPERATION_CODE_POP_EXTRA_SEGMENT:
                 hyperdos_x86_set_segment_register(processor,
@@ -3211,10 +3249,12 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
                                                   hyperdos_x86_pop_word(processor));
                 break;
             case HYPERDOS_X86_OPERATION_CODE_PUSH_CODE_SEGMENT:
-                hyperdos_x86_push_word(processor, processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE]);
+                hyperdos_x86_push_word(processor,
+                                       processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector);
                 break;
             case HYPERDOS_X86_OPERATION_CODE_PUSH_STACK_SEGMENT:
-                hyperdos_x86_push_word(processor, processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_STACK]);
+                hyperdos_x86_push_word(processor,
+                                       processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_STACK].selector);
                 break;
             case HYPERDOS_X86_OPERATION_CODE_POP_STACK_SEGMENT:
                 hyperdos_x86_set_segment_register(processor,
@@ -3223,7 +3263,8 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
                 startMaskableInterruptInhibit = 1;
                 break;
             case HYPERDOS_X86_OPERATION_CODE_PUSH_DATA_SEGMENT:
-                hyperdos_x86_push_word(processor, processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA]);
+                hyperdos_x86_push_word(processor,
+                                       processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_DATA].selector);
                 break;
             case HYPERDOS_X86_OPERATION_CODE_POP_DATA_SEGMENT:
                 hyperdos_x86_set_segment_register(processor,
@@ -3315,7 +3356,10 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
                     result = HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION;
                     break;
                 }
-                hyperdos_x86_write_operand_value(processor, &operand, 1, processor->segmentRegisters[segmentRegister]);
+                hyperdos_x86_write_operand_value(processor,
+                                                 &operand,
+                                                 1,
+                                                 processor->segmentStates[segmentRegister].selector);
                 break;
             }
 
@@ -3390,7 +3434,8 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
             {
                 uint16_t offset  = hyperdos_x86_fetch_instruction_word(processor);
                 uint16_t segment = hyperdos_x86_fetch_instruction_word(processor);
-                hyperdos_x86_push_word(processor, processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE]);
+                hyperdos_x86_push_word(processor,
+                                       processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector);
                 hyperdos_x86_push_word(processor, hyperdos_x86_read_instruction_pointer_word(processor));
                 hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, segment);
                 hyperdos_x86_write_instruction_pointer_word(processor, offset);
@@ -3856,7 +3901,7 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
                 uint16_t                     value = 0u;
                 if (operation == HYPERDOS_X86_GROUP_FOUR_UNUSED && hyperdos_x86_supports_80186_instructions(processor))
                 {
-                    result = hyperdos_x86_execute_unused_operation_code_interrupt(processor);
+                    result = hyperdos_x86_execute_unused_operation_code_interrupt(processor, &instructionCompleted);
                     break;
                 }
                 operand = hyperdos_x86_decode_register_memory_operand(processor,
@@ -3890,7 +3935,10 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
             }
 
             case HYPERDOS_X86_OPERATION_CODE_GROUP_FIVE:
-                result = hyperdos_x86_execute_group_five_instruction(processor, hasSegmentOverride, segmentOverride);
+                result = hyperdos_x86_execute_group_five_instruction(processor,
+                                                                     hasSegmentOverride,
+                                                                     segmentOverride,
+                                                                     &instructionCompleted);
                 break;
 
             default:
@@ -3900,8 +3948,6 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
         }
 
         {
-            int instructionCompleted = result != HYPERDOS_X86_EXECUTION_DIVIDE_ERROR;
-
             if (result == HYPERDOS_X86_EXECUTION_DIVIDE_ERROR)
             {
                 hyperdos_x86_execution_result interruptResult =
@@ -3916,7 +3962,8 @@ hyperdos_x86_execution_result hyperdos_x86_execute(hyperdos_x86_processor* proce
                 {
                     return result;
                 }
-                result = interruptResult;
+                instructionCompleted = 0;
+                result               = interruptResult;
             }
 
             if (instructionCompleted && result == HYPERDOS_X86_EXECUTION_OK)
@@ -3985,11 +4032,60 @@ uint32_t hyperdos_x86_get_physical_address(const hyperdos_x86_processor*       p
                                            hyperdos_x86_segment_register_index segmentRegister,
                                            uint16_t                            offset)
 {
+    uint32_t physicalAddress = 0u;
+
+    if (hyperdos_x86_translate_logical_to_physical_address(processor, segmentRegister, offset, &physicalAddress) !=
+        HYPERDOS_X86_EXECUTION_OK)
+    {
+        return 0u;
+    }
+    return physicalAddress;
+}
+
+hyperdos_x86_execution_result hyperdos_x86_translate_logical_to_linear_address(
+        const hyperdos_x86_processor*       processor,
+        hyperdos_x86_segment_register_index segmentRegister,
+        uint16_t                            offset,
+        uint32_t*                           linearAddress)
+{
     if (processor == NULL || segmentRegister > HYPERDOS_X86_SEGMENT_REGISTER_DATA)
     {
-        return 0;
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
-    return hyperdos_x86_physical_address_from_base(processor->segmentBases[segmentRegister], offset);
+    if (linearAddress == NULL)
+    {
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
+    }
+    *linearAddress = processor->segmentStates[segmentRegister].base + offset;
+    return HYPERDOS_X86_EXECUTION_OK;
+}
+
+hyperdos_x86_execution_result hyperdos_x86_translate_linear_to_physical_address(const hyperdos_x86_processor* processor,
+                                                                                uint32_t  linearAddress,
+                                                                                uint32_t* physicalAddress)
+{
+    if (processor == NULL || physicalAddress == NULL)
+    {
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
+    }
+    *physicalAddress = linearAddress & HYPERDOS_X86_ADDRESS_MASK;
+    return HYPERDOS_X86_EXECUTION_OK;
+}
+
+hyperdos_x86_execution_result hyperdos_x86_translate_logical_to_physical_address(
+        const hyperdos_x86_processor*       processor,
+        hyperdos_x86_segment_register_index segmentRegister,
+        uint16_t                            offset,
+        uint32_t*                           physicalAddress)
+{
+    uint32_t linearAddress = 0u;
+
+    if (hyperdos_x86_translate_logical_to_linear_address(processor, segmentRegister, offset, &linearAddress) !=
+        HYPERDOS_X86_EXECUTION_OK)
+    {
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
+    }
+    return hyperdos_x86_translate_linear_to_physical_address(processor, linearAddress, physicalAddress);
 }
 
 hyperdos_x86_execution_result hyperdos_x86_read_memory_byte(const hyperdos_x86_processor*       processor,
@@ -4057,6 +4153,24 @@ void hyperdos_x86_set_general_register(hyperdos_x86_processor*             proce
     processor->generalRegisters[registerIndex] = value;
 }
 
+uint8_t hyperdos_x86_get_general_register_byte(const hyperdos_x86_processor* processor, uint8_t byteRegisterIndex)
+{
+    if (processor == NULL || byteRegisterIndex > HYPERDOS_X86_GENERAL_REGISTER_INDEX_MASK)
+    {
+        return 0u;
+    }
+    return hyperdos_x86_read_byte_register(processor, byteRegisterIndex);
+}
+
+void hyperdos_x86_set_general_register_byte(hyperdos_x86_processor* processor, uint8_t byteRegisterIndex, uint8_t value)
+{
+    if (processor == NULL || byteRegisterIndex > HYPERDOS_X86_GENERAL_REGISTER_INDEX_MASK)
+    {
+        return;
+    }
+    hyperdos_x86_write_byte_register(processor, byteRegisterIndex, value);
+}
+
 uint16_t hyperdos_x86_get_segment_register(const hyperdos_x86_processor*       processor,
                                            hyperdos_x86_segment_register_index segmentRegister)
 {
@@ -4064,7 +4178,7 @@ uint16_t hyperdos_x86_get_segment_register(const hyperdos_x86_processor*       p
     {
         return 0;
     }
-    return processor->segmentRegisters[segmentRegister];
+    return processor->segmentStates[segmentRegister].selector;
 }
 
 void hyperdos_x86_set_segment_register(hyperdos_x86_processor*             processor,
@@ -4075,8 +4189,117 @@ void hyperdos_x86_set_segment_register(hyperdos_x86_processor*             proce
     {
         return;
     }
-    processor->segmentRegisters[segmentRegister] = value;
-    hyperdos_x86_store_segment_base(processor, segmentRegister);
+    hyperdos_x86_load_real_mode_segment(processor, segmentRegister, value);
+}
+
+uint32_t hyperdos_x86_get_segment_base(const hyperdos_x86_processor*       processor,
+                                       hyperdos_x86_segment_register_index segmentRegister)
+{
+    if (processor == NULL || segmentRegister > HYPERDOS_X86_SEGMENT_REGISTER_DATA)
+    {
+        return 0u;
+    }
+    return processor->segmentStates[segmentRegister].base;
+}
+
+uint32_t hyperdos_x86_get_segment_limit(const hyperdos_x86_processor*       processor,
+                                        hyperdos_x86_segment_register_index segmentRegister)
+{
+    if (processor == NULL || segmentRegister > HYPERDOS_X86_SEGMENT_REGISTER_DATA)
+    {
+        return 0u;
+    }
+    return processor->segmentStates[segmentRegister].limit;
+}
+
+uint16_t hyperdos_x86_get_segment_attributes(const hyperdos_x86_processor*       processor,
+                                             hyperdos_x86_segment_register_index segmentRegister)
+{
+    if (processor == NULL || segmentRegister > HYPERDOS_X86_SEGMENT_REGISTER_DATA)
+    {
+        return 0u;
+    }
+    return processor->segmentStates[segmentRegister].attributes;
+}
+
+uint16_t hyperdos_x86_get_instruction_pointer_word(const hyperdos_x86_processor* processor)
+{
+    if (processor == NULL)
+    {
+        return 0u;
+    }
+    return hyperdos_x86_read_instruction_pointer_word(processor);
+}
+
+void hyperdos_x86_set_instruction_pointer_word(hyperdos_x86_processor* processor, uint16_t value)
+{
+    if (processor == NULL)
+    {
+        return;
+    }
+    hyperdos_x86_write_instruction_pointer_word(processor, value);
+}
+
+uint32_t hyperdos_x86_get_instruction_pointer_dword(const hyperdos_x86_processor* processor)
+{
+    if (processor == NULL)
+    {
+        return 0u;
+    }
+    return processor->instructionPointer;
+}
+
+void hyperdos_x86_set_instruction_pointer_dword(hyperdos_x86_processor* processor, uint32_t value)
+{
+    if (processor == NULL)
+    {
+        return;
+    }
+    processor->instructionPointer = value;
+}
+
+uint16_t hyperdos_x86_get_flags_word(const hyperdos_x86_processor* processor)
+{
+    if (processor == NULL)
+    {
+        return 0u;
+    }
+    return hyperdos_x86_read_flags_word(processor);
+}
+
+void hyperdos_x86_set_flags_word(hyperdos_x86_processor* processor, uint16_t value)
+{
+    if (processor == NULL)
+    {
+        return;
+    }
+    hyperdos_x86_write_flags_word(processor, value);
+}
+
+int hyperdos_x86_get_flag(const hyperdos_x86_processor* processor, hyperdos_x86_flag_mask flagMask)
+{
+    if (processor == NULL)
+    {
+        return 0;
+    }
+    return (hyperdos_x86_read_flags_word(processor) & (uint16_t)flagMask) != 0u;
+}
+
+void hyperdos_x86_update_flags_word(hyperdos_x86_processor* processor, uint16_t flagMask, uint16_t flagValues)
+{
+    uint16_t flags = 0u;
+
+    if (processor == NULL)
+    {
+        return;
+    }
+    flags = hyperdos_x86_read_flags_word(processor);
+    hyperdos_x86_write_flags_word(processor, (uint16_t)((flags & (uint16_t)~flagMask) | (flagValues & flagMask)));
+}
+
+void hyperdos_x86_set_flag(hyperdos_x86_processor* processor, hyperdos_x86_flag_mask flagMask, int enabled)
+{
+    hyperdos_x86_update_flags_word(processor, (uint16_t)flagMask, enabled ? (uint16_t)flagMask : 0u);
 }
 
 const char* hyperdos_x86_execution_result_name(hyperdos_x86_execution_result result)

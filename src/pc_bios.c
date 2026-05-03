@@ -56,11 +56,15 @@ static void hyperdos_pc_bios_write_guest_memory_word(hyperdos_pc* pc, uint32_t p
 static uint32_t hyperdos_pc_bios_get_stack_physical_address(const hyperdos_x86_processor* processor,
                                                             uint16_t                      stackOffset)
 {
-    uint16_t stackPointer = hyperdos_x86_get_general_register_word(processor,
+    uint16_t stackPointer    = hyperdos_x86_get_general_register_word(processor,
                                                                    HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
+    uint32_t physicalAddress = 0u;
 
-    return (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_STACK] + (uint16_t)(stackPointer + stackOffset)) &
-           HYPERDOS_X86_ADDRESS_MASK;
+    (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                             HYPERDOS_X86_SEGMENT_REGISTER_STACK,
+                                                             (uint16_t)(stackPointer + stackOffset),
+                                                             &physicalAddress);
+    return physicalAddress;
 }
 
 static int hyperdos_pc_bios_monitor_service_returns_to_interrupt_return_instruction(
@@ -91,7 +95,7 @@ static void hyperdos_pc_bios_synchronize_interrupt_return_flag_at_stack_offset(h
     uint32_t flagsPhysicalAddress = hyperdos_pc_bios_get_stack_physical_address(processor, stackOffset);
     uint16_t flags                = hyperdos_pc_bios_read_guest_memory_word(pc, flagsPhysicalAddress);
 
-    flags  = (uint16_t)((flags & (uint16_t)~flagMask) | (processor->flags & flagMask));
+    flags  = (uint16_t)((flags & (uint16_t)~flagMask) | (hyperdos_x86_get_flags_word(processor) & flagMask));
     flags |= HYPERDOS_X86_FLAG_RESERVED;
     hyperdos_pc_bios_write_guest_memory_word(pc, flagsPhysicalAddress, flags);
 }
@@ -296,15 +300,7 @@ void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_processor* processor, int carr
     {
         return;
     }
-    if (carry)
-    {
-        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
-    }
-    else
-    {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
-    }
-    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+    hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_CARRY, carry);
 }
 
 void hyperdos_pc_bios_synchronize_interrupt_return_flag(hyperdos_pc*            pc,

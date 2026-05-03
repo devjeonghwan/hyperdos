@@ -470,7 +470,7 @@ void hyperdos_pc_prepare_boot_sector_execution(hyperdos_pc* pc, uint8_t bootDriv
                                       HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
                                       HYPERDOS_PC_BOOT_STACK_POINTER);
     hyperdos_x86_set_general_register(&pc->processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, bootDriveNumber);
-    pc->processor.instructionPointer = HYPERDOS_PC_BOOT_SECTOR_ADDRESS;
+    hyperdos_x86_set_instruction_pointer_word(&pc->processor, HYPERDOS_PC_BOOT_SECTOR_ADDRESS);
 }
 
 int hyperdos_x86_processor_is_at_bios_reset_vector(const hyperdos_x86_processor* processor)

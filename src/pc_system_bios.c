@@ -100,15 +100,7 @@ enum
 
 static void hyperdos_pc_system_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
-    if (carry)
-    {
-        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
-    }
-    else
-    {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
-    }
-    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+    hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_CARRY, carry);
 }
 
 static uint8_t hyperdos_pc_system_bios_make_binary_coded_decimal(uint8_t value)
@@ -592,7 +584,8 @@ static hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_pointing_dev
     case HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_SET_HANDLER_SUBSERVICE:
         systemBios->pointingDeviceHandlerOffset =
                 hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
-        systemBios->pointingDeviceHandlerSegment = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
+        systemBios->pointingDeviceHandlerSegment =
+                hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA);
         hyperdos_pc_system_bios_set_system_services_status(processor,
                                                            HYPERDOS_PC_SYSTEM_BIOS_POINTING_DEVICE_STATUS_SUCCESS,
                                                            0);
@@ -712,10 +705,11 @@ hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_int
                         1);
                 return HYPERDOS_X86_EXECUTION_OK;
             }
-            systemBios->waitEventFlagPhysicalAddress =
-                    (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] +
-                     hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE)) &
-                    HYPERDOS_X86_ADDRESS_MASK;
+            (void)hyperdos_x86_translate_logical_to_physical_address(
+                    processor,
+                    HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE),
+                    &systemBios->waitEventFlagPhysicalAddress);
             systemBios->waitEventCompletionClockCount = pc->bus.clockCount + clockCount;
             systemBios->waitEventActive               = 1u;
             if (clockCount == 0u)

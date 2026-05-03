@@ -3335,7 +3335,7 @@ hyperdos_x86_execution_result hyperdos_8087_escape(hyperdos_x86_processor*      
     coprocessor->lastInstructionOffset  = (uint16_t)processor->lastInstructionOffset;
     if (!instruction->isRegister)
     {
-        coprocessor->lastOperandSegment = processor->segmentRegisters[instruction->segmentRegister];
+        coprocessor->lastOperandSegment = hyperdos_x86_get_segment_register(processor, instruction->segmentRegister);
         coprocessor->lastOperandOffset  = instruction->offset;
     }
     hyperdos_8087_update_environment_words(coprocessor);

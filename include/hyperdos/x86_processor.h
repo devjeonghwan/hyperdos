@@ -81,6 +81,14 @@ typedef enum hyperdos_x86_processor_model
     HYPERDOS_X86_PROCESSOR_MODEL_80188 = 3
 } hyperdos_x86_processor_model;
 
+typedef struct hyperdos_x86_segment_state
+{
+    uint16_t selector;
+    uint32_t base;
+    uint32_t limit;
+    uint16_t attributes;
+} hyperdos_x86_segment_state;
+
 struct hyperdos_x86_processor;
 struct hyperdos_bus;
 
@@ -110,8 +118,7 @@ typedef hyperdos_x86_execution_result (*hyperdos_x86_coprocessor_escape_handler)
 typedef struct hyperdos_x86_processor
 {
     uint32_t                                generalRegisters[8];
-    uint16_t                                segmentRegisters[4];
-    uint32_t                                segmentBases[4];
+    hyperdos_x86_segment_state              segmentStates[4];
     uint32_t                                instructionPointer;
     uint32_t                                flags;
     uint8_t*                                memory;
@@ -174,6 +181,22 @@ uint32_t hyperdos_x86_get_physical_address(const hyperdos_x86_processor*       p
                                            hyperdos_x86_segment_register_index segmentRegister,
                                            uint16_t                            offset);
 
+hyperdos_x86_execution_result hyperdos_x86_translate_logical_to_linear_address(
+        const hyperdos_x86_processor*       processor,
+        hyperdos_x86_segment_register_index segmentRegister,
+        uint16_t                            offset,
+        uint32_t*                           linearAddress);
+
+hyperdos_x86_execution_result hyperdos_x86_translate_linear_to_physical_address(const hyperdos_x86_processor* processor,
+                                                                                uint32_t  linearAddress,
+                                                                                uint32_t* physicalAddress);
+
+hyperdos_x86_execution_result hyperdos_x86_translate_logical_to_physical_address(
+        const hyperdos_x86_processor*       processor,
+        hyperdos_x86_segment_register_index segmentRegister,
+        uint16_t                            offset,
+        uint32_t*                           physicalAddress);
+
 hyperdos_x86_execution_result hyperdos_x86_read_memory_byte(const hyperdos_x86_processor*       processor,
                                                             hyperdos_x86_segment_register_index segmentRegister,
                                                             uint16_t                            offset,
@@ -194,6 +217,12 @@ uint32_t hyperdos_x86_get_general_register(const hyperdos_x86_processor*       p
 void hyperdos_x86_set_general_register(hyperdos_x86_processor*             processor,
                                        hyperdos_x86_general_register_index registerIndex,
                                        uint32_t                            value);
+
+uint8_t hyperdos_x86_get_general_register_byte(const hyperdos_x86_processor* processor, uint8_t byteRegisterIndex);
+
+void hyperdos_x86_set_general_register_byte(hyperdos_x86_processor* processor,
+                                            uint8_t                 byteRegisterIndex,
+                                            uint8_t                 value);
 
 static inline uint16_t hyperdos_x86_get_general_register_word(const hyperdos_x86_processor*       processor,
                                                               hyperdos_x86_general_register_index registerIndex)
@@ -222,6 +251,33 @@ uint16_t hyperdos_x86_get_segment_register(const hyperdos_x86_processor*       p
 void hyperdos_x86_set_segment_register(hyperdos_x86_processor*             processor,
                                        hyperdos_x86_segment_register_index segmentRegister,
                                        uint16_t                            value);
+
+uint32_t hyperdos_x86_get_segment_base(const hyperdos_x86_processor*       processor,
+                                       hyperdos_x86_segment_register_index segmentRegister);
+
+uint32_t hyperdos_x86_get_segment_limit(const hyperdos_x86_processor*       processor,
+                                        hyperdos_x86_segment_register_index segmentRegister);
+
+uint16_t hyperdos_x86_get_segment_attributes(const hyperdos_x86_processor*       processor,
+                                             hyperdos_x86_segment_register_index segmentRegister);
+
+uint16_t hyperdos_x86_get_instruction_pointer_word(const hyperdos_x86_processor* processor);
+
+void hyperdos_x86_set_instruction_pointer_word(hyperdos_x86_processor* processor, uint16_t value);
+
+uint32_t hyperdos_x86_get_instruction_pointer_dword(const hyperdos_x86_processor* processor);
+
+void hyperdos_x86_set_instruction_pointer_dword(hyperdos_x86_processor* processor, uint32_t value);
+
+uint16_t hyperdos_x86_get_flags_word(const hyperdos_x86_processor* processor);
+
+void hyperdos_x86_set_flags_word(hyperdos_x86_processor* processor, uint16_t value);
+
+int hyperdos_x86_get_flag(const hyperdos_x86_processor* processor, hyperdos_x86_flag_mask flagMask);
+
+void hyperdos_x86_set_flag(hyperdos_x86_processor* processor, hyperdos_x86_flag_mask flagMask, int enabled);
+
+void hyperdos_x86_update_flags_word(hyperdos_x86_processor* processor, uint16_t flagMask, uint16_t flagValues);
 
 const char* hyperdos_x86_execution_result_name(hyperdos_x86_execution_result result);
 

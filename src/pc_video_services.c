@@ -1341,13 +1341,16 @@ static int write_video_save_restore_state(hyperdos_x86_processor*     processor,
                                           uint16_t                    bufferSegmentOffset)
 {
     uint16_t stateMask              = (uint16_t)(requestedState & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_STATE_MASK);
-    uint32_t extraSegmentBase       = processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
-    uint32_t bufferPhysicalAddress  = (extraSegmentBase + bufferSegmentOffset) & HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t bufferPhysicalAddress  = 0u;
     uint16_t nextStateSegmentOffset = (uint16_t)(bufferSegmentOffset +
                                                  HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_HEADER_BYTE_COUNT);
     uint16_t headerByteIndex        = 0u;
 
-    if (stateMask == 0u)
+    if (stateMask == 0u ||
+        hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                           HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                           bufferSegmentOffset,
+                                                           &bufferPhysicalAddress) != HYPERDOS_X86_EXECUTION_OK)
     {
         return 0;
     }
@@ -1359,7 +1362,12 @@ static int write_video_save_restore_state(hyperdos_x86_processor*     processor,
 
     if ((stateMask & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_HARDWARE_STATE) != 0u)
     {
-        uint32_t stateDataPhysicalAddress = (extraSegmentBase + nextStateSegmentOffset) & HYPERDOS_X86_ADDRESS_MASK;
+        uint32_t stateDataPhysicalAddress = 0u;
+
+        (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                                 HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                                 nextStateSegmentOffset,
+                                                                 &stateDataPhysicalAddress);
 
         write_guest_memory_word(videoServices,
                                 bufferPhysicalAddress + HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_HARDWARE_POINTER_OFFSET,
@@ -1370,7 +1378,12 @@ static int write_video_save_restore_state(hyperdos_x86_processor*     processor,
     }
     if ((stateMask & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_BASIC_INPUT_OUTPUT_SYSTEM_DATA) != 0u)
     {
-        uint32_t stateDataPhysicalAddress = (extraSegmentBase + nextStateSegmentOffset) & HYPERDOS_X86_ADDRESS_MASK;
+        uint32_t stateDataPhysicalAddress = 0u;
+
+        (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                                 HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                                 nextStateSegmentOffset,
+                                                                 &stateDataPhysicalAddress);
 
         write_guest_memory_word(videoServices,
                                 bufferPhysicalAddress +
@@ -1382,7 +1395,12 @@ static int write_video_save_restore_state(hyperdos_x86_processor*     processor,
     }
     if ((stateMask & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_DIGITAL_TO_ANALOG_CONVERTER_STATE) != 0u)
     {
-        uint32_t stateDataPhysicalAddress = (extraSegmentBase + nextStateSegmentOffset) & HYPERDOS_X86_ADDRESS_MASK;
+        uint32_t stateDataPhysicalAddress = 0u;
+
+        (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                                 HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                                 nextStateSegmentOffset,
+                                                                 &stateDataPhysicalAddress);
 
         write_guest_memory_word(videoServices,
                                 bufferPhysicalAddress +
@@ -1405,10 +1423,13 @@ static int restore_video_save_restore_state(hyperdos_x86_processor*     processo
                                             uint16_t                    bufferSegmentOffset)
 {
     uint16_t stateMask             = (uint16_t)(requestedState & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_STATE_MASK);
-    uint32_t extraSegmentBase      = processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
-    uint32_t bufferPhysicalAddress = (extraSegmentBase + bufferSegmentOffset) & HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t bufferPhysicalAddress = 0u;
 
-    if (stateMask == 0u)
+    if (stateMask == 0u ||
+        hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                           HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                           bufferSegmentOffset,
+                                                           &bufferPhysicalAddress) != HYPERDOS_X86_EXECUTION_OK)
     {
         return 0;
     }
@@ -1420,9 +1441,13 @@ static int restore_video_save_restore_state(hyperdos_x86_processor*     processo
 
         if (stateDataSegmentOffset != 0u)
         {
-            restore_video_save_restore_hardware_state(videoServices,
-                                                      (extraSegmentBase + stateDataSegmentOffset) &
-                                                              HYPERDOS_X86_ADDRESS_MASK);
+            uint32_t stateDataPhysicalAddress = 0u;
+
+            (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                                     HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                                     stateDataSegmentOffset,
+                                                                     &stateDataPhysicalAddress);
+            restore_video_save_restore_hardware_state(videoServices, stateDataPhysicalAddress);
         }
     }
     if ((stateMask & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_BASIC_INPUT_OUTPUT_SYSTEM_DATA) != 0u)
@@ -1433,9 +1458,13 @@ static int restore_video_save_restore_state(hyperdos_x86_processor*     processo
 
         if (stateDataSegmentOffset != 0u)
         {
-            restore_video_save_restore_basic_input_output_system_data(videoServices,
-                                                                      (extraSegmentBase + stateDataSegmentOffset) &
-                                                                              HYPERDOS_X86_ADDRESS_MASK);
+            uint32_t stateDataPhysicalAddress = 0u;
+
+            (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                                     HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                                     stateDataSegmentOffset,
+                                                                     &stateDataPhysicalAddress);
+            restore_video_save_restore_basic_input_output_system_data(videoServices, stateDataPhysicalAddress);
         }
     }
     if ((stateMask & HYPERDOS_X86_BIOS_VIDEO_SAVE_RESTORE_DIGITAL_TO_ANALOG_CONVERTER_STATE) != 0u)
@@ -1447,9 +1476,13 @@ static int restore_video_save_restore_state(hyperdos_x86_processor*     processo
 
         if (stateDataSegmentOffset != 0u)
         {
-            restore_video_save_restore_digital_to_analog_converter_state(videoServices,
-                                                                         (extraSegmentBase + stateDataSegmentOffset) &
-                                                                                 HYPERDOS_X86_ADDRESS_MASK);
+            uint32_t stateDataPhysicalAddress = 0u;
+
+            (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                                     HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                                     stateDataSegmentOffset,
+                                                                     &stateDataPhysicalAddress);
+            restore_video_save_restore_digital_to_analog_converter_state(videoServices, stateDataPhysicalAddress);
         }
     }
 
@@ -1463,16 +1496,19 @@ static int restore_video_save_restore_state(hyperdos_x86_processor*     processo
 static void write_video_functionality_state_table(hyperdos_x86_processor*     processor,
                                                   hyperdos_pc_video_services* videoServices)
 {
-    size_t                           byteIndex       = 0u;
-    size_t                           cursorPageIndex = 0u;
-    hyperdos_color_graphics_adapter* adapter         = &videoServices->pc->colorGraphicsAdapter;
-    uint32_t                         tablePhysicalAddress =
-            (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] +
-             hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX)) &
-            HYPERDOS_X86_ADDRESS_MASK;
+    size_t                           byteIndex            = 0u;
+    size_t                           cursorPageIndex      = 0u;
+    hyperdos_color_graphics_adapter* adapter              = &videoServices->pc->colorGraphicsAdapter;
+    uint32_t                         tablePhysicalAddress = 0u;
     uint32_t staticFunctionalityTablePointer = ((uint32_t)HYPERDOS_X86_BIOS_VIDEO_STATIC_FUNCTIONALITY_TABLE_SEGMENT
                                                 << 16u) |
                                                HYPERDOS_X86_BIOS_VIDEO_STATIC_FUNCTIONALITY_TABLE_OFFSET;
+
+    (void)hyperdos_x86_translate_logical_to_physical_address(
+            processor,
+            HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+            hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX),
+            &tablePhysicalAddress);
 
     for (byteIndex = 0u; byteIndex < HYPERDOS_X86_BIOS_VIDEO_DYNAMIC_STATE_TABLE_BYTE_COUNT; ++byteIndex)
     {
@@ -1588,9 +1624,12 @@ static void write_korean_extension_placeholder_character_shape(hyperdos_x86_proc
                                                                uint16_t                    characterShapeOffset)
 {
     uint16_t rowIndex                      = 0u;
-    uint32_t characterShapePhysicalAddress = (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] +
-                                              characterShapeOffset) &
-                                             HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t characterShapePhysicalAddress = 0u;
+
+    (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                             HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                             characterShapeOffset,
+                                                             &characterShapePhysicalAddress);
 
     for (rowIndex = 0u; rowIndex < HYPERDOS_X86_BIOS_VIDEO_KOREAN_EXTENSION_CHARACTER_SHAPE_ROW_COUNT; ++rowIndex)
     {
@@ -1707,7 +1746,13 @@ static int write_video_register_interface_register(hyperdos_pc_video_services* v
 
 static uint32_t get_extra_segment_physical_address(const hyperdos_x86_processor* processor, uint16_t offset)
 {
-    return (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] + offset) & HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t physicalAddress = 0u;
+
+    (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                             HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                             offset,
+                                                             &physicalAddress);
+    return physicalAddress;
 }
 
 static uint16_t get_text_page_memory_offset(const hyperdos_pc_video_services* videoServices, uint8_t videoPage)
@@ -1942,13 +1987,12 @@ static void write_bios_video_string(hyperdos_x86_processor*     processor,
     uint16_t currentColumn            = column;
     uint16_t sourceOffset             = hyperdos_x86_get_general_register_word(processor,
                                                                    HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER);
-    uint32_t sourceBase               = processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
     int      stringContainsAttributes = (writeMode & HYPERDOS_X86_BIOS_VIDEO_WRITE_STRING_ATTRIBUTE_BIT) != 0u;
 
     for (characterIndex = 0u; characterIndex < characterCount; ++characterIndex)
     {
         uint8_t character          = read_guest_memory_byte(videoServices,
-                                                   (sourceBase + sourceOffset) & HYPERDOS_X86_ADDRESS_MASK);
+                                                   get_extra_segment_physical_address(processor, sourceOffset));
         uint8_t characterAttribute = attribute;
         size_t  memoryIndex        = 0u;
 
@@ -1956,7 +2000,7 @@ static void write_bios_video_string(hyperdos_x86_processor*     processor,
         if (stringContainsAttributes)
         {
             characterAttribute = read_guest_memory_byte(videoServices,
-                                                        (sourceBase + sourceOffset) & HYPERDOS_X86_ADDRESS_MASK);
+                                                        get_extra_segment_physical_address(processor, sourceOffset));
             ++sourceOffset;
         }
 

@@ -15,15 +15,7 @@ enum
 
 static void hyperdos_pc_keyboard_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
-    if (carry)
-    {
-        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
-    }
-    else
-    {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
-    }
-    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+    hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_CARRY, carry);
 }
 
 static void hyperdos_pc_keyboard_bios_lock(const hyperdos_pc_keyboard_bios_interface* keyboardBiosInterface)
@@ -618,13 +610,12 @@ hyperdos_x86_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
         if (hyperdos_pc_keyboard_bios_pop_key_word(keyboardBios, keyboardBiosInterface, pc, &keyWord))
         {
             hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, keyWord);
-            processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_ZERO;
-            processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+            hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_ZERO, 0);
             return HYPERDOS_X86_EXECUTION_OK;
         }
 
-        processor->instructionPointer  = processor->lastInstructionOffset;
-        processor->flags              |= HYPERDOS_X86_FLAG_INTERRUPT_ENABLE | HYPERDOS_X86_FLAG_RESERVED;
+        hyperdos_x86_set_instruction_pointer_word(processor, (uint16_t)processor->lastInstructionOffset);
+        hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_INTERRUPT_ENABLE, 1);
         return HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED;
     }
 
@@ -633,13 +624,13 @@ hyperdos_x86_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
         if (hyperdos_pc_keyboard_bios_peek_key_word(keyboardBios, keyboardBiosInterface, pc, &keyWord))
         {
             hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, keyWord);
-            processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_ZERO;
+            hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_ZERO, 0);
         }
         else
         {
-            processor->flags |= HYPERDOS_X86_FLAG_ZERO;
+            hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_ZERO, 1);
         }
-        processor->flags |= HYPERDOS_X86_FLAG_INTERRUPT_ENABLE | HYPERDOS_X86_FLAG_RESERVED;
+        hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_INTERRUPT_ENABLE, 1);
         return HYPERDOS_X86_EXECUTION_OK;
     }
 
@@ -654,7 +645,7 @@ hyperdos_x86_execution_result hyperdos_pc_keyboard_bios_handle_interrupt(
                                                HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
                                                (uint16_t)((accumulator & (uint16_t)~HYPERDOS_X86_LOW_BYTE_MASK) |
                                                           shiftFlags));
-        processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+        hyperdos_x86_set_flags_word(processor, hyperdos_x86_get_flags_word(processor));
         return HYPERDOS_X86_EXECUTION_OK;
     }
 

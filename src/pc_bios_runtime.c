@@ -174,8 +174,8 @@ static void hyperdos_pc_bios_runtime_push_processor_word(hyperdos_x86_processor*
 static void hyperdos_pc_bios_runtime_call_pointing_device_handler(hyperdos_x86_processor*  processor,
                                                                   hyperdos_pc_system_bios* systemBios)
 {
-    uint16_t returnOffset       = (uint16_t)processor->instructionPointer;
-    uint16_t returnSegment      = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE];
+    uint16_t returnOffset       = hyperdos_x86_get_instruction_pointer_word(processor);
+    uint16_t returnSegment      = hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE);
     uint16_t statusWord         = (uint16_t)(systemBios->pointingDevicePacketBytes[0] &
                                      HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_STATUS_MASK);
     uint16_t horizontalDataWord = systemBios->pointingDevicePacketBytes[1];
@@ -194,7 +194,7 @@ static void hyperdos_pc_bios_runtime_call_pointing_device_handler(hyperdos_x86_p
     hyperdos_x86_set_segment_register(processor,
                                       HYPERDOS_X86_SEGMENT_REGISTER_CODE,
                                       systemBios->pointingDeviceHandlerSegment);
-    processor->instructionPointer = systemBios->pointingDeviceHandlerOffset;
+    hyperdos_x86_set_instruction_pointer_word(processor, systemBios->pointingDeviceHandlerOffset);
 }
 
 static hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_auxiliary_device_hardware_interrupt(

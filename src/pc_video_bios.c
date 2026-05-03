@@ -109,21 +109,19 @@ enum
 
 static void hyperdos_pc_video_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
-    if (carry)
-    {
-        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
-    }
-    else
-    {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
-    }
-    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+    hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_CARRY, carry);
 }
 
 static uint32_t hyperdos_pc_video_bios_get_extra_segment_physical_address(const hyperdos_x86_processor* processor,
                                                                           uint16_t                      offset)
 {
-    return (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] + offset) & HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t physicalAddress = 0u;
+
+    (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                             HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                             offset,
+                                                             &physicalAddress);
+    return physicalAddress;
 }
 
 static uint8_t hyperdos_pc_video_bios_read_guest_memory_byte(const hyperdos_pc_video_bios_interface* videoBiosInterface,
@@ -147,12 +145,15 @@ static uint16_t hyperdos_pc_video_bios_read_guest_stack_word(const hyperdos_pc_v
                                                              const hyperdos_x86_processor*           processor,
                                                              uint16_t                                stackByteOffset)
 {
-    uint32_t physicalAddress =
-            (processor->segmentBases[HYPERDOS_X86_SEGMENT_REGISTER_STACK] +
-             (uint16_t)(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) +
-                        stackByteOffset)) &
-            HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t physicalAddress = 0u;
+    uint16_t stackOffset =
+            (uint16_t)(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) +
+                       stackByteOffset);
 
+    (void)hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                             HYPERDOS_X86_SEGMENT_REGISTER_STACK,
+                                                             stackOffset,
+                                                             &physicalAddress);
     return hyperdos_pc_video_bios_read_guest_memory_word(videoBiosInterface, physicalAddress);
 }
 

@@ -58,15 +58,7 @@ enum
 
 static void hyperdos_pc_disk_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry)
 {
-    if (carry)
-    {
-        processor->flags |= HYPERDOS_X86_FLAG_CARRY;
-    }
-    else
-    {
-        processor->flags &= (uint16_t)~HYPERDOS_X86_FLAG_CARRY;
-    }
-    processor->flags |= HYPERDOS_X86_FLAG_RESERVED;
+    hyperdos_x86_set_flag(processor, HYPERDOS_X86_FLAG_CARRY, carry);
 }
 
 static void hyperdos_pc_disk_bios_trace(const hyperdos_pc_disk_bios_interface* diskBiosInterface,
@@ -490,15 +482,23 @@ static hyperdos_x86_execution_result hyperdos_pc_disk_bios_handle_transfer(
     uint16_t head        = (uint16_t)(data >> HYPERDOS_PC_DISK_BIOS_SERVICE_REGISTER_SHIFT);
     uint8_t  driveNumber = (uint8_t)(data & HYPERDOS_X86_LOW_BYTE_MASK);
     uint16_t transferOffset  = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
-    uint32_t transferAddress = (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA] << 4u) +
-                                transferOffset) &
-                               HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t transferAddress = 0u;
     hyperdos_pc_disk_image*          diskImage           = NULL;
     uint64_t                         logicalBlockAddress = 0u;
     size_t                           transferByteCount   = 0u;
     size_t                           byteIndex           = 0;
     uint8_t*                         transferBytes       = NULL;
     hyperdos_pc_disk_transfer_result transferResult      = HYPERDOS_PC_DISK_TRANSFER_OK;
+
+    if (hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                           HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                                                           transferOffset,
+                                                           &transferAddress) != HYPERDOS_X86_EXECUTION_OK)
+    {
+        hyperdos_pc_disk_bios_set_status_in_accumulator(processor, HYPERDOS_PC_DISK_BIOS_STATUS_INVALID_FUNCTION);
+        hyperdos_pc_disk_bios_set_carry_flag(processor, 1);
+        return HYPERDOS_X86_EXECUTION_OK;
+    }
 
     hyperdos_pc_disk_bios_lock_disk_images(diskBiosInterface);
     diskImage = hyperdos_pc_disk_bios_get_disk_image(diskBiosInterface, driveNumber);

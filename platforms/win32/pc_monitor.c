@@ -197,30 +197,30 @@ static HWND     globalStatusBarWindowHandle;
 
 static const hyperdos_monitor_processor_clock_option globalProcessorClockOptions[] = {
     {
-        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ,
-        .processorFrequencyHertz = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ,
-        .menuText                = "4.77 MHz",
-    },
+     .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_4_77_MHZ,
+     .processorFrequencyHertz = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ,
+     .menuText                = "4.77 MHz",
+     },
     {
-        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ,
-        .processorFrequencyHertz = 8000000u,
-        .menuText                = "8 MHz",
-    },
+     .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_8_MHZ,
+     .processorFrequencyHertz = 8000000u,
+     .menuText                = "8 MHz",
+     },
     {
-        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ,
-        .processorFrequencyHertz = 10000000u,
-        .menuText                = "10 MHz",
-    },
+     .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_10_MHZ,
+     .processorFrequencyHertz = 10000000u,
+     .menuText                = "10 MHz",
+     },
     {
-        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ,
-        .processorFrequencyHertz = 12000000u,
-        .menuText                = "12 MHz",
-    },
+     .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_12_MHZ,
+     .processorFrequencyHertz = 12000000u,
+     .menuText                = "12 MHz",
+     },
     {
-        .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ,
-        .processorFrequencyHertz = 16000000u,
-        .menuText                = "16 MHz",
-    },
+     .commandIdentifier       = HYPERDOS_MONITOR_COMMAND_PROCESSOR_CLOCK_16_MHZ,
+     .processorFrequencyHertz = 16000000u,
+     .menuText                = "16 MHz",
+     },
 };
 
 static int floppy_drive_contains_media(const hyperdos_win32_boot_state* bootState, uint8_t driveNumber);
@@ -615,9 +615,9 @@ static void notify_monitor_window_execution_stopped(void* callbackContext)
 }
 
 static const hyperdos_win32_pc_monitor_runtime_callbacks globalRuntimeCallbacks = {
-    .requestRender           = request_monitor_window_render,
-    .requestReset            = request_monitor_window_reset,
-    .notifyExecutionStopped  = notify_monitor_window_execution_stopped,
+    .requestRender          = request_monitor_window_render,
+    .requestReset           = request_monitor_window_reset,
+    .notifyExecutionStopped = notify_monitor_window_execution_stopped,
 };
 
 static void write_text_screen_dump_file(const hyperdos_win32_boot_state* bootState);
@@ -678,7 +678,7 @@ static void trace_disk_event(hyperdos_win32_boot_state* bootState, const char* f
                 hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER),
                 hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA),
                 hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER),
-                (uint16_t)processor->flags);
+                hyperdos_x86_get_flags_word(processor));
     }
     va_start(arguments, format);
     vfprintf(globalDiskTraceFile, format, arguments);
@@ -1900,53 +1900,64 @@ static void observe_guest_memory_write(void*    observerContext,
                 continue;
             }
 
-            fprintf(globalMemoryTraceFile,
-                    "%llu %04X:%04X opcode=%02X write physical=%05X old=%02X new=%02X "
-                    "watch=%s word0=%04X word2=%04X "
-                    "AX=%04X BX=%04X CX=%04X DX=%04X BP=%04X SI=%04X DI=%04X "
-                    "DS=%04X ES=%04X SS:SP=%04X:%04X source-physical=%05X destination-physical=%05X FLAGS=%04X "
-                    "SR02=%02X SR04=%02X GC00=%02X GC01=%02X GC03=%02X GC04=%02X GC05=%02X GC06=%02X GC08=%02X\n",
-                    (unsigned long long)processor->executedInstructionCount,
-                    processor->lastInstructionSegment,
-                    processor->lastInstructionOffset,
-                    processor->lastOperationCode,
-                    physicalAddress,
-                    oldValue,
-                    newValue,
-                    memoryWatch->text,
-                    read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress),
-                    read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress + HYPERDOS_X86_WORD_SIZE),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX),
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX),
-                    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA],
-                    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA],
-                    processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_STACK],
-                    hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER),
-                    (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA]
-                      << HYPERDOS_X86_SEGMENT_SHIFT) +
-                     hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX)) &
-                            HYPERDOS_X86_ADDRESS_MASK,
-                    (((uint32_t)processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA]
-                      << HYPERDOS_X86_SEGMENT_SHIFT) +
-                     hyperdos_x86_get_general_register_word(processor,
-                                                            HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX)) &
-                            HYPERDOS_X86_ADDRESS_MASK,
-                    processor->flags,
-                    bootState->machine.pc.colorGraphicsAdapter.sequencerRegisters[2],
-                    bootState->machine.pc.colorGraphicsAdapter.sequencerRegisters[4],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[0],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[1],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[3],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[4],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[5],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[6],
-                    bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[8]);
-            fflush(globalMemoryTraceFile);
+            {
+                uint32_t sourcePhysicalAddress      = 0u;
+                uint32_t destinationPhysicalAddress = 0u;
+
+                (void)hyperdos_x86_translate_logical_to_physical_address(
+                        processor,
+                        HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX),
+                        &sourcePhysicalAddress);
+                (void)hyperdos_x86_translate_logical_to_physical_address(
+                        processor,
+                        HYPERDOS_X86_SEGMENT_REGISTER_EXTRA,
+                        hyperdos_x86_get_general_register_word(processor,
+                                                               HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX),
+                        &destinationPhysicalAddress);
+
+                fprintf(globalMemoryTraceFile,
+                        "%llu %04X:%04X opcode=%02X write physical=%05X old=%02X new=%02X "
+                        "watch=%s word0=%04X word2=%04X "
+                        "AX=%04X BX=%04X CX=%04X DX=%04X BP=%04X SI=%04X DI=%04X "
+                        "DS=%04X ES=%04X SS:SP=%04X:%04X source-physical=%05X destination-physical=%05X FLAGS=%04X "
+                        "SR02=%02X SR04=%02X GC00=%02X GC01=%02X GC03=%02X GC04=%02X GC05=%02X GC06=%02X GC08=%02X\n",
+                        (unsigned long long)processor->executedInstructionCount,
+                        processor->lastInstructionSegment,
+                        processor->lastInstructionOffset,
+                        processor->lastOperationCode,
+                        physicalAddress,
+                        oldValue,
+                        newValue,
+                        memoryWatch->text,
+                        read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress),
+                        read_guest_memory_word(bootState, memoryWatch->firstPhysicalAddress + HYPERDOS_X86_WORD_SIZE),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX),
+                        hyperdos_x86_get_general_register_word(processor,
+                                                               HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX),
+                        hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA),
+                        hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA),
+                        hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK),
+                        hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER),
+                        sourcePhysicalAddress,
+                        destinationPhysicalAddress,
+                        hyperdos_x86_get_flags_word(processor),
+                        bootState->machine.pc.colorGraphicsAdapter.sequencerRegisters[2],
+                        bootState->machine.pc.colorGraphicsAdapter.sequencerRegisters[4],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[0],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[1],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[3],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[4],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[5],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[6],
+                        bootState->machine.pc.colorGraphicsAdapter.graphicsControllerRegisters[8]);
+                fflush(globalMemoryTraceFile);
+            }
         }
     }
     if (globalMemoryStopByteEnabled && physicalAddress == globalMemoryStopPhysicalAddress &&
@@ -1975,13 +1986,13 @@ static void capture_cpu_trace_entry(hyperdos_win32_boot_state* bootState)
     size_t                            stackWordIndex = 0u;
 
     traceEntry->instructionCount   = processor->executedInstructionCount;
-    traceEntry->codeSegment        = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_CODE];
-    traceEntry->instructionPointer = (uint16_t)processor->instructionPointer;
-    traceEntry->stackSegment       = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_STACK];
+    traceEntry->codeSegment        = hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE);
+    traceEntry->instructionPointer = hyperdos_x86_get_instruction_pointer_word(processor);
+    traceEntry->stackSegment       = hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK);
     traceEntry->stackPointer       = hyperdos_x86_get_general_register_word(processor,
                                                                       HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER);
-    traceEntry->dataSegment        = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_DATA];
-    traceEntry->extraSegment       = processor->segmentRegisters[HYPERDOS_X86_SEGMENT_REGISTER_EXTRA];
+    traceEntry->dataSegment        = hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA);
+    traceEntry->extraSegment       = hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA);
     traceEntry->accumulator        = hyperdos_x86_get_general_register_word(processor,
                                                                      HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR);
     traceEntry->base        = hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE);
@@ -1993,7 +2004,7 @@ static void capture_cpu_trace_entry(hyperdos_win32_boot_state* bootState)
                                                                      HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX);
     traceEntry->destinationIndex =
             hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX);
-    traceEntry->flags = (uint16_t)processor->flags;
+    traceEntry->flags = hyperdos_x86_get_flags_word(processor);
     for (byteIndex = 0u; byteIndex < HYPERDOS_MONITOR_CPU_TRACE_BYTE_COUNT; ++byteIndex)
     {
         traceEntry->instructionBytes
@@ -2527,12 +2538,12 @@ static int initialize_code_page_437_glyph_rows(HDC referenceDeviceContext)
     HGDIOBJ previousBitmap     = NULL;
     HFONT   previousFont       = NULL;
     RECT    glyphRectangle     = {
-        .left   = 0,
-        .top    = 0,
-        .right  = GLYPH_BITMAP_WIDTH,
-        .bottom = GLYPH_BITMAP_HEIGHT,
+               .left   = 0,
+               .top    = 0,
+               .right  = GLYPH_BITMAP_WIDTH,
+               .bottom = GLYPH_BITMAP_HEIGHT,
     };
-    size_t  characterIndex     = 0u;
+    size_t characterIndex = 0u;
 
     if (referenceDeviceContext == NULL || globalCodePage437TextFontHandle == NULL)
     {
@@ -2557,14 +2568,14 @@ static int initialize_code_page_437_glyph_rows(HDC referenceDeviceContext)
 
     for (characterIndex = 0u; characterIndex < HYPERDOS_MONITOR_CHARACTER_COUNT; ++characterIndex)
     {
-        WCHAR character    = (WCHAR)hyperdos_pc_text_code_page_437_unicode_character((uint8_t)characterIndex);
-        SIZE  glyphSize    = {
-            .cx = HYPERDOS_MONITOR_CHARACTER_WIDTH,
-            .cy = HYPERDOS_MONITOR_CHARACTER_HEIGHT,
+        WCHAR character = (WCHAR)hyperdos_pc_text_code_page_437_unicode_character((uint8_t)characterIndex);
+        SIZE  glyphSize = {
+             .cx = HYPERDOS_MONITOR_CHARACTER_WIDTH,
+             .cy = HYPERDOS_MONITOR_CHARACTER_HEIGHT,
         };
-        int   sourceWidth  = HYPERDOS_MONITOR_CHARACTER_WIDTH;
-        int   sourceHeight = HYPERDOS_MONITOR_CHARACTER_HEIGHT;
-        int   targetRow    = 0;
+        int sourceWidth  = HYPERDOS_MONITOR_CHARACTER_WIDTH;
+        int sourceHeight = HYPERDOS_MONITOR_CHARACTER_HEIGHT;
+        int targetRow    = 0;
 
         FillRect(glyphDeviceContext, &glyphRectangle, (HBRUSH)GetStockObject(WHITE_BRUSH));
         (void)GetTextExtentPoint32W(glyphDeviceContext, &character, 1, &glyphSize);
@@ -2854,37 +2865,37 @@ static void write_planar_video_graphics_array_color_index_dump(FILE* videoStateD
         uint32_t row;
     } samples[] = {
         {
-            .column = 16u,
-            .row    = 16u,
-        },
+         .column = 16u,
+         .row    = 16u,
+         },
         {
-            .column = 32u,
-            .row    = 72u,
-        },
+         .column = 32u,
+         .row    = 72u,
+         },
         {
-            .column = 120u,
-            .row    = 120u,
-        },
+         .column = 120u,
+         .row    = 120u,
+         },
         {
-            .column = 240u,
-            .row    = 180u,
-        },
+         .column = 240u,
+         .row    = 180u,
+         },
         {
-            .column = 400u,
-            .row    = 180u,
-        },
+         .column = 400u,
+         .row    = 180u,
+         },
         {
-            .column = 520u,
-            .row    = 220u,
-        },
+         .column = 520u,
+         .row    = 220u,
+         },
         {
-            .column = 80u,
-            .row    = 420u,
-        },
+         .column = 80u,
+         .row    = 420u,
+         },
         {
-            .column = 560u,
-            .row    = 420u,
-        },
+         .column = 560u,
+         .row    = 420u,
+         },
     };
 
     if (videoStateDumpFile == NULL || adapter == NULL || sourceWidth == 0u || sourceHeight == 0u)
