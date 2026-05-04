@@ -45,6 +45,12 @@ if (WIN32)
             platforms/win32/pc_monitor_main.c
             platforms/win32/pc_monitor_runtime.c)
     target_link_libraries(hyperdos_win32_pc_monitor PRIVATE hyperdos user32 gdi32 comdlg32 shell32 ole32 comctl32)
+
+    add_executable(hyperdos_win32_directory_disk_tests
+            tests/win32_directory_disk_tests.c
+            platforms/win32/pc_directory_disk.c)
+    target_include_directories(hyperdos_win32_directory_disk_tests PRIVATE platforms/win32)
+    target_link_libraries(hyperdos_win32_directory_disk_tests PRIVATE hyperdos)
 endif ()
 
 add_executable(hyperdos_tests tests/emulator_tests.c)
@@ -52,3 +58,6 @@ target_link_libraries(hyperdos_tests PRIVATE hyperdos)
 
 enable_testing()
 add_test(NAME hyperdos_tests COMMAND hyperdos_tests)
+if (WIN32)
+    add_test(NAME hyperdos_win32_directory_disk_tests COMMAND hyperdos_win32_directory_disk_tests)
+endif ()

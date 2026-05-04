@@ -21,10 +21,16 @@ enum
     HYPERDOS_WIN32_DIRECTORY_DISK_FLOPPY_ROOT_ENTRY_COUNT     = 224u,
     HYPERDOS_WIN32_DIRECTORY_DISK_FIXED_ROOT_ENTRY_COUNT      = 512u,
     HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_READ_ONLY     = 0x01u,
+    HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_HIDDEN        = 0x02u,
+    HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_SYSTEM        = 0x04u,
+    HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_VOLUME_LABEL  = 0x08u,
     HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY     = 0x10u,
     HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_ARCHIVE       = 0x20u,
+    HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_LONG_NAME     = 0x0Fu,
     HYPERDOS_WIN32_DIRECTORY_DISK_FAT12_END_OF_CHAIN          = 0x0FFFu,
     HYPERDOS_WIN32_DIRECTORY_DISK_FAT16_END_OF_CHAIN          = 0xFFFFu,
+    HYPERDOS_WIN32_DIRECTORY_DISK_FAT16_BAD_CLUSTER           = 0xFFF7u,
+    HYPERDOS_WIN32_DIRECTORY_DISK_FAT16_END_OF_CHAIN_FIRST    = 0xFFF8u,
     HYPERDOS_WIN32_DIRECTORY_DISK_FIXED_HIDDEN_SECTORS        = 63u,
     HYPERDOS_WIN32_DIRECTORY_DISK_FIXED_SECTORS_PER_TRACK     = 63u,
     HYPERDOS_WIN32_DIRECTORY_DISK_FIXED_HEAD_COUNT            = 16u,
@@ -73,7 +79,47 @@ typedef struct hyperdos_win32_directory_disk_entry_list
     size_t                               entryCapacity;
 } hyperdos_win32_directory_disk_entry_list;
 
+typedef struct hyperdos_win32_directory_disk_context
+{
+    uint8_t*                                 imageBytes;
+    size_t                                   imageByteCount;
+    uint16_t                                 bytesPerSector;
+    uint8_t                                  readOnly;
+    uint8_t                                  fileSystemDirty;
+    char                                     directoryPath[HYPERDOS_WIN32_DIRECTORY_DISK_PATH_CAPACITY];
+    hyperdos_win32_directory_disk_format     format;
+    hyperdos_win32_directory_disk_entry_list originalEntryList;
+} hyperdos_win32_directory_disk_context;
+
+typedef struct hyperdos_win32_directory_disk_write_back_entry
+{
+    char     hostPath[HYPERDOS_WIN32_DIRECTORY_DISK_PATH_CAPACITY];
+    uint32_t fileSize;
+    uint16_t modifiedDate;
+    uint16_t modifiedTime;
+    uint16_t firstCluster;
+    uint8_t  attribute;
+} hyperdos_win32_directory_disk_write_back_entry;
+
+typedef struct hyperdos_win32_directory_disk_write_back_entry_list
+{
+    hyperdos_win32_directory_disk_write_back_entry* entries;
+    size_t                                          entryCount;
+    size_t                                          entryCapacity;
+} hyperdos_win32_directory_disk_write_back_entry_list;
+
 static void hyperdos_win32_directory_disk_free_entry_list(hyperdos_win32_directory_disk_entry_list* entryList)
+{
+    if (entryList == NULL)
+    {
+        return;
+    }
+    free(entryList->entries);
+    memset(entryList, 0, sizeof(*entryList));
+}
+
+static void hyperdos_win32_directory_disk_free_write_back_entry_list(
+        hyperdos_win32_directory_disk_write_back_entry_list* entryList)
 {
     if (entryList == NULL)
     {
@@ -125,6 +171,72 @@ static int hyperdos_win32_directory_disk_append_entry(hyperdos_win32_directory_d
     return 1;
 }
 
+static int hyperdos_win32_directory_disk_copy_entry_list(hyperdos_win32_directory_disk_entry_list* destinationList,
+                                                         const hyperdos_win32_directory_disk_entry_list* sourceList)
+{
+    if (destinationList == NULL || sourceList == NULL)
+    {
+        return 0;
+    }
+    memset(destinationList, 0, sizeof(*destinationList));
+    if (sourceList->entryCount == 0u)
+    {
+        return 1;
+    }
+    if (!hyperdos_win32_directory_disk_reserve_entries(destinationList, sourceList->entryCount))
+    {
+        return 0;
+    }
+    memcpy(destinationList->entries, sourceList->entries, sourceList->entryCount * sizeof(sourceList->entries[0]));
+    destinationList->entryCount = sourceList->entryCount;
+    return 1;
+}
+
+static int hyperdos_win32_directory_disk_reserve_write_back_entries(
+        hyperdos_win32_directory_disk_write_back_entry_list* entryList,
+        size_t                                               requiredEntryCount)
+{
+    size_t                                          newEntryCapacity = 0u;
+    hyperdos_win32_directory_disk_write_back_entry* newEntries       = NULL;
+
+    if (entryList == NULL)
+    {
+        return 0;
+    }
+    if (requiredEntryCount <= entryList->entryCapacity)
+    {
+        return 1;
+    }
+    newEntryCapacity = entryList->entryCapacity == 0u ? 64u : entryList->entryCapacity;
+    while (newEntryCapacity < requiredEntryCount)
+    {
+        newEntryCapacity *= 2u;
+    }
+    newEntries = (hyperdos_win32_directory_disk_write_back_entry*)realloc(entryList->entries,
+                                                                          newEntryCapacity *
+                                                                                  sizeof(*entryList->entries));
+    if (newEntries == NULL)
+    {
+        return 0;
+    }
+    entryList->entries       = newEntries;
+    entryList->entryCapacity = newEntryCapacity;
+    return 1;
+}
+
+static int hyperdos_win32_directory_disk_append_write_back_entry(
+        hyperdos_win32_directory_disk_write_back_entry_list*  entryList,
+        const hyperdos_win32_directory_disk_write_back_entry* sourceEntry)
+{
+    if (!hyperdos_win32_directory_disk_reserve_write_back_entries(entryList, entryList->entryCount + 1u))
+    {
+        return 0;
+    }
+    entryList->entries[entryList->entryCount] = *sourceEntry;
+    ++entryList->entryCount;
+    return 1;
+}
+
 static void hyperdos_win32_directory_disk_write_word(uint8_t* bytes, size_t byteOffset, uint16_t value)
 {
     bytes[byteOffset]      = (uint8_t)(value & 0x00FFu);
@@ -137,6 +249,17 @@ static void hyperdos_win32_directory_disk_write_double_word(uint8_t* bytes, size
     bytes[byteOffset + 1u] = (uint8_t)((value >> 8u) & 0x000000FFu);
     bytes[byteOffset + 2u] = (uint8_t)((value >> 16u) & 0x000000FFu);
     bytes[byteOffset + 3u] = (uint8_t)(value >> 24u);
+}
+
+static uint16_t hyperdos_win32_directory_disk_read_word(const uint8_t* bytes, size_t byteOffset)
+{
+    return (uint16_t)(bytes[byteOffset] | ((uint16_t)bytes[byteOffset + 1u] << 8u));
+}
+
+static uint32_t hyperdos_win32_directory_disk_read_double_word(const uint8_t* bytes, size_t byteOffset)
+{
+    return (uint32_t)bytes[byteOffset] | ((uint32_t)bytes[byteOffset + 1u] << 8u) |
+           ((uint32_t)bytes[byteOffset + 2u] << 16u) | ((uint32_t)bytes[byteOffset + 3u] << 24u);
 }
 
 static int hyperdos_win32_directory_disk_join_path(char*       destination,
@@ -966,14 +1089,894 @@ static int hyperdos_win32_directory_disk_write_file_data(uint8_t*               
     return 1;
 }
 
+static uint32_t hyperdos_win32_directory_disk_get_file_allocation_table_sector(
+        const hyperdos_win32_directory_disk_format* format)
+{
+    return format->hiddenSectorCount + HYPERDOS_WIN32_DIRECTORY_DISK_RESERVED_SECTOR_COUNT;
+}
+
+static uint32_t hyperdos_win32_directory_disk_get_root_directory_sector(
+        const hyperdos_win32_directory_disk_format* format)
+{
+    return format->hiddenSectorCount + HYPERDOS_WIN32_DIRECTORY_DISK_RESERVED_SECTOR_COUNT +
+           (uint32_t)HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_COUNT * format->sectorsPerFileAllocationTable;
+}
+
+static size_t hyperdos_win32_directory_disk_get_sector_byte_offset(uint32_t sectorNumber)
+{
+    return (size_t)sectorNumber * HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR;
+}
+
+static uint32_t hyperdos_win32_directory_disk_get_cluster_byte_count(const hyperdos_win32_directory_disk_format* format)
+{
+    return (uint32_t)format->sectorsPerCluster * HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR;
+}
+
+static hyperdos_pc_disk_transfer_result hyperdos_win32_directory_disk_validate_transfer(
+        const hyperdos_win32_directory_disk_context* diskContext,
+        uint64_t                                     logicalBlockAddress,
+        uint16_t                                     sectorCount,
+        size_t*                                      byteOffset,
+        size_t*                                      byteCount)
+{
+    uint64_t transferByteOffset = 0u;
+    uint64_t transferByteCount  = 0u;
+
+    if (diskContext == NULL || byteOffset == NULL || byteCount == NULL)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_HOST_ERROR;
+    }
+    if (logicalBlockAddress > UINT64_MAX / diskContext->bytesPerSector)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_OUT_OF_RANGE;
+    }
+    transferByteOffset = logicalBlockAddress * diskContext->bytesPerSector;
+    transferByteCount  = (uint64_t)sectorCount * diskContext->bytesPerSector;
+    if (transferByteOffset > diskContext->imageByteCount ||
+        transferByteCount > diskContext->imageByteCount - transferByteOffset)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_OUT_OF_RANGE;
+    }
+    if (transferByteOffset > SIZE_MAX || transferByteCount > SIZE_MAX)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_HOST_ERROR;
+    }
+    *byteOffset = (size_t)transferByteOffset;
+    *byteCount  = (size_t)transferByteCount;
+    return HYPERDOS_PC_DISK_TRANSFER_OK;
+}
+
+static int hyperdos_win32_directory_disk_transfer_range_intersects_file_system(
+        const hyperdos_win32_directory_disk_context* diskContext,
+        size_t                                       byteOffset,
+        size_t                                       byteCount)
+{
+    size_t fileSystemByteOffset = hyperdos_win32_directory_disk_get_sector_byte_offset(
+            diskContext->format.hiddenSectorCount);
+
+    return byteCount != 0u && byteOffset < diskContext->imageByteCount && byteOffset + byteCount > fileSystemByteOffset;
+}
+
+static hyperdos_pc_disk_transfer_result hyperdos_win32_directory_disk_read_sectors(void*    userContext,
+                                                                                   uint64_t logicalBlockAddress,
+                                                                                   uint16_t sectorCount,
+                                                                                   uint8_t* destinationBytes)
+{
+    hyperdos_win32_directory_disk_context* diskContext = (hyperdos_win32_directory_disk_context*)userContext;
+    size_t                                 byteOffset  = 0u;
+    size_t                                 byteCount   = 0u;
+    hyperdos_pc_disk_transfer_result
+            transferResult = hyperdos_win32_directory_disk_validate_transfer(diskContext,
+                                                                             logicalBlockAddress,
+                                                                             sectorCount,
+                                                                             &byteOffset,
+                                                                             &byteCount);
+
+    if (destinationBytes == NULL)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_HOST_ERROR;
+    }
+    if (transferResult != HYPERDOS_PC_DISK_TRANSFER_OK)
+    {
+        return transferResult;
+    }
+    memcpy(destinationBytes, diskContext->imageBytes + byteOffset, byteCount);
+    return HYPERDOS_PC_DISK_TRANSFER_OK;
+}
+
+static hyperdos_pc_disk_transfer_result hyperdos_win32_directory_disk_write_sectors(void*          userContext,
+                                                                                    uint64_t       logicalBlockAddress,
+                                                                                    uint16_t       sectorCount,
+                                                                                    const uint8_t* sourceBytes)
+{
+    hyperdos_win32_directory_disk_context* diskContext = (hyperdos_win32_directory_disk_context*)userContext;
+    size_t                                 byteOffset  = 0u;
+    size_t                                 byteCount   = 0u;
+    hyperdos_pc_disk_transfer_result
+            transferResult = hyperdos_win32_directory_disk_validate_transfer(diskContext,
+                                                                             logicalBlockAddress,
+                                                                             sectorCount,
+                                                                             &byteOffset,
+                                                                             &byteCount);
+
+    if (sourceBytes == NULL)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_HOST_ERROR;
+    }
+    if (diskContext != NULL && diskContext->readOnly)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_WRITE_PROTECTED;
+    }
+    if (transferResult != HYPERDOS_PC_DISK_TRANSFER_OK)
+    {
+        return transferResult;
+    }
+    memcpy(diskContext->imageBytes + byteOffset, sourceBytes, byteCount);
+    if (hyperdos_win32_directory_disk_transfer_range_intersects_file_system(diskContext, byteOffset, byteCount))
+    {
+        diskContext->fileSystemDirty = 1u;
+    }
+    return HYPERDOS_PC_DISK_TRANSFER_OK;
+}
+
+static uint16_t hyperdos_win32_directory_disk_get_file_allocation_table_entry(
+        const hyperdos_win32_directory_disk_context* diskContext,
+        uint16_t                                     clusterNumber)
+{
+    size_t fileAllocationTableByteOffset = hyperdos_win32_directory_disk_get_sector_byte_offset(
+                                                   hyperdos_win32_directory_disk_get_file_allocation_table_sector(
+                                                           &diskContext->format)) +
+                                           (size_t)clusterNumber * 2u;
+
+    if (fileAllocationTableByteOffset + 2u > diskContext->imageByteCount)
+    {
+        return HYPERDOS_WIN32_DIRECTORY_DISK_FAT16_BAD_CLUSTER;
+    }
+    return hyperdos_win32_directory_disk_read_word(diskContext->imageBytes, fileAllocationTableByteOffset);
+}
+
+static int hyperdos_win32_directory_disk_read_cluster_chain(const hyperdos_win32_directory_disk_context* diskContext,
+                                                            uint16_t                                     firstCluster,
+                                                            uint8_t**                                    chainBytes,
+                                                            size_t*                                      chainByteCount)
+{
+    uint32_t dataClusterCount    = hyperdos_win32_directory_disk_get_data_cluster_count(&diskContext->format);
+    uint32_t clusterByteCount    = hyperdos_win32_directory_disk_get_cluster_byte_count(&diskContext->format);
+    uint16_t clusterNumber       = firstCluster;
+    uint8_t* bytes               = NULL;
+    size_t   byteCount           = 0u;
+    uint32_t visitedClusterCount = 0u;
+
+    if (diskContext == NULL || chainBytes == NULL || chainByteCount == NULL || firstCluster < 2u)
+    {
+        return 0;
+    }
+    while (clusterNumber >= 2u && clusterNumber < HYPERDOS_WIN32_DIRECTORY_DISK_FAT16_END_OF_CHAIN_FIRST)
+    {
+        size_t   clusterByteOffset = 0u;
+        uint8_t* newBytes          = NULL;
+        uint16_t nextClusterNumber = 0u;
+
+        if (clusterNumber == HYPERDOS_WIN32_DIRECTORY_DISK_FAT16_BAD_CLUSTER ||
+            (uint32_t)(clusterNumber - 2u) >= dataClusterCount || visitedClusterCount >= dataClusterCount ||
+            byteCount > SIZE_MAX - clusterByteCount)
+        {
+            free(bytes);
+            return 0;
+        }
+        clusterByteOffset = hyperdos_win32_directory_disk_get_cluster_byte_offset(&diskContext->format, clusterNumber);
+        if (clusterByteOffset + clusterByteCount > diskContext->imageByteCount)
+        {
+            free(bytes);
+            return 0;
+        }
+        newBytes = (uint8_t*)realloc(bytes, byteCount + clusterByteCount);
+        if (newBytes == NULL)
+        {
+            free(bytes);
+            return 0;
+        }
+        bytes = newBytes;
+        memcpy(bytes + byteCount, diskContext->imageBytes + clusterByteOffset, clusterByteCount);
+        byteCount += clusterByteCount;
+        ++visitedClusterCount;
+
+        nextClusterNumber = hyperdos_win32_directory_disk_get_file_allocation_table_entry(diskContext, clusterNumber);
+        if (nextClusterNumber == 0u)
+        {
+            break;
+        }
+        clusterNumber = nextClusterNumber;
+    }
+    *chainBytes     = bytes;
+    *chainByteCount = byteCount;
+    return 1;
+}
+
+static int hyperdos_win32_directory_disk_short_name_is_dot_entry(const uint8_t* shortName)
+{
+    size_t byteIndex = 0u;
+
+    if (shortName == NULL || shortName[0] != '.')
+    {
+        return 0;
+    }
+    for (byteIndex = 1u; byteIndex < HYPERDOS_WIN32_DIRECTORY_DISK_SHORT_NAME_BYTE_COUNT; ++byteIndex)
+    {
+        if (shortName[byteIndex] != ' ' && shortName[byteIndex] != '.')
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int hyperdos_win32_directory_disk_host_file_name_character_is_valid(uint8_t character)
+{
+    if (character < 0x20u)
+    {
+        return 0;
+    }
+    return character != '<' && character != '>' && character != ':' && character != '"' && character != '/' &&
+           character != '\\' && character != '|' && character != '?' && character != '*';
+}
+
+static int hyperdos_win32_directory_disk_host_file_name_is_reserved_device(const char* baseName)
+{
+    static const char* reservedDeviceNames[]   = {"CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
+                                                  "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+                                                  "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
+    size_t             reservedDeviceNameIndex = 0u;
+
+    if (baseName == NULL || baseName[0] == '\0')
+    {
+        return 1;
+    }
+    for (reservedDeviceNameIndex = 0u;
+         reservedDeviceNameIndex < sizeof(reservedDeviceNames) / sizeof(reservedDeviceNames[0]);
+         ++reservedDeviceNameIndex)
+    {
+        if (_stricmp(baseName, reservedDeviceNames[reservedDeviceNameIndex]) == 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int hyperdos_win32_directory_disk_short_name_to_host_file_name(const uint8_t* shortName,
+                                                                      char*          hostFileName,
+                                                                      size_t         hostFileNameSize)
+{
+    char   baseName[9];
+    char   extensionName[4];
+    size_t sourceIndex      = 0u;
+    size_t destinationIndex = 0u;
+
+    if (shortName == NULL || hostFileName == NULL || hostFileNameSize == 0u)
+    {
+        return 0;
+    }
+    memset(baseName, 0, sizeof(baseName));
+    memset(extensionName, 0, sizeof(extensionName));
+    for (sourceIndex = 0u; sourceIndex < 8u && shortName[sourceIndex] != ' '; ++sourceIndex)
+    {
+        if (!hyperdos_win32_directory_disk_host_file_name_character_is_valid(shortName[sourceIndex]))
+        {
+            return 0;
+        }
+        baseName[destinationIndex] = (char)shortName[sourceIndex];
+        ++destinationIndex;
+    }
+    destinationIndex = 0u;
+    for (sourceIndex = 8u; sourceIndex < 11u && shortName[sourceIndex] != ' '; ++sourceIndex)
+    {
+        if (!hyperdos_win32_directory_disk_host_file_name_character_is_valid(shortName[sourceIndex]))
+        {
+            return 0;
+        }
+        extensionName[destinationIndex] = (char)shortName[sourceIndex];
+        ++destinationIndex;
+    }
+    if (baseName[0] == '\0' || hyperdos_win32_directory_disk_host_file_name_is_reserved_device(baseName))
+    {
+        return 0;
+    }
+    if (extensionName[0] != '\0')
+    {
+        return snprintf(hostFileName, hostFileNameSize, "%s.%s", baseName, extensionName) > 0;
+    }
+    return snprintf(hostFileName, hostFileNameSize, "%s", baseName) > 0;
+}
+
+static const hyperdos_win32_directory_disk_entry* hyperdos_win32_directory_disk_find_original_child_entry(
+        const hyperdos_win32_directory_disk_context* diskContext,
+        size_t                                       parentEntryIndex,
+        const uint8_t*                               shortName,
+        size_t*                                      childEntryIndex)
+{
+    size_t entryIndex = 0u;
+
+    if (diskContext == NULL || shortName == NULL)
+    {
+        return NULL;
+    }
+    for (entryIndex = 0u; entryIndex < diskContext->originalEntryList.entryCount; ++entryIndex)
+    {
+        const hyperdos_win32_directory_disk_entry* entry = &diskContext->originalEntryList.entries[entryIndex];
+
+        if (entry->parentEntryIndex == parentEntryIndex &&
+            memcmp(entry->shortName, shortName, HYPERDOS_WIN32_DIRECTORY_DISK_SHORT_NAME_BYTE_COUNT) == 0)
+        {
+            if (childEntryIndex != NULL)
+            {
+                *childEntryIndex = entryIndex;
+            }
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static int hyperdos_win32_directory_disk_read_file_bytes(const hyperdos_win32_directory_disk_context* diskContext,
+                                                         const hyperdos_win32_directory_disk_write_back_entry* entry,
+                                                         uint8_t** fileBytes)
+{
+    uint8_t* chainBytes     = NULL;
+    size_t   chainByteCount = 0u;
+
+    if (diskContext == NULL || entry == NULL || fileBytes == NULL)
+    {
+        return 0;
+    }
+    *fileBytes = NULL;
+    if (entry->fileSize == 0u)
+    {
+        return 1;
+    }
+    if (entry->firstCluster < 2u || !hyperdos_win32_directory_disk_read_cluster_chain(diskContext,
+                                                                                      entry->firstCluster,
+                                                                                      &chainBytes,
+                                                                                      &chainByteCount))
+    {
+        return 0;
+    }
+    if (chainByteCount < entry->fileSize)
+    {
+        free(chainBytes);
+        return 0;
+    }
+    *fileBytes = chainBytes;
+    return 1;
+}
+
+static int hyperdos_win32_directory_disk_parse_directory_entries(
+        const hyperdos_win32_directory_disk_context*         diskContext,
+        hyperdos_win32_directory_disk_write_back_entry_list* writeBackEntryList,
+        const uint8_t*                                       directoryBytes,
+        size_t                                               directoryByteCount,
+        const char*                                          parentHostPath,
+        size_t                                               parentOriginalEntryIndex);
+
+static int hyperdos_win32_directory_disk_parse_child_directory(
+        const hyperdos_win32_directory_disk_context*          diskContext,
+        hyperdos_win32_directory_disk_write_back_entry_list*  writeBackEntryList,
+        const hyperdos_win32_directory_disk_write_back_entry* entry,
+        size_t                                                originalEntryIndex)
+{
+    uint8_t* directoryBytes     = NULL;
+    size_t   directoryByteCount = 0u;
+    int      parsed             = 0;
+
+    if (entry->firstCluster < 2u || !hyperdos_win32_directory_disk_read_cluster_chain(diskContext,
+                                                                                      entry->firstCluster,
+                                                                                      &directoryBytes,
+                                                                                      &directoryByteCount))
+    {
+        return 0;
+    }
+    parsed = hyperdos_win32_directory_disk_parse_directory_entries(diskContext,
+                                                                   writeBackEntryList,
+                                                                   directoryBytes,
+                                                                   directoryByteCount,
+                                                                   entry->hostPath,
+                                                                   originalEntryIndex);
+    free(directoryBytes);
+    return parsed;
+}
+
+static int hyperdos_win32_directory_disk_parse_directory_entries(
+        const hyperdos_win32_directory_disk_context*         diskContext,
+        hyperdos_win32_directory_disk_write_back_entry_list* writeBackEntryList,
+        const uint8_t*                                       directoryBytes,
+        size_t                                               directoryByteCount,
+        const char*                                          parentHostPath,
+        size_t                                               parentOriginalEntryIndex)
+{
+    size_t directoryEntryOffset = 0u;
+
+    if (diskContext == NULL || writeBackEntryList == NULL || directoryBytes == NULL || parentHostPath == NULL)
+    {
+        return 0;
+    }
+    for (directoryEntryOffset = 0u;
+         directoryEntryOffset + HYPERDOS_WIN32_DIRECTORY_DISK_DIRECTORY_ENTRY_SIZE <= directoryByteCount;
+         directoryEntryOffset += HYPERDOS_WIN32_DIRECTORY_DISK_DIRECTORY_ENTRY_SIZE)
+    {
+        const uint8_t*                                 directoryEntry     = directoryBytes + directoryEntryOffset;
+        uint8_t                                        attribute          = directoryEntry[11u];
+        uint16_t                                       firstCluster       = 0u;
+        size_t                                         originalEntryIndex = SIZE_MAX;
+        const hyperdos_win32_directory_disk_entry*     originalEntry      = NULL;
+        hyperdos_win32_directory_disk_write_back_entry writeBackEntry;
+
+        if (directoryEntry[0] == 0x00u)
+        {
+            break;
+        }
+        if (directoryEntry[0] == 0xE5u ||
+            (attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_LONG_NAME) ==
+                    HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_LONG_NAME ||
+            ((attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_VOLUME_LABEL) != 0u &&
+             (attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY) == 0u) ||
+            hyperdos_win32_directory_disk_short_name_is_dot_entry(directoryEntry))
+        {
+            continue;
+        }
+
+        memset(&writeBackEntry, 0, sizeof(writeBackEntry));
+        originalEntry = hyperdos_win32_directory_disk_find_original_child_entry(diskContext,
+                                                                                parentOriginalEntryIndex,
+                                                                                directoryEntry,
+                                                                                &originalEntryIndex);
+        if (originalEntry != NULL)
+        {
+            memcpy(writeBackEntry.hostPath, originalEntry->hostPath, sizeof(writeBackEntry.hostPath));
+        }
+        else
+        {
+            char hostFileName[16];
+
+            if (!hyperdos_win32_directory_disk_short_name_to_host_file_name(directoryEntry,
+                                                                            hostFileName,
+                                                                            sizeof(hostFileName)) ||
+                !hyperdos_win32_directory_disk_join_path(writeBackEntry.hostPath,
+                                                         sizeof(writeBackEntry.hostPath),
+                                                         parentHostPath,
+                                                         hostFileName))
+            {
+                return 0;
+            }
+        }
+
+        firstCluster                = hyperdos_win32_directory_disk_read_word(directoryEntry, 26u);
+        writeBackEntry.attribute    = attribute;
+        writeBackEntry.modifiedTime = hyperdos_win32_directory_disk_read_word(directoryEntry, 22u);
+        writeBackEntry.modifiedDate = hyperdos_win32_directory_disk_read_word(directoryEntry, 24u);
+        writeBackEntry.firstCluster = firstCluster;
+        writeBackEntry.fileSize     = hyperdos_win32_directory_disk_read_double_word(directoryEntry, 28u);
+        if (!hyperdos_win32_directory_disk_append_write_back_entry(writeBackEntryList, &writeBackEntry))
+        {
+            return 0;
+        }
+        if ((attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY) != 0u &&
+            !hyperdos_win32_directory_disk_parse_child_directory(diskContext,
+                                                                 writeBackEntryList,
+                                                                 &writeBackEntry,
+                                                                 originalEntryIndex))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int hyperdos_win32_directory_disk_write_back_entry_list_contains_path(
+        const hyperdos_win32_directory_disk_write_back_entry_list* entryList,
+        const char*                                                hostPath)
+{
+    size_t entryIndex = 0u;
+
+    if (entryList == NULL || hostPath == NULL)
+    {
+        return 0;
+    }
+    for (entryIndex = 0u; entryIndex < entryList->entryCount; ++entryIndex)
+    {
+        if (_stricmp(entryList->entries[entryIndex].hostPath, hostPath) == 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int hyperdos_win32_directory_disk_delete_host_path_recursively(const char* hostPath)
+{
+    DWORD attributes = 0u;
+
+    if (hostPath == NULL || hostPath[0] == '\0')
+    {
+        return 0;
+    }
+    attributes = GetFileAttributesA(hostPath);
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+    }
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u)
+    {
+        char             searchPath[HYPERDOS_WIN32_DIRECTORY_DISK_PATH_CAPACITY];
+        WIN32_FIND_DATAA findData;
+        HANDLE           findHandle = INVALID_HANDLE_VALUE;
+
+        if (!hyperdos_win32_directory_disk_join_path(searchPath, sizeof(searchPath), hostPath, "*"))
+        {
+            return 0;
+        }
+        findHandle = FindFirstFileA(searchPath, &findData);
+        if (findHandle != INVALID_HANDLE_VALUE)
+        {
+            do
+            {
+                char childPath[HYPERDOS_WIN32_DIRECTORY_DISK_PATH_CAPACITY];
+
+                if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0)
+                {
+                    continue;
+                }
+                if (!hyperdos_win32_directory_disk_join_path(childPath,
+                                                             sizeof(childPath),
+                                                             hostPath,
+                                                             findData.cFileName) ||
+                    !hyperdos_win32_directory_disk_delete_host_path_recursively(childPath))
+                {
+                    FindClose(findHandle);
+                    return 0;
+                }
+            }
+            while (FindNextFileA(findHandle, &findData) != 0);
+            if (GetLastError() != ERROR_NO_MORE_FILES)
+            {
+                FindClose(findHandle);
+                return 0;
+            }
+            FindClose(findHandle);
+        }
+    }
+    (void)SetFileAttributesA(hostPath, FILE_ATTRIBUTE_NORMAL);
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+    {
+        return RemoveDirectoryA(hostPath) != 0;
+    }
+    return DeleteFileA(hostPath) != 0;
+}
+
+static int hyperdos_win32_directory_disk_delete_unlisted_host_children(
+        const char*                                                directoryPath,
+        const hyperdos_win32_directory_disk_write_back_entry_list* writeBackEntryList)
+{
+    char             searchPath[HYPERDOS_WIN32_DIRECTORY_DISK_PATH_CAPACITY];
+    WIN32_FIND_DATAA findData;
+    HANDLE           findHandle = INVALID_HANDLE_VALUE;
+
+    if (directoryPath == NULL || writeBackEntryList == NULL ||
+        !hyperdos_win32_directory_disk_join_path(searchPath, sizeof(searchPath), directoryPath, "*"))
+    {
+        return 0;
+    }
+    findHandle = FindFirstFileA(searchPath, &findData);
+    if (findHandle == INVALID_HANDLE_VALUE)
+    {
+        return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+    }
+    do
+    {
+        char childPath[HYPERDOS_WIN32_DIRECTORY_DISK_PATH_CAPACITY];
+
+        if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0)
+        {
+            continue;
+        }
+        if (!hyperdos_win32_directory_disk_join_path(childPath, sizeof(childPath), directoryPath, findData.cFileName))
+        {
+            FindClose(findHandle);
+            return 0;
+        }
+        if (!hyperdos_win32_directory_disk_write_back_entry_list_contains_path(writeBackEntryList, childPath))
+        {
+            if (!hyperdos_win32_directory_disk_delete_host_path_recursively(childPath))
+            {
+                FindClose(findHandle);
+                return 0;
+            }
+        }
+        else if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+                 (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u &&
+                 !hyperdos_win32_directory_disk_delete_unlisted_host_children(childPath, writeBackEntryList))
+        {
+            FindClose(findHandle);
+            return 0;
+        }
+    }
+    while (FindNextFileA(findHandle, &findData) != 0);
+    if (GetLastError() != ERROR_NO_MORE_FILES)
+    {
+        FindClose(findHandle);
+        return 0;
+    }
+    FindClose(findHandle);
+    return 1;
+}
+
+static DWORD hyperdos_win32_directory_disk_make_host_file_attributes(uint8_t dosAttribute)
+{
+    DWORD fileAttributes = 0u;
+
+    if ((dosAttribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_READ_ONLY) != 0u)
+    {
+        fileAttributes |= FILE_ATTRIBUTE_READONLY;
+    }
+    if ((dosAttribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_HIDDEN) != 0u)
+    {
+        fileAttributes |= FILE_ATTRIBUTE_HIDDEN;
+    }
+    if ((dosAttribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_SYSTEM) != 0u)
+    {
+        fileAttributes |= FILE_ATTRIBUTE_SYSTEM;
+    }
+    if ((dosAttribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_ARCHIVE) != 0u)
+    {
+        fileAttributes |= FILE_ATTRIBUTE_ARCHIVE;
+    }
+    return fileAttributes == 0u ? FILE_ATTRIBUTE_NORMAL : fileAttributes;
+}
+
+static int hyperdos_win32_directory_disk_set_host_time(const char* hostPath,
+                                                       uint8_t     isDirectory,
+                                                       uint16_t    modifiedDate,
+                                                       uint16_t    modifiedTime)
+{
+    FILETIME localFileTime;
+    FILETIME fileTime;
+    HANDLE   fileHandle = INVALID_HANDLE_VALUE;
+    DWORD    flags      = FILE_ATTRIBUTE_NORMAL;
+    int      result     = 0;
+
+    if (hostPath == NULL || DosDateTimeToFileTime(modifiedDate, modifiedTime, &localFileTime) == 0)
+    {
+        return 1;
+    }
+    if (LocalFileTimeToFileTime(&localFileTime, &fileTime) == 0)
+    {
+        fileTime = localFileTime;
+    }
+    if (isDirectory)
+    {
+        flags |= FILE_FLAG_BACKUP_SEMANTICS;
+    }
+    fileHandle = CreateFileA(hostPath,
+                             FILE_WRITE_ATTRIBUTES,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                             NULL,
+                             OPEN_EXISTING,
+                             flags,
+                             NULL);
+    if (fileHandle == INVALID_HANDLE_VALUE)
+    {
+        return 0;
+    }
+    result = SetFileTime(fileHandle, NULL, NULL, &fileTime) != 0;
+    CloseHandle(fileHandle);
+    return result;
+}
+
+static int hyperdos_win32_directory_disk_set_host_metadata(const hyperdos_win32_directory_disk_write_back_entry* entry)
+{
+    uint8_t isDirectory = (entry->attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY) != 0u;
+
+    if (!hyperdos_win32_directory_disk_set_host_time(entry->hostPath,
+                                                     isDirectory,
+                                                     entry->modifiedDate,
+                                                     entry->modifiedTime))
+    {
+        return 0;
+    }
+    return SetFileAttributesA(entry->hostPath,
+                              hyperdos_win32_directory_disk_make_host_file_attributes(entry->attribute)) != 0;
+}
+
+static int hyperdos_win32_directory_disk_ensure_host_directory(
+        const hyperdos_win32_directory_disk_write_back_entry* entry)
+{
+    DWORD attributes = 0u;
+
+    if (entry == NULL)
+    {
+        return 0;
+    }
+    attributes = GetFileAttributesA(entry->hostPath);
+    if (attributes != INVALID_FILE_ATTRIBUTES)
+    {
+        if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+        {
+            return 1;
+        }
+        if (!hyperdos_win32_directory_disk_delete_host_path_recursively(entry->hostPath))
+        {
+            return 0;
+        }
+    }
+    return CreateDirectoryA(entry->hostPath, NULL) != 0 || GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+static int hyperdos_win32_directory_disk_write_host_file(const hyperdos_win32_directory_disk_context* diskContext,
+                                                         const hyperdos_win32_directory_disk_write_back_entry* entry)
+{
+    DWORD    attributes = 0u;
+    uint8_t* fileBytes  = NULL;
+    FILE*    hostFile   = NULL;
+    int      result     = 0;
+
+    if (!hyperdos_win32_directory_disk_read_file_bytes(diskContext, entry, &fileBytes))
+    {
+        return 0;
+    }
+    attributes = GetFileAttributesA(entry->hostPath);
+    if (attributes != INVALID_FILE_ATTRIBUTES)
+    {
+        if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+        {
+            if (!hyperdos_win32_directory_disk_delete_host_path_recursively(entry->hostPath))
+            {
+                free(fileBytes);
+                return 0;
+            }
+        }
+        else
+        {
+            (void)SetFileAttributesA(entry->hostPath, FILE_ATTRIBUTE_NORMAL);
+        }
+    }
+    hostFile = fopen(entry->hostPath, "wb");
+    if (hostFile != NULL)
+    {
+        result = entry->fileSize == 0u || fwrite(fileBytes, 1u, entry->fileSize, hostFile) == entry->fileSize;
+        result = fclose(hostFile) == 0 && result;
+    }
+    free(fileBytes);
+    return result && hyperdos_win32_directory_disk_set_host_metadata(entry);
+}
+
+static int hyperdos_win32_directory_disk_parse_image_for_write_back(
+        const hyperdos_win32_directory_disk_context*         diskContext,
+        hyperdos_win32_directory_disk_write_back_entry_list* writeBackEntryList)
+{
+    uint32_t rootDirectorySector    = hyperdos_win32_directory_disk_get_root_directory_sector(&diskContext->format);
+    uint32_t rootDirectoryByteCount = hyperdos_win32_directory_disk_get_root_directory_sector_count(
+                                              diskContext->format.rootDirectoryEntryCount) *
+                                      HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR;
+    size_t rootDirectoryByteOffset = hyperdos_win32_directory_disk_get_sector_byte_offset(rootDirectorySector);
+
+    if (rootDirectoryByteOffset + rootDirectoryByteCount > diskContext->imageByteCount)
+    {
+        return 0;
+    }
+    return hyperdos_win32_directory_disk_parse_directory_entries(diskContext,
+                                                                 writeBackEntryList,
+                                                                 diskContext->imageBytes + rootDirectoryByteOffset,
+                                                                 rootDirectoryByteCount,
+                                                                 diskContext->directoryPath,
+                                                                 SIZE_MAX);
+}
+
+static int hyperdos_win32_directory_disk_write_back_to_host_directory(
+        const hyperdos_win32_directory_disk_context* diskContext)
+{
+    hyperdos_win32_directory_disk_write_back_entry_list writeBackEntryList;
+    size_t                                              entryIndex = 0u;
+    int                                                 result     = 0;
+
+    memset(&writeBackEntryList, 0, sizeof(writeBackEntryList));
+    if (!hyperdos_win32_directory_disk_parse_image_for_write_back(diskContext, &writeBackEntryList))
+    {
+        hyperdos_win32_directory_disk_free_write_back_entry_list(&writeBackEntryList);
+        return 0;
+    }
+    if (!hyperdos_win32_directory_disk_delete_unlisted_host_children(diskContext->directoryPath, &writeBackEntryList))
+    {
+        hyperdos_win32_directory_disk_free_write_back_entry_list(&writeBackEntryList);
+        return 0;
+    }
+    for (entryIndex = 0u; entryIndex < writeBackEntryList.entryCount; ++entryIndex)
+    {
+        const hyperdos_win32_directory_disk_write_back_entry* entry = &writeBackEntryList.entries[entryIndex];
+
+        if ((entry->attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY) != 0u &&
+            !hyperdos_win32_directory_disk_ensure_host_directory(entry))
+        {
+            hyperdos_win32_directory_disk_free_write_back_entry_list(&writeBackEntryList);
+            return 0;
+        }
+    }
+    for (entryIndex = 0u; entryIndex < writeBackEntryList.entryCount; ++entryIndex)
+    {
+        const hyperdos_win32_directory_disk_write_back_entry* entry = &writeBackEntryList.entries[entryIndex];
+
+        if ((entry->attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY) == 0u &&
+            !hyperdos_win32_directory_disk_write_host_file(diskContext, entry))
+        {
+            hyperdos_win32_directory_disk_free_write_back_entry_list(&writeBackEntryList);
+            return 0;
+        }
+    }
+    result = 1;
+    for (entryIndex = writeBackEntryList.entryCount; entryIndex > 0u; --entryIndex)
+    {
+        const hyperdos_win32_directory_disk_write_back_entry* entry = &writeBackEntryList.entries[entryIndex - 1u];
+
+        if ((entry->attribute & HYPERDOS_WIN32_DIRECTORY_DISK_DOS_ATTRIBUTE_DIRECTORY) != 0u &&
+            !hyperdos_win32_directory_disk_set_host_metadata(entry))
+        {
+            result = 0;
+            break;
+        }
+    }
+    hyperdos_win32_directory_disk_free_write_back_entry_list(&writeBackEntryList);
+    return result;
+}
+
+static hyperdos_pc_disk_transfer_result hyperdos_win32_directory_disk_flush(void* userContext)
+{
+    hyperdos_win32_directory_disk_context* diskContext = (hyperdos_win32_directory_disk_context*)userContext;
+
+    if (diskContext == NULL)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_HOST_ERROR;
+    }
+    if (diskContext->readOnly || !diskContext->fileSystemDirty)
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_OK;
+    }
+    if (!hyperdos_win32_directory_disk_write_back_to_host_directory(diskContext))
+    {
+        return HYPERDOS_PC_DISK_TRANSFER_HOST_ERROR;
+    }
+    diskContext->fileSystemDirty = 0u;
+    return HYPERDOS_PC_DISK_TRANSFER_OK;
+}
+
+static void hyperdos_win32_directory_disk_destroy(void* userContext)
+{
+    hyperdos_win32_directory_disk_context* diskContext = (hyperdos_win32_directory_disk_context*)userContext;
+
+    if (diskContext == NULL)
+    {
+        return;
+    }
+    (void)hyperdos_win32_directory_disk_flush(diskContext);
+    hyperdos_win32_directory_disk_free_entry_list(&diskContext->originalEntryList);
+    free(diskContext->imageBytes);
+    free(diskContext);
+}
+
 static int hyperdos_win32_directory_disk_build_image(hyperdos_pc_disk_image*                         diskImage,
                                                      const char*                                     directoryPath,
                                                      const hyperdos_win32_directory_disk_format*     format,
                                                      const hyperdos_win32_directory_disk_entry_list* entryList,
                                                      uint8_t                                         isHardDisk)
 {
-    uint8_t* imageBytes     = NULL;
-    size_t   imageByteCount = (size_t)format->totalSectorCount * HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR;
+    static const hyperdos_pc_disk_operations directoryDiskOperations = {
+        .readSectors  = hyperdos_win32_directory_disk_read_sectors,
+        .writeSectors = hyperdos_win32_directory_disk_write_sectors,
+        .flush        = hyperdos_win32_directory_disk_flush,
+        .destroy      = hyperdos_win32_directory_disk_destroy,
+    };
+    hyperdos_win32_directory_disk_context* diskContext = NULL;
+    uint8_t*                               imageBytes  = NULL;
+    size_t  imageByteCount = (size_t)format->totalSectorCount * HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR;
+    uint8_t readOnly       = isHardDisk ? 0u : 1u;
+    int     initialized    = 0;
 
     imageBytes = (uint8_t*)calloc(1u, imageByteCount);
     if (imageBytes == NULL)
@@ -1000,16 +2003,46 @@ static int hyperdos_win32_directory_disk_build_image(hyperdos_pc_disk_image*    
         return 0;
     }
 
-    return isHardDisk ? hyperdos_pc_disk_image_initialize_memory_hard_disk(diskImage,
-                                                                           directoryPath,
-                                                                           imageBytes,
-                                                                           imageByteCount,
-                                                                           1u)
-                      : hyperdos_pc_disk_image_initialize_memory_floppy(diskImage,
-                                                                        directoryPath,
-                                                                        imageBytes,
-                                                                        imageByteCount,
-                                                                        1u);
+    diskContext = (hyperdos_win32_directory_disk_context*)calloc(1u, sizeof(*diskContext));
+    if (diskContext == NULL)
+    {
+        free(imageBytes);
+        return 0;
+    }
+    diskContext->imageBytes     = imageBytes;
+    diskContext->imageByteCount = imageByteCount;
+    diskContext->bytesPerSector = HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR;
+    diskContext->readOnly       = readOnly;
+    diskContext->format         = *format;
+    if (snprintf(diskContext->directoryPath, sizeof(diskContext->directoryPath), "%s", directoryPath) <= 0 ||
+        !hyperdos_win32_directory_disk_copy_entry_list(&diskContext->originalEntryList, entryList))
+    {
+        hyperdos_win32_directory_disk_destroy(diskContext);
+        return 0;
+    }
+
+    initialized = isHardDisk ? hyperdos_pc_disk_image_initialize_hard_disk(
+                                       diskImage,
+                                       directoryPath,
+                                       imageByteCount / HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR,
+                                       HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR,
+                                       readOnly,
+                                       &directoryDiskOperations,
+                                       diskContext)
+                             : hyperdos_pc_disk_image_initialize_floppy(
+                                       diskImage,
+                                       directoryPath,
+                                       imageByteCount / HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR,
+                                       HYPERDOS_WIN32_DIRECTORY_DISK_BYTES_PER_SECTOR,
+                                       readOnly,
+                                       &directoryDiskOperations,
+                                       diskContext);
+    if (!initialized)
+    {
+        hyperdos_win32_directory_disk_destroy(diskContext);
+        return 0;
+    }
+    return 1;
 }
 
 static uint16_t hyperdos_win32_directory_disk_calculate_fat16_sector_count(uint32_t totalSectorCount)
@@ -1051,38 +2084,38 @@ static int hyperdos_win32_directory_disk_load_directory_disk_image(hyperdos_pc_d
 {
     static const hyperdos_win32_directory_disk_format floppyFormats[] = {
         {
-            .totalSectorCount              = 2880u,
-            .hiddenSectorCount             = 0u,
-            .rootDirectoryEntryCount       = 224u,
-            .sectorsPerFileAllocationTable = 9u,
-            .sectorsPerTrack               = 18u,
-            .headCount                     = 2u,
-            .sectorsPerCluster             = 1u,
-            .mediaDescriptor               = 0xF0u,
-            .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
-        },
+         .totalSectorCount              = 2880u,
+         .hiddenSectorCount             = 0u,
+         .rootDirectoryEntryCount       = 224u,
+         .sectorsPerFileAllocationTable = 9u,
+         .sectorsPerTrack               = 18u,
+         .headCount                     = 2u,
+         .sectorsPerCluster             = 1u,
+         .mediaDescriptor               = 0xF0u,
+         .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
+         },
         {
-            .totalSectorCount              = 5760u,
-            .hiddenSectorCount             = 0u,
-            .rootDirectoryEntryCount       = 240u,
-            .sectorsPerFileAllocationTable = 9u,
-            .sectorsPerTrack               = 36u,
-            .headCount                     = 2u,
-            .sectorsPerCluster             = 2u,
-            .mediaDescriptor               = 0xF0u,
-            .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
-        },
+         .totalSectorCount              = 5760u,
+         .hiddenSectorCount             = 0u,
+         .rootDirectoryEntryCount       = 240u,
+         .sectorsPerFileAllocationTable = 9u,
+         .sectorsPerTrack               = 36u,
+         .headCount                     = 2u,
+         .sectorsPerCluster             = 2u,
+         .mediaDescriptor               = 0xF0u,
+         .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
+         },
         {
-            .totalSectorCount              = 11520u,
-            .hiddenSectorCount             = 0u,
-            .rootDirectoryEntryCount       = 224u,
-            .sectorsPerFileAllocationTable = 9u,
-            .sectorsPerTrack               = 72u,
-            .headCount                     = 2u,
-            .sectorsPerCluster             = 4u,
-            .mediaDescriptor               = 0xF0u,
-            .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
-        },
+         .totalSectorCount              = 11520u,
+         .hiddenSectorCount             = 0u,
+         .rootDirectoryEntryCount       = 224u,
+         .sectorsPerFileAllocationTable = 9u,
+         .sectorsPerTrack               = 72u,
+         .headCount                     = 2u,
+         .sectorsPerCluster             = 4u,
+         .mediaDescriptor               = 0xF0u,
+         .fileAllocationTableType       = HYPERDOS_WIN32_DIRECTORY_DISK_FILE_ALLOCATION_TABLE_TYPE_12,
+         },
     };
     hyperdos_win32_directory_disk_entry_list entryList;
     hyperdos_win32_directory_disk_format     selectedFormat;
