@@ -35,7 +35,6 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
     coprocessorModel = hyperdos_pc_machine_get_coprocessor_model(configuration);
 
     hyperdos_pc_keyboard_bios_reset(&machine->keyboardBios);
-    hyperdos_pc_mouse_driver_reset(&machine->mouseDriver);
     hyperdos_pc_system_bios_reset(&machine->systemBios);
     hyperdos_pc_system_bios_set_model_identifier(&machine->systemBios,
                                                  hyperdos_pc_model_get_system_bios_model_identifier(
@@ -115,7 +114,6 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
                                         &machine->pc,
                                         &machine->systemBios,
                                         &machine->keyboardBios,
-                                        &machine->mouseDriver,
                                         &machine->keyboardBiosInterface,
                                         &machine->diskBiosInterface,
                                         &machine->videoBiosInterface,

@@ -1816,10 +1816,6 @@ static void drain_host_mouse_events_to_keyboard_controller(hyperdos_win32_boot_s
         {
             break;
         }
-        hyperdos_pc_mouse_driver_receive_relative_movement(&bootState->machine.mouseDriver,
-                                                           mouseEvent.horizontalMovement,
-                                                           mouseEvent.verticalMovement,
-                                                           mouseEvent.buttonMask);
         consume_host_mouse_event(bootState);
     }
 }
@@ -3180,17 +3176,9 @@ static void render_text_display_native(HDC deviceContext, const hyperdos_win32_b
     HBRUSH   backgroundBrush    = (HBRUSH)GetStockObject(DC_BRUSH);
     uint32_t row                = 0;
     uint32_t column             = 0;
-    uint16_t mouseCursorColumn  = 0u;
-    uint16_t mouseCursorRow     = 0u;
-    int      mouseCursorVisible = 0;
 
     SetTextAlign(deviceContext, TA_LEFT | TA_TOP | TA_NOUPDATECP);
     SetBkMode(deviceContext, TRANSPARENT);
-    mouseCursorVisible = hyperdos_pc_mouse_driver_get_text_cursor_cell(&bootState->machine.mouseDriver,
-                                                                       HYPERDOS_COLOR_GRAPHICS_ADAPTER_COLUMN_COUNT,
-                                                                       HYPERDOS_COLOR_GRAPHICS_ADAPTER_ROW_COUNT,
-                                                                       &mouseCursorColumn,
-                                                                       &mouseCursorRow);
     for (row = 0; row < HYPERDOS_COLOR_GRAPHICS_ADAPTER_ROW_COUNT; ++row)
     {
         for (column = 0; column < HYPERDOS_COLOR_GRAPHICS_ADAPTER_COLUMN_COUNT; ++column)
@@ -3206,11 +3194,8 @@ static void render_text_display_native(HDC deviceContext, const hyperdos_win32_b
             COLORREF backgroundColor       = 0;
             int      textCursorHighlighted = (uint16_t)row == bootState->machine.videoServices.cursorRow &&
                                         (uint16_t)column == bootState->machine.videoServices.cursorColumn;
-            int mouseCursorHighlighted = mouseCursorVisible != 0 && (uint16_t)row == mouseCursorRow &&
-                                         (uint16_t)column == mouseCursorColumn;
-            int highlighted = textCursorHighlighted != mouseCursorHighlighted;
 
-            if (highlighted)
+            if (textCursorHighlighted)
             {
                 backgroundColor = hyperdos_pc_video_services_color_graphics_adapter_color_from_index(
                         (uint8_t)(attribute & 0x0Fu));
@@ -3246,11 +3231,8 @@ static void render_text_display_native(HDC deviceContext, const hyperdos_win32_b
             COLORREF foregroundColor       = 0;
             int      textCursorHighlighted = (uint16_t)row == bootState->machine.videoServices.cursorRow &&
                                         (uint16_t)column == bootState->machine.videoServices.cursorColumn;
-            int mouseCursorHighlighted = mouseCursorVisible != 0 && (uint16_t)row == mouseCursorRow &&
-                                         (uint16_t)column == mouseCursorColumn;
-            int highlighted = textCursorHighlighted != mouseCursorHighlighted;
 
-            if (highlighted)
+            if (textCursorHighlighted)
             {
                 foregroundColor = hyperdos_pc_video_services_color_graphics_adapter_color_from_index(
                         (uint8_t)(attribute >> 4u));
