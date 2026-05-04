@@ -113,6 +113,8 @@ void hyperdos_pc_raise_auxiliary_device_interrupt_request(hyperdos_pc*          
                                                           hyperdos_pc_board_trace_function traceFunction,
                                                           void*                            traceUserContext);
 
+void hyperdos_pc_raise_auxiliary_device_interrupt_request_line(hyperdos_pc* pc);
+
 void hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(hyperdos_pc* pc, uint8_t enabled);
 
 void hyperdos_pc_raise_interval_timer_interrupt_request(hyperdos_pc*                     pc,

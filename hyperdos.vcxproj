@@ -163,6 +163,7 @@
     <ClCompile Include="src\pc_keyboard_bios.c" />
     <ClCompile Include="src\pc_machine.c" />
     <ClCompile Include="src\pc_model.c" />
+    <ClCompile Include="src\pc_mouse_driver.c" />
     <ClCompile Include="src\pc_storage.c" />
     <ClCompile Include="src\pc_system_bios.c" />
     <ClCompile Include="src\pc_text.c" />
@@ -186,6 +187,7 @@
     <ClInclude Include="include\hyperdos\pc_keyboard_bios.h" />
     <ClInclude Include="include\hyperdos\pc_machine.h" />
     <ClInclude Include="include\hyperdos\pc_model.h" />
+    <ClInclude Include="include\hyperdos\pc_mouse_driver.h" />
     <ClInclude Include="include\hyperdos\pc_storage.h" />
     <ClInclude Include="include\hyperdos\pc_system_bios.h" />
     <ClInclude Include="include\hyperdos\pc_text.h" />

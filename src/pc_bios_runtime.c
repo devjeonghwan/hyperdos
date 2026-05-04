@@ -66,6 +66,7 @@ void hyperdos_pc_bios_runtime_initialize(hyperdos_pc_bios_runtime*              
                                          hyperdos_pc*                                           pc,
                                          hyperdos_pc_system_bios*                               systemBios,
                                          hyperdos_pc_keyboard_bios*                             keyboardBios,
+                                         hyperdos_pc_mouse_driver*                              mouseDriver,
                                          const hyperdos_pc_keyboard_bios_interface*             keyboardBiosInterface,
                                          const hyperdos_pc_disk_bios_interface*                 diskBiosInterface,
                                          const hyperdos_pc_video_bios_interface*                videoBiosInterface,
@@ -83,6 +84,7 @@ void hyperdos_pc_bios_runtime_initialize(hyperdos_pc_bios_runtime*              
     biosRuntime->pc                    = pc;
     biosRuntime->systemBios            = systemBios;
     biosRuntime->keyboardBios          = keyboardBios;
+    biosRuntime->mouseDriver           = mouseDriver;
     biosRuntime->keyboardBiosInterface = keyboardBiosInterface;
     biosRuntime->diskBiosInterface     = diskBiosInterface;
     biosRuntime->videoBiosInterface    = videoBiosInterface;
@@ -197,18 +199,101 @@ static void hyperdos_pc_bios_runtime_call_pointing_device_handler(hyperdos_x86_p
     hyperdos_x86_set_instruction_pointer_word(processor, systemBios->pointingDeviceHandlerOffset);
 }
 
+static int hyperdos_pc_bios_runtime_mouse_driver_has_event_handler(const hyperdos_pc_mouse_driver* mouseDriver)
+{
+    return mouseDriver != NULL && mouseDriver->eventHandlerMask != 0u &&
+           (mouseDriver->eventHandlerOffset != 0u || mouseDriver->eventHandlerSegment != 0u);
+}
+
+static int hyperdos_pc_bios_runtime_mouse_driver_has_pending_event_handler(const hyperdos_pc_mouse_driver* mouseDriver)
+{
+    return hyperdos_pc_bios_runtime_mouse_driver_has_event_handler(mouseDriver) &&
+           mouseDriver->pendingEventMask != 0u && mouseDriver->eventHandlerActive == 0u;
+}
+
+static void hyperdos_pc_bios_runtime_enable_mouse_event_interrupt_request_line_if_needed(
+        hyperdos_pc_bios_runtime* biosRuntime)
+{
+    if (biosRuntime == NULL || biosRuntime->pc == NULL ||
+        !hyperdos_pc_bios_runtime_mouse_driver_has_event_handler(biosRuntime->mouseDriver))
+    {
+        return;
+    }
+
+    hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(biosRuntime->pc, 1u);
+}
+
+static void hyperdos_pc_bios_runtime_install_mouse_software_interrupt_vector_if_unowned(
+        hyperdos_pc_bios_runtime* biosRuntime)
+{
+    if (biosRuntime == NULL || biosRuntime->pc == NULL || biosRuntime->mouseDriver == NULL ||
+        biosRuntime->mouseDriver->installed == 0u)
+    {
+        return;
+    }
+    if (hyperdos_pc_bios_interrupt_vector_matches(biosRuntime->pc,
+                                                  HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                  HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                                  HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET))
+    {
+        return;
+    }
+    if (!hyperdos_pc_bios_interrupt_vector_is_empty(biosRuntime->pc, HYPERDOS_PC_BIOS_MOUSE_INTERRUPT) &&
+        !hyperdos_pc_bios_interrupt_vector_points_to_interrupt_return(biosRuntime->pc,
+                                                                      HYPERDOS_PC_BIOS_MOUSE_INTERRUPT))
+    {
+        return;
+    }
+
+    hyperdos_pc_bios_install_mouse_software_interrupt_vector_stub(biosRuntime->pc);
+}
+
+static int hyperdos_pc_bios_runtime_auxiliary_output_buffer_is_pending(const hyperdos_pc_bios_runtime* biosRuntime)
+{
+    const hyperdos_intel_8042_keyboard_controller* keyboardController = NULL;
+
+    if (biosRuntime == NULL || biosRuntime->pc == NULL)
+    {
+        return 0;
+    }
+
+    keyboardController = &biosRuntime->pc->keyboardController;
+    return keyboardController->outputQueueCount != 0u &&
+           keyboardController->outputQueueAuxiliaryDevice[keyboardController->outputQueueReadIndex] != 0u;
+}
+
+static hyperdos_x86_execution_result hyperdos_pc_bios_runtime_dispatch_mouse_event_handler(
+        hyperdos_pc_bios_runtime* biosRuntime,
+        hyperdos_x86_processor*   processor)
+{
+    if (!hyperdos_pc_bios_runtime_mouse_driver_has_pending_event_handler(biosRuntime->mouseDriver))
+    {
+        return HYPERDOS_X86_EXECUTION_OK;
+    }
+
+    return hyperdos_pc_mouse_driver_dispatch_pending_event_handler(biosRuntime->mouseDriver, processor);
+}
+
 static hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_auxiliary_device_hardware_interrupt(
         hyperdos_x86_processor*   processor,
         hyperdos_pc_bios_runtime* biosRuntime)
 {
-    hyperdos_pc_system_bios* systemBios = biosRuntime->systemBios;
-    uint8_t packetByte = hyperdos_intel_8042_keyboard_controller_read_byte(&biosRuntime->pc->keyboardController,
-                                                                           HYPERDOS_PC_KEYBOARD_CONTROLLER_DATA_PORT);
+    hyperdos_pc_system_bios*      systemBios = biosRuntime->systemBios;
+    hyperdos_x86_execution_result result     = HYPERDOS_X86_EXECUTION_OK;
+    uint8_t                       packetByte = 0u;
+
+    if (!hyperdos_pc_bios_runtime_auxiliary_output_buffer_is_pending(biosRuntime))
+    {
+        return hyperdos_pc_bios_runtime_dispatch_mouse_event_handler(biosRuntime, processor);
+    }
+
+    packetByte = hyperdos_intel_8042_keyboard_controller_read_byte(&biosRuntime->pc->keyboardController,
+                                                                   HYPERDOS_PC_KEYBOARD_CONTROLLER_DATA_PORT);
 
     if (systemBios->pointingDevicePacketByteCount == 0u &&
         (packetByte & HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_ALWAYS_ONE) == 0u)
     {
-        return HYPERDOS_X86_EXECUTION_OK;
+        return hyperdos_pc_bios_runtime_dispatch_mouse_event_handler(biosRuntime, processor);
     }
 
     systemBios->pointingDevicePacketBytes[systemBios->pointingDevicePacketByteCount] = packetByte;
@@ -219,6 +304,12 @@ static hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_auxiliary_d
     }
 
     systemBios->pointingDevicePacketByteCount = 0u;
+    result = hyperdos_pc_bios_runtime_dispatch_mouse_event_handler(biosRuntime, processor);
+    if (result != HYPERDOS_X86_EXECUTION_OK ||
+        (biosRuntime->mouseDriver != NULL && biosRuntime->mouseDriver->eventHandlerActive != 0u))
+    {
+        return result;
+    }
     if (systemBios->pointingDeviceEnabled != 0u &&
         (systemBios->pointingDeviceHandlerOffset != 0u || systemBios->pointingDeviceHandlerSegment != 0u))
     {
@@ -258,6 +349,7 @@ static int hyperdos_pc_bios_runtime_is_legacy_bios_interrupt(uint8_t interruptNu
            interruptNumber == HYPERDOS_PC_BIOS_PRINTER_INTERRUPT ||
            interruptNumber == HYPERDOS_PC_BIOS_TIME_INTERRUPT ||
            interruptNumber == HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_INTERRUPT ||
+           interruptNumber == HYPERDOS_PC_BIOS_MOUSE_INTERRUPT ||
            interruptNumber == HYPERDOS_PC_BIOS_USER_TIMER_TICK_INTERRUPT;
 }
 
@@ -310,6 +402,11 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyperdos
     {
         return hyperdos_pc_bios_runtime_handle_korean_video_interrupt(processor, biosRuntime, serviceNumber);
     }
+    if (interruptNumber == HYPERDOS_PC_BIOS_MOUSE_INTERRUPT)
+    {
+        hyperdos_pc_bios_runtime_install_mouse_software_interrupt_vector_if_unowned(biosRuntime);
+        return HYPERDOS_X86_EXECUTION_INTERRUPT_NOT_HANDLED;
+    }
     if (interruptNumber == HYPERDOS_PC_BIOS_KEYBOARD_SERVICE_INTERRUPT)
     {
         return hyperdos_pc_bios_runtime_handle_keyboard_hardware_interrupt(processor, biosRuntime);
@@ -322,6 +419,31 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyperdos
     if (interruptNumber == HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_SERVICE_INTERRUPT)
     {
         return hyperdos_pc_bios_runtime_handle_auxiliary_device_hardware_interrupt(processor, biosRuntime);
+    }
+    if (interruptNumber == HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT)
+    {
+        hyperdos_x86_execution_result result = hyperdos_pc_mouse_driver_handle_interrupt(biosRuntime->mouseDriver,
+                                                                                         processor);
+        if (result == HYPERDOS_X86_EXECUTION_OK)
+        {
+            hyperdos_pc_bios_runtime_enable_mouse_event_interrupt_request_line_if_needed(biosRuntime);
+        }
+        return result;
+    }
+    if (interruptNumber == HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_SERVICE_INTERRUPT)
+    {
+        hyperdos_pc_mouse_driver_complete_event_handler(biosRuntime->mouseDriver, processor);
+        return HYPERDOS_X86_EXECUTION_OK;
+    }
+    if (interruptNumber == HYPERDOS_PC_BIOS_MOUSE_BACKDOOR_SERVICE_INTERRUPT)
+    {
+        hyperdos_x86_execution_result
+                result = hyperdos_pc_mouse_driver_handle_backdoor_interrupt(biosRuntime->mouseDriver, processor);
+        if (result == HYPERDOS_X86_EXECUTION_OK)
+        {
+            hyperdos_pc_bios_runtime_enable_mouse_event_interrupt_request_line_if_needed(biosRuntime);
+        }
+        return result;
     }
     if (interruptNumber == HYPERDOS_PC_BIOS_KEYBOARD_SOFTWARE_SERVICE_INTERRUPT)
     {
@@ -559,6 +681,7 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_service_pending_hardware_
     }
 
     processor = &biosRuntime->pc->processor;
+    hyperdos_pc_bios_runtime_install_mouse_software_interrupt_vector_if_unowned(biosRuntime);
     hyperdos_pc_system_bios_service_wait_event(biosRuntime->systemBios, biosRuntime->pc);
     if (biosRuntime->drainKeyboardInput != NULL)
     {
@@ -570,6 +693,10 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_service_pending_hardware_
     hyperdos_pc_raise_auxiliary_device_interrupt_request(biosRuntime->pc,
                                                          biosRuntime->traceFunction,
                                                          biosRuntime->userContext);
+    if (hyperdos_pc_bios_runtime_mouse_driver_has_pending_event_handler(biosRuntime->mouseDriver))
+    {
+        hyperdos_pc_raise_auxiliary_device_interrupt_request_line(biosRuntime->pc);
+    }
     hyperdos_pc_raise_interval_timer_interrupt_request(biosRuntime->pc,
                                                        biosRuntime->traceFunction,
                                                        biosRuntime->userContext);

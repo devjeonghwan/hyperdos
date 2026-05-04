@@ -62,6 +62,8 @@ enum
     TEST_AUXILIARY_MOUSE_PACKET_ALWAYS_ONE                           = 0x08u,
     TEST_AUXILIARY_MOUSE_PACKET_HORIZONTAL_SIGN                      = 0x10u,
     TEST_AUXILIARY_MOUSE_PACKET_VERTICAL_SIGN                        = 0x20u,
+    TEST_MOUSE_DRIVER_EVENT_MOVEMENT                                 = 0x0001u,
+    TEST_MOUSE_DRIVER_EVENT_LEFT_PRESS                               = 0x0002u,
     TEST_PC_EQUIPMENT_FLAGS_POINTING_DEVICE_PRESENT                  = 0x0004u,
     TEST_MASTER_CASCADE_INTERRUPT_MASK                               = 0x04u,
     TEST_AUXILIARY_DEVICE_INTERRUPT_MASK                             = 0x10u,
@@ -228,6 +230,19 @@ static const uint8_t sampleDosProgram[] = {
     'H',   'y',   'p',   'e',   'r',   'D',   'O',   'S',   ' ',   'D',   'O',   'S',   ' ',
     'C',   'O',   'M',   ' ',   's',   'a',   'm',   'p',   'l',   'e',   0x0Du, 0x0Au, '$',
 };
+
+static void test_write_real_mode_interrupt_vector(hyperdos_pc* pc,
+                                                  uint8_t      interruptNumber,
+                                                  uint16_t     segment,
+                                                  uint16_t     offset)
+{
+    uint32_t vectorAddress = (uint32_t)interruptNumber * 4u;
+
+    pc->processorMemory[vectorAddress]      = (uint8_t)(offset & 0x00FFu);
+    pc->processorMemory[vectorAddress + 1u] = (uint8_t)(offset >> HYPERDOS_X86_BYTE_BIT_COUNT);
+    pc->processorMemory[vectorAddress + 2u] = (uint8_t)(segment & 0x00FFu);
+    pc->processorMemory[vectorAddress + 3u] = (uint8_t)(segment >> HYPERDOS_X86_BYTE_BIT_COUNT);
+}
 
 static hyperdos_pc_disk_image* test_get_disk_bios_disk_image(void* userContext, uint8_t driveNumber)
 {
@@ -4742,6 +4757,867 @@ static void test_pointing_device_bios_callback_from_auxiliary_interrupt(void)
     free(machine);
 }
 
+static void test_mouse_driver_interrupt_services(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+    assert(hyperdos_pc_bios_interrupt_vector_matches(&machine->pc,
+                                                     HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET));
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0001u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_pc_mouse_driver_cursor_is_visible(&machine->mouseDriver));
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x001Fu);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0x1234u);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, 0x5678u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(!hyperdos_pc_mouse_driver_cursor_is_visible(&machine->mouseDriver));
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 0u);
+    assert(hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA) == 0u);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0020u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_pc_mouse_driver_cursor_is_visible(&machine->mouseDriver));
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0004u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, 100u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, 50u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+
+    hyperdos_pc_mouse_driver_receive_relative_movement(&machine->mouseDriver, 8, -16, TEST_AUXILIARY_MOUSE_LEFT_BUTTON);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0003u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert((hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) &
+            TEST_AUXILIARY_MOUSE_LEFT_BUTTON) != 0u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) == 108u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == 58u);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0005u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert((hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+            TEST_AUXILIARY_MOUSE_LEFT_BUTTON) != 0u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 1u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) == 108u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == 58u);
+
+    hyperdos_pc_mouse_driver_receive_relative_movement(&machine->mouseDriver, 0, 0, 0u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0006u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert((hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+            TEST_AUXILIARY_MOUSE_LEFT_BUTTON) == 0u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 1u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) == 108u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == 58u);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x000Bu);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) == 8u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == 0xFFF0u);
+    free(machine);
+}
+
+static void test_mouse_driver_state_restores_button_history_positions(void)
+{
+    enum
+    {
+        TEST_STATE_SEGMENT = 0x2800u,
+        TEST_STATE_OFFSET  = 0x0100u
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0004u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, 100u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, 50u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+
+    hyperdos_pc_mouse_driver_receive_relative_movement(&machine->mouseDriver, 8, -16, TEST_AUXILIARY_MOUSE_LEFT_BUTTON);
+    hyperdos_pc_mouse_driver_receive_relative_movement(&machine->mouseDriver, 0, 0, 0u);
+
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, TEST_STATE_SEGMENT);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, TEST_STATE_OFFSET);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0016u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 1u);
+
+    hyperdos_pc_mouse_driver_reset(&machine->mouseDriver);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, TEST_STATE_SEGMENT);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, TEST_STATE_OFFSET);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0017u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 1u);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0005u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 1u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) == 108u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == 58u);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0006u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 1u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) == 108u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == 58u);
+
+    free(machine);
+}
+
+static void test_mouse_driver_software_interrupt_uses_vector_stub(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT       = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER = 0x0100u
+    };
+    static const uint8_t                   programBytes[] = {0xCDu, HYPERDOS_PC_BIOS_MOUSE_INTERRUPT, 0xF4u};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+    assert(hyperdos_pc_bios_interrupt_vector_matches(&machine->pc,
+                                                     HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET));
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+    free(machine);
+}
+
+static void test_mouse_driver_hardware_service_installs_unowned_vector(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_execution_result          result = HYPERDOS_X86_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    test_write_real_mode_interrupt_vector(&machine->pc, HYPERDOS_PC_BIOS_MOUSE_INTERRUPT, 0u, 0u);
+
+    result = hyperdos_pc_bios_runtime_service_pending_hardware_interrupts(&machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_pc_bios_interrupt_vector_matches(&machine->pc,
+                                                     HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET));
+
+    free(machine);
+}
+
+static void test_mouse_driver_hardware_service_keeps_guest_vector(void)
+{
+    enum
+    {
+        TEST_GUEST_VECTOR_SEGMENT = 0x2600u,
+        TEST_GUEST_VECTOR_OFFSET  = 0x0040u
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_execution_result          result = HYPERDOS_X86_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    machine->pc.processorMemory[((uint32_t)TEST_GUEST_VECTOR_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT) +
+                                TEST_GUEST_VECTOR_OFFSET] = 0xCBu;
+    test_write_real_mode_interrupt_vector(&machine->pc,
+                                          HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                          TEST_GUEST_VECTOR_SEGMENT,
+                                          TEST_GUEST_VECTOR_OFFSET);
+
+    result = hyperdos_pc_bios_runtime_service_pending_hardware_interrupts(&machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_pc_bios_interrupt_vector_matches(&machine->pc,
+                                                     HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                     TEST_GUEST_VECTOR_SEGMENT,
+                                                     TEST_GUEST_VECTOR_OFFSET));
+
+    free(machine);
+}
+
+static void test_mouse_driver_software_interrupt_restores_empty_vector(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT       = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER = 0x0100u
+    };
+    static const uint8_t                   programBytes[] = {0xCDu, HYPERDOS_PC_BIOS_MOUSE_INTERRUPT, 0xF4u};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    test_write_real_mode_interrupt_vector(&machine->pc, HYPERDOS_PC_BIOS_MOUSE_INTERRUPT, 0u, 0u);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_pc_bios_interrupt_vector_matches(&machine->pc,
+                                                     HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET));
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+    free(machine);
+}
+
+static void test_mouse_driver_software_interrupt_restores_interrupt_return_vector(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT          = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT    = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER    = 0x0100u,
+        TEST_INTERRUPT_RETURN_SEGMENT = 0x2600u,
+        TEST_INTERRUPT_RETURN_OFFSET  = 0x0040u
+    };
+    static const uint8_t                   programBytes[] = {0xCDu, HYPERDOS_PC_BIOS_MOUSE_INTERRUPT, 0xF4u};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+    uint32_t interruptReturnPhysicalAddress = ((uint32_t)TEST_INTERRUPT_RETURN_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT) +
+                                              TEST_INTERRUPT_RETURN_OFFSET;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    machine->pc.processorMemory[interruptReturnPhysicalAddress] = 0xCFu;
+    test_write_real_mode_interrupt_vector(&machine->pc,
+                                          HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                          TEST_INTERRUPT_RETURN_SEGMENT,
+                                          TEST_INTERRUPT_RETURN_OFFSET);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_pc_bios_interrupt_vector_matches(&machine->pc,
+                                                     HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                                     HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET));
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+    free(machine);
+}
+
+static void test_mouse_driver_interrupt_vector_push_flags_far_call_preserves_stack_pointer(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT       = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER = 0x0100u,
+        TEST_INITIAL_FLAGS         = HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_CARRY | HYPERDOS_X86_FLAG_SIGN |
+                             HYPERDOS_X86_FLAG_INTERRUPT_ENABLE
+    };
+    static const uint8_t                   programBytes[] = {0x9Cu,
+                                                             0x9Au,
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET >> 8u),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT >> 8u),
+                                                             0xF4u};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    hyperdos_x86_set_flags_word(processor, (uint16_t)TEST_INITIAL_FLAGS);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_PROGRAM_STACK_POINTER);
+    assert(hyperdos_x86_get_flags_word(processor) == (uint16_t)TEST_INITIAL_FLAGS);
+    free(machine);
+}
+
+static void test_mouse_driver_interrupt_vector_push_flags_memory_far_call_preserves_stack_pointer(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT       = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER = 0x0100u,
+        TEST_VECTOR_POINTER_OFFSET = 0x0010u,
+        TEST_INITIAL_FLAGS         = HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_CARRY | HYPERDOS_X86_FLAG_SIGN |
+                             HYPERDOS_X86_FLAG_INTERRUPT_ENABLE
+    };
+    static const uint8_t                   programBytes[] = {0x9Cu,
+                                                             0xFFu,
+                                                             0x1Eu,
+                                                             (uint8_t)(TEST_VECTOR_POINTER_OFFSET & 0x00FFu),
+                                                             (uint8_t)(TEST_VECTOR_POINTER_OFFSET >> 8u),
+                                                             0xF4u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET >> 8u),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT >> 8u)};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    hyperdos_x86_set_flags_word(processor, (uint16_t)TEST_INITIAL_FLAGS);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_PROGRAM_STACK_POINTER);
+    assert(hyperdos_x86_get_flags_word(processor) == (uint16_t)TEST_INITIAL_FLAGS);
+    free(machine);
+}
+
+static void test_mouse_driver_interrupt_vector_push_flags_code_memory_far_call_preserves_stack_pointer(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT       = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER = 0x0100u,
+        TEST_VECTOR_POINTER_OFFSET = 0x0010u,
+        TEST_INITIAL_FLAGS         = HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_CARRY | HYPERDOS_X86_FLAG_SIGN |
+                             HYPERDOS_X86_FLAG_INTERRUPT_ENABLE
+    };
+    static const uint8_t                   programBytes[] = {0x9Cu,
+                                                             0x2Eu,
+                                                             0xFFu,
+                                                             0x1Eu,
+                                                             (uint8_t)(TEST_VECTOR_POINTER_OFFSET & 0x00FFu),
+                                                             (uint8_t)(TEST_VECTOR_POINTER_OFFSET >> 8u),
+                                                             0xF4u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             0x00u,
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET >> 8u),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT >> 8u)};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0000u);
+    hyperdos_x86_set_flags_word(processor, (uint16_t)TEST_INITIAL_FLAGS);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) == 0xFFFFu);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == 3u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_PROGRAM_STACK_POINTER);
+    assert(hyperdos_x86_get_flags_word(processor) == (uint16_t)TEST_INITIAL_FLAGS);
+    free(machine);
+}
+
+static void test_mouse_driver_interrupt_vector_backdoor_call_uses_register_pointers(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT            = 0x2400u,
+        TEST_PROGRAM_STACK_SEGMENT      = 0x2500u,
+        TEST_PROGRAM_STACK_POINTER      = 0x0100u,
+        TEST_ACCUMULATOR_POINTER_OFFSET = 0x0040u,
+        TEST_BASE_POINTER_OFFSET        = 0x0042u,
+        TEST_COUNTER_POINTER_OFFSET     = 0x0044u,
+        TEST_DATA_POINTER_OFFSET        = 0x0046u,
+        TEST_EVENT_HANDLER_MASK         = 0x0003u,
+        TEST_EVENT_HANDLER_SEGMENT      = 0x3456u,
+        TEST_EVENT_HANDLER_OFFSET       = 0x789Au
+    };
+    static const uint8_t                   programBytes[] = {0xB8u,
+                                                             (uint8_t)(TEST_ACCUMULATOR_POINTER_OFFSET & 0x00FFu),
+                                                             (uint8_t)(TEST_ACCUMULATOR_POINTER_OFFSET >> 8u),
+                                                             0x50u,
+                                                             0xB8u,
+                                                             (uint8_t)(TEST_BASE_POINTER_OFFSET & 0x00FFu),
+                                                             (uint8_t)(TEST_BASE_POINTER_OFFSET >> 8u),
+                                                             0x50u,
+                                                             0xB8u,
+                                                             (uint8_t)(TEST_COUNTER_POINTER_OFFSET & 0x00FFu),
+                                                             (uint8_t)(TEST_COUNTER_POINTER_OFFSET >> 8u),
+                                                             0x50u,
+                                                             0xB8u,
+                                                             (uint8_t)(TEST_DATA_POINTER_OFFSET & 0x00FFu),
+                                                             (uint8_t)(TEST_DATA_POINTER_OFFSET >> 8u),
+                                                             0x50u,
+                                                             0x9Au,
+                                                             (uint8_t)((HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET + 2u) & 0x00FFu),
+                                                             (uint8_t)((HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET + 2u) >> 8u),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT & 0x00FFu),
+                                                             (uint8_t)(HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT >> 8u),
+                                                             0xF4u};
+    hyperdos_pc_machine*                   machine        = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_PROGRAM_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+    machine->pc.processorMemory[programPhysicalAddress + TEST_ACCUMULATOR_POINTER_OFFSET]      = 0x0Cu;
+    machine->pc.processorMemory[programPhysicalAddress + TEST_ACCUMULATOR_POINTER_OFFSET + 1u] = 0x00u;
+    machine->pc.processorMemory[programPhysicalAddress +
+                                TEST_BASE_POINTER_OFFSET]    = (uint8_t)(TEST_EVENT_HANDLER_SEGMENT & 0x00FFu);
+    machine->pc.processorMemory[programPhysicalAddress + TEST_BASE_POINTER_OFFSET +
+                                1u]                          = (uint8_t)(TEST_EVENT_HANDLER_SEGMENT >> 8u);
+    machine->pc.processorMemory[programPhysicalAddress +
+                                TEST_COUNTER_POINTER_OFFSET] = (uint8_t)(TEST_EVENT_HANDLER_MASK & 0x00FFu);
+    machine->pc.processorMemory[programPhysicalAddress + TEST_COUNTER_POINTER_OFFSET +
+                                1u]                          = (uint8_t)(TEST_EVENT_HANDLER_MASK >> 8u);
+    machine->pc.processorMemory[programPhysicalAddress +
+                                TEST_DATA_POINTER_OFFSET]    = (uint8_t)(TEST_EVENT_HANDLER_OFFSET & 0x00FFu);
+    machine->pc.processorMemory[programPhysicalAddress + TEST_DATA_POINTER_OFFSET +
+                                1u]                          = (uint8_t)(TEST_EVENT_HANDLER_OFFSET >> 8u);
+
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER) ==
+           TEST_PROGRAM_STACK_POINTER);
+    assert(machine->mouseDriver.eventHandlerMask == TEST_EVENT_HANDLER_MASK);
+    assert(machine->mouseDriver.eventHandlerSegment == TEST_EVENT_HANDLER_SEGMENT);
+    assert(machine->mouseDriver.eventHandlerOffset == TEST_EVENT_HANDLER_OFFSET);
+    assert(test_read_memory_word(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_ACCUMULATOR_POINTER_OFFSET) ==
+           0x000Cu);
+    free(machine);
+}
+
+static void test_mouse_driver_event_callback(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT                     = 0x2400u,
+        TEST_CALLBACK_SEGMENT                    = 0x2500u,
+        TEST_DATA_SEGMENT                        = 0x2600u,
+        TEST_STACK_SEGMENT                       = 0x2700u,
+        TEST_PROGRAM_STACK_POINTER               = 0x0100u,
+        TEST_CALLBACK_EVENT_MASK_OFFSET          = 0x0040u,
+        TEST_CALLBACK_BUTTON_MASK_OFFSET         = 0x0042u,
+        TEST_CALLBACK_HORIZONTAL_POSITION_OFFSET = 0x0044u,
+        TEST_CALLBACK_VERTICAL_POSITION_OFFSET   = 0x0046u,
+        TEST_CALLBACK_HORIZONTAL_MOVEMENT_OFFSET = 0x0048u,
+        TEST_CALLBACK_VERTICAL_MOVEMENT_OFFSET   = 0x004Au,
+        TEST_RESTORED_ACCUMULATOR                = 0xABCDu,
+        TEST_RESTORED_BASE                       = 0xBCDEu,
+        TEST_RESTORED_COUNTER                    = 0xCDEFu,
+        TEST_RESTORED_DATA                       = 0xDEF0u,
+        TEST_RESTORED_BASE_POINTER               = 0x1357u,
+        TEST_RESTORED_SOURCE_INDEX               = 0x2468u,
+        TEST_RESTORED_DESTINATION_INDEX          = 0x369Au,
+        TEST_RESTORED_EXTRA_SEGMENT              = 0x2800u,
+        TEST_RESTORED_FLAGS = HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_CARRY | HYPERDOS_X86_FLAG_SIGN |
+                              HYPERDOS_X86_FLAG_INTERRUPT_ENABLE
+    };
+    static const uint8_t programBytes[]  = {0xF4u};
+    static const uint8_t callbackBytes[] = {0x89u, 0x06u, 0x40u, 0x00u, 0x89u, 0x1Eu, 0x42u, 0x00u, 0x89u,
+                                            0x0Eu, 0x44u, 0x00u, 0x89u, 0x16u, 0x46u, 0x00u, 0x89u, 0x36u,
+                                            0x48u, 0x00u, 0x89u, 0x3Eu, 0x4Au, 0x00u, 0xCBu};
+    hyperdos_pc_machine* machine         = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+    uint32_t callbackPhysicalAddress                 = (uint32_t)TEST_CALLBACK_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_DATA_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+    memcpy(&machine->pc.processorMemory[callbackPhysicalAddress], callbackBytes, sizeof(callbackBytes));
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x0004u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, 100u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, 50u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x000Cu);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                           TEST_MOUSE_DRIVER_EVENT_MOVEMENT | TEST_MOUSE_DRIVER_EVENT_LEFT_PRESS);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, 0u);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, TEST_CALLBACK_SEGMENT);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                           TEST_RESTORED_ACCUMULATOR);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, TEST_RESTORED_BASE);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER, TEST_RESTORED_COUNTER);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, TEST_RESTORED_DATA);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER,
+                                           TEST_RESTORED_BASE_POINTER);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX,
+                                           TEST_RESTORED_SOURCE_INDEX);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX,
+                                           TEST_RESTORED_DESTINATION_INDEX);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, TEST_RESTORED_EXTRA_SEGMENT);
+    hyperdos_x86_set_flags_word(processor, (uint16_t)TEST_RESTORED_FLAGS);
+    hyperdos_pc_mouse_driver_receive_relative_movement(&machine->mouseDriver, 8, -16, TEST_AUXILIARY_MOUSE_LEFT_BUTTON);
+    result = hyperdos_pc_mouse_driver_dispatch_pending_event_handler(&machine->mouseDriver, processor);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+    result = hyperdos_x86_execute(processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(machine->mouseDriver.eventHandlerActive == 0u);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           TEST_RESTORED_ACCUMULATOR);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE) == TEST_RESTORED_BASE);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_COUNTER) ==
+           TEST_RESTORED_COUNTER);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA) == TEST_RESTORED_DATA);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE_POINTER) ==
+           TEST_RESTORED_BASE_POINTER);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_SOURCE_INDEX) ==
+           TEST_RESTORED_SOURCE_INDEX);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DESTINATION_INDEX) ==
+           TEST_RESTORED_DESTINATION_INDEX);
+    assert(hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA) ==
+           TEST_RESTORED_EXTRA_SEGMENT);
+    assert(hyperdos_x86_get_flags_word(processor) == (uint16_t)TEST_RESTORED_FLAGS);
+    assert(test_read_memory_word(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_CALLBACK_EVENT_MASK_OFFSET) ==
+           (TEST_MOUSE_DRIVER_EVENT_MOVEMENT | TEST_MOUSE_DRIVER_EVENT_LEFT_PRESS));
+    assert(test_read_memory_word(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_CALLBACK_BUTTON_MASK_OFFSET) ==
+           TEST_AUXILIARY_MOUSE_LEFT_BUTTON);
+    assert(test_read_memory_word(processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                 TEST_CALLBACK_HORIZONTAL_POSITION_OFFSET) == 108u);
+    assert(test_read_memory_word(processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                 TEST_CALLBACK_VERTICAL_POSITION_OFFSET) == 58u);
+    assert(test_read_memory_word(processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                 TEST_CALLBACK_HORIZONTAL_MOVEMENT_OFFSET) == 8u);
+    assert(test_read_memory_word(processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                 TEST_CALLBACK_VERTICAL_MOVEMENT_OFFSET) == 0xFFF0u);
+    free(machine);
+}
+
+static void test_mouse_driver_event_callback_waits_until_keyboard_interrupt_completes(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT          = 0x2400u,
+        TEST_CALLBACK_SEGMENT         = 0x2500u,
+        TEST_DATA_SEGMENT             = 0x2600u,
+        TEST_STACK_SEGMENT            = 0x2700u,
+        TEST_PROGRAM_STACK_POINTER    = 0x0100u,
+        TEST_CALLBACK_MARKER_OFFSET   = 0x0040u,
+        TEST_CALLBACK_MARKER_WORD     = 0xBEEFu,
+        TEST_FIRST_INSTRUCTION_LIMIT  = 256u,
+        TEST_SECOND_INSTRUCTION_LIMIT = 512u
+    };
+    static const uint8_t                   programBytes[]  = {0xEBu, 0xFEu};
+    static const uint8_t                   callbackBytes[] = {0xB8u,
+                                                              (uint8_t)(TEST_CALLBACK_MARKER_WORD & 0x00FFu),
+                                                              (uint8_t)(TEST_CALLBACK_MARKER_WORD >> 8u),
+                                                              0xA3u,
+                                                              (uint8_t)(TEST_CALLBACK_MARKER_OFFSET & 0x00FFu),
+                                                              (uint8_t)(TEST_CALLBACK_MARKER_OFFSET >> 8u),
+                                                              0xCBu};
+    hyperdos_pc_machine*                   machine         = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor                = NULL;
+    hyperdos_x86_execution_result          result                   = HYPERDOS_X86_EXECUTION_OK;
+    uint64_t                               executedInstructionCount = 0u;
+    uint32_t programPhysicalAddress  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+    uint32_t callbackPhysicalAddress = (uint32_t)TEST_CALLBACK_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_runtime_initialize_data_area(&machine->biosRuntime, NULL, 1u);
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_DATA_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
+                                           TEST_PROGRAM_STACK_POINTER);
+    hyperdos_x86_set_flags_word(processor, HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_INTERRUPT_ENABLE);
+    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+    memcpy(&machine->pc.processorMemory[callbackPhysicalAddress], callbackBytes, sizeof(callbackBytes));
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0x000Cu);
+    hyperdos_x86_set_general_register_word(processor,
+                                           HYPERDOS_X86_GENERAL_REGISTER_COUNTER,
+                                           TEST_MOUSE_DRIVER_EVENT_MOVEMENT);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_DATA, 0u);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_EXTRA, TEST_CALLBACK_SEGMENT);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+                                                       HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+                                                       &machine->biosRuntime);
+    assert(result == HYPERDOS_X86_EXECUTION_OK);
+
+    assert(hyperdos_intel_8042_keyboard_controller_receive_scan_code(&machine->pc.keyboardController,
+                                                                     TEST_KEYBOARD_SCAN_CODE_A));
+    hyperdos_pc_mouse_driver_receive_relative_movement(&machine->mouseDriver, 8, 0, 0u);
+    result = hyperdos_pc_bios_runtime_execute_processor_slice(&machine->biosRuntime,
+                                                              TEST_FIRST_INSTRUCTION_LIMIT,
+                                                              &executedInstructionCount);
+    assert(result == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(machine->pc.keyboardController.outputQueueCount == 0u);
+    assert(machine->mouseDriver.pendingEventMask == TEST_MOUSE_DRIVER_EVENT_MOVEMENT);
+    assert(test_read_memory_word(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_CALLBACK_MARKER_OFFSET) == 0u);
+
+    result = hyperdos_pc_bios_runtime_execute_processor_slice(&machine->biosRuntime,
+                                                              TEST_SECOND_INSTRUCTION_LIMIT,
+                                                              &executedInstructionCount);
+    assert(result == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(machine->mouseDriver.pendingEventMask == 0u);
+    assert(test_read_memory_word(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_CALLBACK_MARKER_OFFSET) ==
+           TEST_CALLBACK_MARKER_WORD);
+    free(machine);
+}
+
 static void test_keyboard_bios_status_return_flags(void)
 {
     hyperdos_pc_machine*                   machine = NULL;
@@ -7505,6 +8381,19 @@ int main(void)
     test_cascaded_programmable_interrupt_controller();
     test_pointing_device_bios_services();
     test_pointing_device_bios_callback_from_auxiliary_interrupt();
+    test_mouse_driver_interrupt_services();
+    test_mouse_driver_state_restores_button_history_positions();
+    test_mouse_driver_software_interrupt_uses_vector_stub();
+    test_mouse_driver_hardware_service_installs_unowned_vector();
+    test_mouse_driver_hardware_service_keeps_guest_vector();
+    test_mouse_driver_software_interrupt_restores_empty_vector();
+    test_mouse_driver_software_interrupt_restores_interrupt_return_vector();
+    test_mouse_driver_interrupt_vector_push_flags_far_call_preserves_stack_pointer();
+    test_mouse_driver_interrupt_vector_push_flags_memory_far_call_preserves_stack_pointer();
+    test_mouse_driver_interrupt_vector_push_flags_code_memory_far_call_preserves_stack_pointer();
+    test_mouse_driver_interrupt_vector_backdoor_call_uses_register_pointers();
+    test_mouse_driver_event_callback();
+    test_mouse_driver_event_callback_waits_until_keyboard_interrupt_completes();
     test_keyboard_bios_status_return_flags();
     test_keyboard_bios_status_return_flags_through_firmware_stub();
     test_keyboard_bios_read_waits_with_interrupts_enabled();

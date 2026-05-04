@@ -20,6 +20,7 @@ enum
     HYPERDOS_PC_BIOS_PRINTER_INTERRUPT                              = 0x17u,
     HYPERDOS_PC_BIOS_TIME_INTERRUPT                                 = 0x1Au,
     HYPERDOS_PC_BIOS_USER_TIMER_TICK_INTERRUPT                      = 0x1Cu,
+    HYPERDOS_PC_BIOS_MOUSE_INTERRUPT                                = 0x33u,
     HYPERDOS_PC_BIOS_KEYBOARD_SERVICE_INTERRUPT                     = 0xF1u,
     HYPERDOS_PC_BIOS_DISK_SERVICE_INTERRUPT                         = 0xF2u,
     HYPERDOS_PC_BIOS_KEYBOARD_SOFTWARE_SERVICE_INTERRUPT            = 0xF3u,
@@ -32,6 +33,9 @@ enum
     HYPERDOS_PC_BIOS_TIME_SERVICE_INTERRUPT                         = 0xFAu,
     HYPERDOS_PC_BIOS_TIMER_SERVICE_INTERRUPT                        = 0xFBu,
     HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_SERVICE_INTERRUPT             = 0xFCu,
+    HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT                        = 0xFDu,
+    HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_SERVICE_INTERRUPT       = 0xFEu,
+    HYPERDOS_PC_BIOS_MOUSE_BACKDOOR_SERVICE_INTERRUPT               = 0xFFu,
     HYPERDOS_PC_BIOS_KEYBOARD_HARDWARE_STUB_SEGMENT                 = 0xF000u,
     HYPERDOS_PC_BIOS_KEYBOARD_HARDWARE_STUB_OFFSET                  = 0x0100u,
     HYPERDOS_PC_BIOS_TIMER_HARDWARE_STUB_SEGMENT                    = 0xF000u,
@@ -59,10 +63,16 @@ enum
     HYPERDOS_PC_BIOS_PRINTER_STUB_SEGMENT                           = 0xF000u,
     HYPERDOS_PC_BIOS_PRINTER_STUB_OFFSET                            = 0x013Cu,
     HYPERDOS_PC_BIOS_TIME_STUB_SEGMENT                              = 0xF000u,
-    HYPERDOS_PC_BIOS_TIME_STUB_OFFSET                               = 0x0140u
+    HYPERDOS_PC_BIOS_TIME_STUB_OFFSET                               = 0x0140u,
+    HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT                             = 0xF000u,
+    HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET                              = 0x0144u,
+    HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_STUB_SEGMENT            = 0xF000u,
+    HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_STUB_OFFSET             = 0x0190u
 };
 
 void hyperdos_pc_bios_install_interrupt_vector_stubs(hyperdos_pc* pc);
+
+void hyperdos_pc_bios_install_mouse_software_interrupt_vector_stub(hyperdos_pc* pc);
 
 void hyperdos_pc_bios_set_carry_flag(hyperdos_x86_processor* processor, int carry);
 
@@ -80,6 +90,8 @@ int hyperdos_pc_bios_interrupt_vector_matches(hyperdos_pc* pc,
                                               uint16_t     expectedOffset);
 
 int hyperdos_pc_bios_interrupt_vector_is_empty(hyperdos_pc* pc, uint8_t interruptNumber);
+
+int hyperdos_pc_bios_interrupt_vector_points_to_interrupt_return(hyperdos_pc* pc, uint8_t interruptNumber);
 
 int hyperdos_pc_bios_keyboard_hardware_interrupt_vector_is_default(hyperdos_pc* pc);
 

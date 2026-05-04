@@ -6,6 +6,7 @@
 #include "hyperdos/pc_bios.h"
 #include "hyperdos/pc_disk_bios.h"
 #include "hyperdos/pc_keyboard_bios.h"
+#include "hyperdos/pc_mouse_driver.h"
 #include "hyperdos/pc_system_bios.h"
 #include "hyperdos/pc_video_bios.h"
 
@@ -19,6 +20,7 @@ typedef struct hyperdos_pc_bios_runtime
     hyperdos_pc*                                           pc;
     hyperdos_pc_system_bios*                               systemBios;
     hyperdos_pc_keyboard_bios*                             keyboardBios;
+    hyperdos_pc_mouse_driver*                              mouseDriver;
     const hyperdos_pc_keyboard_bios_interface*             keyboardBiosInterface;
     const hyperdos_pc_disk_bios_interface*                 diskBiosInterface;
     const hyperdos_pc_video_bios_interface*                videoBiosInterface;
@@ -31,6 +33,7 @@ void hyperdos_pc_bios_runtime_initialize(hyperdos_pc_bios_runtime*              
                                          hyperdos_pc*                                           pc,
                                          hyperdos_pc_system_bios*                               systemBios,
                                          hyperdos_pc_keyboard_bios*                             keyboardBios,
+                                         hyperdos_pc_mouse_driver*                              mouseDriver,
                                          const hyperdos_pc_keyboard_bios_interface*             keyboardBiosInterface,
                                          const hyperdos_pc_disk_bios_interface*                 diskBiosInterface,
                                          const hyperdos_pc_video_bios_interface*                videoBiosInterface,

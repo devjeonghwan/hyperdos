@@ -516,9 +516,19 @@ void hyperdos_pc_raise_auxiliary_device_interrupt_request(hyperdos_pc*          
         return;
     }
 
+    hyperdos_pc_raise_auxiliary_device_interrupt_request_line(pc);
+    hyperdos_intel_8042_keyboard_controller_clear_auxiliary_device_interrupt_request(&pc->keyboardController);
+}
+
+void hyperdos_pc_raise_auxiliary_device_interrupt_request_line(hyperdos_pc* pc)
+{
+    if (pc == NULL || pc->slaveProgrammableInterruptControllerEnabled == 0u)
+    {
+        return;
+    }
+
     hyperdos_programmable_interrupt_controller_raise_request(&pc->slaveProgrammableInterruptController,
                                                              HYPERDOS_PC_AUXILIARY_DEVICE_INTERRUPT_REQUEST_LINE);
-    hyperdos_intel_8042_keyboard_controller_clear_auxiliary_device_interrupt_request(&pc->keyboardController);
 }
 
 void hyperdos_pc_set_auxiliary_device_interrupt_request_enabled(hyperdos_pc* pc, uint8_t enabled)

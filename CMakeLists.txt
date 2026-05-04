@@ -23,6 +23,7 @@ add_library(hyperdos STATIC
         src/pc_keyboard_bios.c
         src/pc_machine.c
         src/pc_model.c
+        src/pc_mouse_driver.c
         src/pc_storage.c
         src/pc_system_bios.c
         src/pc_text.c

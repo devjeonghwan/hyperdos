@@ -19,6 +19,7 @@ enum
     HYPERDOS_PC_BIOS_OPERATION_CODE_INPUT_ACCUMULATOR_IMMEDIATE         = 0xE4u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_MOVE_HIGH_ACCUMULATOR_IMMEDIATE     = 0xB4u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_MOVE_LOW_ACCUMULATOR_IMMEDIATE      = 0xB0u,
+    HYPERDOS_PC_BIOS_OPERATION_CODE_JUMP_SHORT                          = 0xEBu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_SET_CARRY_FLAG                      = 0xF9u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_CLEAR_INTERRUPT_FLAG                = 0xFAu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_ADD_STACK_POINTER_IMMEDIATE         = 0x83u,
@@ -26,6 +27,7 @@ enum
     HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_IMMEDIATE                 = 0xCDu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_JUMP_IF_NOT_CARRY_SHORT             = 0x73u,
     HYPERDOS_PC_BIOS_OPERATION_CODE_OUTPUT_IMMEDIATE_ACCUMULATOR        = 0xE6u,
+    HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR_IMMEDIATE                = 0xCAu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR                          = 0xCBu,
     HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN                    = 0xCFu
 };
@@ -241,12 +243,66 @@ static void hyperdos_pc_bios_install_auxiliary_device_hardware_interrupt_vector_
                                               HYPERDOS_PC_BIOS_AUXILIARY_DEVICE_HARDWARE_STUB_OFFSET);
 }
 
+static void hyperdos_pc_bios_install_mouse_callback_cleanup_stub(hyperdos_pc* pc)
+{
+    static const uint8_t mouseCallbackCleanupStubBytes[] = {HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_IMMEDIATE,
+                                                            HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_SERVICE_INTERRUPT,
+                                                            HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR};
+    uint32_t             stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_STUB_SEGMENT
+                                    << HYPERDOS_X86_SEGMENT_SHIFT) +
+                                   HYPERDOS_PC_BIOS_MOUSE_CALLBACK_CLEANUP_STUB_OFFSET;
+    size_t byteIndex = 0u;
+
+    for (byteIndex = 0u; byteIndex < sizeof(mouseCallbackCleanupStubBytes); ++byteIndex)
+    {
+        hyperdos_pc_firmware_write_byte(pc,
+                                        stubPhysicalAddress + (uint32_t)byteIndex,
+                                        mouseCallbackCleanupStubBytes[byteIndex]);
+    }
+}
+
+void hyperdos_pc_bios_install_mouse_software_interrupt_vector_stub(hyperdos_pc* pc)
+{
+    static const uint8_t mouseSoftwareInterruptVectorStubBytes[] =
+            {HYPERDOS_PC_BIOS_OPERATION_CODE_JUMP_SHORT,
+             0x05u,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_IMMEDIATE,
+             HYPERDOS_PC_BIOS_MOUSE_BACKDOOR_SERVICE_INTERRUPT,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_RETURN_FAR_IMMEDIATE,
+             0x08u,
+             0x00u,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_IMMEDIATE,
+             HYPERDOS_PC_BIOS_MOUSE_SERVICE_INTERRUPT,
+             HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN};
+    uint32_t stubPhysicalAddress = ((uint32_t)HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT) +
+                                   HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET;
+    size_t byteIndex = 0u;
+
+    if (pc == NULL)
+    {
+        return;
+    }
+
+    for (byteIndex = 0u; byteIndex < sizeof(mouseSoftwareInterruptVectorStubBytes); ++byteIndex)
+    {
+        hyperdos_pc_firmware_write_byte(pc,
+                                        stubPhysicalAddress + (uint32_t)byteIndex,
+                                        mouseSoftwareInterruptVectorStubBytes[byteIndex]);
+    }
+    hyperdos_pc_bios_install_interrupt_vector(pc,
+                                              HYPERDOS_PC_BIOS_MOUSE_INTERRUPT,
+                                              HYPERDOS_PC_BIOS_MOUSE_STUB_SEGMENT,
+                                              HYPERDOS_PC_BIOS_MOUSE_STUB_OFFSET);
+}
+
 void hyperdos_pc_bios_install_interrupt_vector_stubs(hyperdos_pc* pc)
 {
     hyperdos_pc_bios_install_timer_hardware_interrupt_vector_stub(pc);
     hyperdos_pc_bios_install_user_timer_tick_interrupt_vector_stub(pc);
     hyperdos_pc_bios_install_keyboard_hardware_interrupt_vector_stub(pc);
     hyperdos_pc_bios_install_auxiliary_device_hardware_interrupt_vector_stub(pc);
+    hyperdos_pc_bios_install_mouse_callback_cleanup_stub(pc);
+    hyperdos_pc_bios_install_mouse_software_interrupt_vector_stub(pc);
     hyperdos_pc_firmware_install_interrupt_vector_stub(pc,
                                                        HYPERDOS_PC_BIOS_VIDEO_INTERRUPT,
                                                        HYPERDOS_PC_BIOS_VIDEO_SERVICE_INTERRUPT,
@@ -359,6 +415,31 @@ int hyperdos_pc_bios_interrupt_vector_matches(hyperdos_pc* pc,
 int hyperdos_pc_bios_interrupt_vector_is_empty(hyperdos_pc* pc, uint8_t interruptNumber)
 {
     return hyperdos_pc_bios_interrupt_vector_matches(pc, interruptNumber, 0u, 0u);
+}
+
+int hyperdos_pc_bios_interrupt_vector_points_to_interrupt_return(hyperdos_pc* pc, uint8_t interruptNumber)
+{
+    uint32_t vectorAddress         = (uint32_t)interruptNumber * HYPERDOS_PC_BIOS_INTERRUPT_VECTOR_BYTE_COUNT;
+    uint16_t vectorOffset          = 0u;
+    uint16_t vectorSegment         = 0u;
+    uint32_t vectorPhysicalAddress = 0u;
+
+    if (pc == NULL)
+    {
+        return 0;
+    }
+
+    vectorOffset  = hyperdos_pc_bios_read_guest_memory_word(pc, vectorAddress);
+    vectorSegment = hyperdos_pc_bios_read_guest_memory_word(pc, vectorAddress + HYPERDOS_X86_WORD_SIZE);
+    if (vectorOffset == 0u && vectorSegment == 0u)
+    {
+        return 0;
+    }
+
+    vectorPhysicalAddress = (((uint32_t)vectorSegment << HYPERDOS_X86_SEGMENT_SHIFT) + vectorOffset) &
+                            HYPERDOS_X86_ADDRESS_MASK;
+    return hyperdos_pc_bios_read_guest_memory_byte(pc, vectorPhysicalAddress) ==
+           HYPERDOS_PC_BIOS_OPERATION_CODE_INTERRUPT_RETURN;
 }
 
 int hyperdos_pc_bios_keyboard_hardware_interrupt_vector_is_default(hyperdos_pc* pc)

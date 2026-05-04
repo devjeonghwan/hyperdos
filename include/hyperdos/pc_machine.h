@@ -9,6 +9,7 @@
 #include "hyperdos/pc_floppy_controller.h"
 #include "hyperdos/pc_keyboard_bios.h"
 #include "hyperdos/pc_model.h"
+#include "hyperdos/pc_mouse_driver.h"
 #include "hyperdos/pc_system_bios.h"
 #include "hyperdos/pc_video_bios.h"
 #include "hyperdos/pc_video_services.h"
@@ -18,6 +19,7 @@ typedef struct hyperdos_pc_machine
     hyperdos_pc                         pc;
     hyperdos_pc_system_bios             systemBios;
     hyperdos_pc_keyboard_bios           keyboardBios;
+    hyperdos_pc_mouse_driver            mouseDriver;
     hyperdos_pc_keyboard_bios_interface keyboardBiosInterface;
     hyperdos_pc_disk_bios_interface     diskBiosInterface;
     hyperdos_pc_video_bios_interface    videoBiosInterface;
