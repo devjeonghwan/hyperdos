@@ -30,6 +30,10 @@ add_library(hyperdos STATIC
         src/pc_video_services.c)
 target_include_directories(hyperdos PUBLIC include)
 
+if (NOT MSVC)
+    target_link_libraries(hyperdos PUBLIC m)
+endif ()
+
 if (MSVC)
     target_compile_options(hyperdos PRIVATE /W4)
 else ()
@@ -44,7 +48,7 @@ if (WIN32)
             platforms/win32/pc_monitor.c
             platforms/win32/pc_monitor_main.c
             platforms/win32/pc_monitor_runtime.c)
-    target_link_libraries(hyperdos_win32_pc_monitor PRIVATE hyperdos user32 gdi32 comdlg32 shell32 ole32 comctl32)
+    target_link_libraries(hyperdos_win32_pc_monitor PRIVATE hyperdos user32 gdi32 comdlg32 shell32 ole32 comctl32 winmm)
 
     add_executable(hyperdos_win32_directory_disk_tests
             tests/win32_directory_disk_tests.c

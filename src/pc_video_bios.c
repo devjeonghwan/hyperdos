@@ -127,8 +127,7 @@ static uint32_t hyperdos_pc_video_bios_get_extra_segment_physical_address(const 
 static uint8_t hyperdos_pc_video_bios_read_guest_memory_byte(const hyperdos_pc_video_bios_interface* videoBiosInterface,
                                                              uint32_t                                physicalAddress)
 {
-    return hyperdos_bus_read_memory_byte_or_open_bus(&videoBiosInterface->pc->bus,
-                                                     physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
+    return hyperdos_bus_read_memory_byte_or_open_bus(&videoBiosInterface->pc->bus, physicalAddress);
 }
 
 static uint16_t hyperdos_pc_video_bios_read_guest_memory_word(
@@ -161,9 +160,7 @@ static void hyperdos_pc_video_bios_write_guest_memory_byte(const hyperdos_pc_vid
                                                            uint32_t                                physicalAddress,
                                                            uint8_t                                 value)
 {
-    hyperdos_bus_write_memory_byte_if_mapped(&videoBiosInterface->pc->bus,
-                                             physicalAddress & HYPERDOS_X86_ADDRESS_MASK,
-                                             value);
+    hyperdos_bus_write_memory_byte_if_mapped(&videoBiosInterface->pc->bus, physicalAddress, value);
 }
 
 static void hyperdos_pc_video_bios_trace(const hyperdos_pc_video_bios_interface* videoBiosInterface,

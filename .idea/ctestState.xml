@@ -2,7 +2,6 @@
 <project version="4">
   <component name="CidrCTestProjectState">
     <ctestState>
-      <lineNumber testId="path:CMakeLists.txt test:hyperdos_tests" value="53" />
       <lineNumber testId="path:null test:hyperdos_tests" value="53" />
     </ctestState>
   </component>

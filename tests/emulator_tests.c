@@ -40,6 +40,7 @@ enum
     TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_COMMAND_BYTE              = 0x60u,
     TEST_KEYBOARD_CONTROLLER_COMMAND_DISABLE_KEYBOARD                = 0xADu,
     TEST_KEYBOARD_CONTROLLER_COMMAND_ENABLE_KEYBOARD                 = 0xAEu,
+    TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_OUTPUT_PORT               = 0xD1u,
     TEST_KEYBOARD_CONTROLLER_COMMAND_ENABLE_AUXILIARY                = 0xA8u,
     TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_KEYBOARD_OUTPUT           = 0xD2u,
     TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_AUXILIARY_DEVICE          = 0xD4u,
@@ -72,6 +73,13 @@ enum
     TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_RELOAD_LOW_BYTE               = 0x33u,
     TEST_PC_INTERVAL_TIMER_CHANNEL_TWO_RELOAD_HIGH_BYTE              = 0x05u,
     TEST_PC_PERIPHERAL_INTERFACE_PORT_B                              = 0x0061u,
+    TEST_PC_SYSTEM_CONTROL_PORT_A                                    = 0x0092u,
+    TEST_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT                = 0x02u,
+    TEST_PC_CMOS_BASE_MEMORY_LOW_REGISTER                            = 0x15u,
+    TEST_PC_CMOS_BASE_MEMORY_HIGH_REGISTER                           = 0x16u,
+    TEST_PC_CMOS_EXTENDED_MEMORY_LOW_REGISTER                        = 0x17u,
+    TEST_PC_CMOS_EXTENDED_MEMORY_HIGH_REGISTER                       = 0x18u,
+    TEST_PC_SYSTEM_BIOS_GET_EXTENDED_MEMORY_SIZE_SERVICE             = 0x88u,
     TEST_PC_SPEAKER_ENABLE_BITS                                      = 0x03u,
     TEST_PC_DEFAULT_TIMER_INTERRUPT_CLOCK_COUNT                      = 262144u,
     TEST_PC_TIMER_TICKS_PER_DAY                                      = 0x001800B0u,
@@ -115,6 +123,20 @@ enum
     TEST_8087_FIRST_REAL_OFFSET                                      = 0x0210u,
     TEST_8087_SECOND_REAL_OFFSET                                     = 0x0214u,
     TEST_8087_RESULT_REAL_OFFSET                                     = 0x0218u,
+    TEST_8087_EXTENDED_REAL_OFFSET                                   = 0x0230u,
+    TEST_8087_PACKED_DECIMAL_OFFSET                                  = 0x0240u,
+    TEST_8087_INTEGER_RESULT_OFFSET                                  = 0x0250u,
+    TEST_8087_SAVED_STATE_OFFSET                                     = 0x0300u,
+    TEST_8087_ESCAPE_D9                                              = 0xD9u,
+    TEST_8087_ESCAPE_DB                                              = 0xDBu,
+    TEST_8087_ESCAPE_DF                                              = 0xDFu,
+    TEST_8087_OPERATION_EXAMINE_STACK_TOP                            = 0xE5u,
+    TEST_8087_OPERATION_DISABLE_INTERRUPTS                           = 0xE1u,
+    TEST_8087_OPERATION_SET_PROTECTED_MODE                           = 0xE4u,
+    TEST_8087_OPERATION_RESERVED_REGISTER                            = 0xEBu,
+    TEST_8087_OPERATION_STORE_STATUS_WORD_TO_ACCUMULATOR             = 0xE0u,
+    TEST_8087_STATUS_INVALID_OPERATION                               = 0x0001u,
+    TEST_8087_STATUS_ERROR_SUMMARY                                   = 0x0080u,
     TEST_VIDEO_WRITE_BYTE_COUNT                                      = 5u
 };
 
@@ -158,6 +180,19 @@ typedef struct test_coprocessor_wait_context
     size_t waitCallCount;
 } test_coprocessor_wait_context;
 
+typedef struct test_page_translation_cache_context
+{
+    size_t   callCount;
+    uint32_t linearAddress;
+    uint8_t  allEntries;
+} test_page_translation_cache_context;
+
+typedef struct test_internal_cache_context
+{
+    size_t  callCount;
+    uint8_t writeBackModifiedLines;
+} test_internal_cache_context;
+
 static void test_configure_assertion_reporting(void)
 {
 #if defined(_MSC_VER)
@@ -194,6 +229,75 @@ static void test_string_input_output_write_byte(void* device, uint16_t port, uin
     inputOutputDevice->writtenBytes[inputOutputDevice->writtenByteCount++] = value;
 }
 
+static uint8_t test_read_guest_memory_byte(hyperdos_pc* pc, uint32_t physicalAddress)
+{
+    return hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus, physicalAddress);
+}
+
+static uint16_t test_read_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress)
+{
+    uint16_t lowByte  = test_read_guest_memory_byte(pc, physicalAddress);
+    uint16_t highByte = test_read_guest_memory_byte(pc, physicalAddress + 1u);
+
+    return (uint16_t)(lowByte | (highByte << HYPERDOS_X86_BYTE_BIT_COUNT));
+}
+
+static void test_write_guest_memory_byte(hyperdos_pc* pc, uint32_t physicalAddress, uint8_t value)
+{
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress, value);
+}
+
+static void test_write_guest_memory_bytes(hyperdos_pc*   pc,
+                                          uint32_t       physicalAddress,
+                                          const uint8_t* bytes,
+                                          size_t         byteCount)
+{
+    size_t byteIndex = 0u;
+
+    for (byteIndex = 0u; byteIndex < byteCount; ++byteIndex)
+    {
+        test_write_guest_memory_byte(pc, physicalAddress + (uint32_t)byteIndex, bytes[byteIndex]);
+    }
+}
+
+typedef struct test_x86_processor_memory_attachment
+{
+    hyperdos_bus                  bus;
+    hyperdos_random_access_memory randomAccessMemory;
+} test_x86_processor_memory_attachment;
+
+static hyperdos_x86_execution_result test_initialize_x86_processor_with_memory(hyperdos_x86_processor* processor,
+                                                                               uint8_t*                memory,
+                                                                               size_t                  memorySize)
+{
+    test_x86_processor_memory_attachment* attachment = NULL;
+    hyperdos_x86_execution_result         result     = HYPERDOS_X86_EXECUTION_OK;
+
+    if (processor == NULL || memory == NULL || memorySize == 0u)
+    {
+        return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
+    }
+    attachment = (test_x86_processor_memory_attachment*)calloc(1u, sizeof(*attachment));
+    assert(attachment != NULL);
+    hyperdos_bus_initialize(&attachment->bus);
+    hyperdos_random_access_memory_initialize(&attachment->randomAccessMemory, memory, memorySize, 0u);
+    assert(hyperdos_bus_map_memory(&attachment->bus,
+                                   0u,
+                                   (uint32_t)memorySize,
+                                   &attachment->randomAccessMemory,
+                                   hyperdos_random_access_memory_read_byte,
+                                   hyperdos_random_access_memory_write_byte) == HYPERDOS_BUS_ACCESS_OK);
+    result = hyperdos_x86_initialize_processor(processor);
+    if (result == HYPERDOS_X86_EXECUTION_OK)
+    {
+        hyperdos_x86_attach_bus(processor, &attachment->bus);
+    }
+    return result;
+}
+
+#define hyperdos_x86_initialize_processor(processor, memory, memorySize) \
+    test_initialize_x86_processor_with_memory((processor), (memory), (memorySize))
+
 static hyperdos_x86_execution_result test_coprocessor_escape_records_call(
         hyperdos_x86_processor*                     processor,
         const hyperdos_x86_coprocessor_instruction* instruction,
@@ -221,6 +325,36 @@ static hyperdos_x86_execution_result test_coprocessor_wait_records_call(hyperdos
         ++context->waitCallCount;
     }
     return HYPERDOS_X86_EXECUTION_OK;
+}
+
+static void test_page_translation_cache_invalidation_records_call(hyperdos_x86_processor* processor,
+                                                                  uint32_t                linearAddress,
+                                                                  uint8_t                 allEntries,
+                                                                  void*                   userContext)
+{
+    test_page_translation_cache_context* context = (test_page_translation_cache_context*)userContext;
+
+    (void)processor;
+    if (context != NULL)
+    {
+        ++context->callCount;
+        context->linearAddress = linearAddress;
+        context->allEntries    = allEntries;
+    }
+}
+
+static void test_internal_cache_invalidation_records_call(hyperdos_x86_processor* processor,
+                                                          uint8_t                 writeBackModifiedLines,
+                                                          void*                   userContext)
+{
+    test_internal_cache_context* context = (test_internal_cache_context*)userContext;
+
+    (void)processor;
+    if (context != NULL)
+    {
+        ++context->callCount;
+        context->writeBackModifiedLines = writeBackModifiedLines;
+    }
 }
 
 static const uint8_t sampleDosProgram[] = {
@@ -1624,6 +1758,7 @@ static void test_80186_unused_operation_code_interrupt_for_model(hyperdos_x86_pr
     static const uint8_t operationCode65Program[]           = {0x65u, 0xF4u};
     static const uint8_t operationCode66Program[]           = {0x66u, 0xF4u};
     static const uint8_t operationCode67Program[]           = {0x67u, 0xF4u};
+    static const uint8_t operationCodeD6Program[]           = {0xD6u, 0xF4u};
     static const uint8_t operationCodeF1Program[]           = {0xF1u, 0xF4u};
     static const uint8_t operationCodeFEGroupSevenProgram[] = {0xFEu, 0xF8u, 0xF4u};
     static const uint8_t operationCodeFFGroupSevenProgram[] = {0xFFu, 0xF8u, 0xF4u};
@@ -1655,6 +1790,10 @@ static void test_80186_unused_operation_code_interrupt_for_model(hyperdos_x86_pr
         {
          .program     = operationCode67Program,
          .programSize = sizeof(operationCode67Program),
+         },
+        {
+         .program     = operationCodeD6Program,
+         .programSize = sizeof(operationCodeD6Program),
          },
         {
          .program     = operationCodeF1Program,
@@ -2072,6 +2211,32 @@ static void test_write_80286_segment_descriptor(uint8_t* memory,
     memory[descriptorAddress + 3u] = (uint8_t)((baseAddress >> HYPERDOS_X86_BYTE_BIT_COUNT) & HYPERDOS_X86_BYTE_MASK);
     memory[descriptorAddress + 4u] = (uint8_t)((baseAddress >> HYPERDOS_X86_WORD_BIT_COUNT) & HYPERDOS_X86_BYTE_MASK);
     memory[descriptorAddress + 5u] = access;
+}
+
+static void test_write_80286_segment_descriptor_to_pc(hyperdos_pc* pc,
+                                                      uint32_t     descriptorAddress,
+                                                      uint32_t     baseAddress,
+                                                      uint16_t     limit,
+                                                      uint8_t      access)
+{
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
+                                             descriptorAddress + 0u,
+                                             (uint8_t)(limit & HYPERDOS_X86_BYTE_MASK));
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
+                                             descriptorAddress + 1u,
+                                             (uint8_t)(limit >> HYPERDOS_X86_BYTE_BIT_COUNT));
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
+                                             descriptorAddress + 2u,
+                                             (uint8_t)(baseAddress & HYPERDOS_X86_BYTE_MASK));
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
+                                             descriptorAddress + 3u,
+                                             (uint8_t)((baseAddress >> HYPERDOS_X86_BYTE_BIT_COUNT) &
+                                                       HYPERDOS_X86_BYTE_MASK));
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
+                                             descriptorAddress + 4u,
+                                             (uint8_t)((baseAddress >> HYPERDOS_X86_WORD_BIT_COUNT) &
+                                                       HYPERDOS_X86_BYTE_MASK));
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, descriptorAddress + 5u, access);
 }
 
 static void test_write_80286_interrupt_gate(uint8_t* memory,
@@ -4125,6 +4290,81 @@ static void test_external_bus_cycle_count_profiles(void)
     assert(processor8088CycleCount == processor80188CycleCount);
 }
 
+static void test_80386_and_80486_external_bus_profiles(void)
+{
+    uint8_t*               memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor processor;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80386_DX);
+    assert(hyperdos_x86_get_external_data_bus_byte_count(&processor) == 4u);
+    assert(hyperdos_x86_get_external_address_mask(&processor) == UINT32_C(0xFFFFFFFF));
+
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80386_SX);
+    assert(hyperdos_x86_get_external_data_bus_byte_count(&processor) == 2u);
+    assert(hyperdos_x86_get_external_address_mask(&processor) == UINT32_C(0x00FFFFFF));
+
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80486);
+    assert(hyperdos_x86_get_external_data_bus_byte_count(&processor) == 4u);
+    assert(hyperdos_x86_get_external_address_mask(&processor) == UINT32_C(0xFFFFFFFF));
+    free(memory);
+}
+
+static void test_80486_control_register_zero_and_cache_invalidation_hooks(void)
+{
+    uint8_t*                            memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor              processor;
+    test_page_translation_cache_context pageTranslationCacheContext = {0};
+    test_internal_cache_context         internalCacheContext        = {0};
+    uint32_t                            controlRegisterZeroValue    = HYPERDOS_X86_CONTROL_REGISTER_ZERO_CACHE_DISABLE |
+                                        HYPERDOS_X86_CONTROL_REGISTER_ZERO_NOT_WRITE_THROUGH;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x86_set_processor_model(&processor, HYPERDOS_X86_PROCESSOR_MODEL_80486);
+
+    hyperdos_x86_set_control_register(&processor, 0u, controlRegisterZeroValue);
+    assert(hyperdos_x86_get_control_register(&processor, 0u) == controlRegisterZeroValue);
+    assert(hyperdos_x86_control_register_zero_cache_disable_enabled(&processor));
+    assert(hyperdos_x86_control_register_zero_not_write_through_enabled(&processor));
+
+    hyperdos_x86_set_page_translation_cache_invalidation_handler(&processor,
+                                                                 test_page_translation_cache_invalidation_records_call,
+                                                                 &pageTranslationCacheContext);
+    hyperdos_x86_set_internal_cache_invalidation_handler(&processor,
+                                                         test_internal_cache_invalidation_records_call,
+                                                         &internalCacheContext);
+
+    hyperdos_x86_invalidate_page_translation_cache_entry(&processor, UINT32_C(0x00123456));
+    assert(processor.translationLookasideBufferInvalidationCount == 1u);
+    assert(processor.lastInvalidatedLinearAddressValid);
+    assert(processor.lastInvalidatedLinearAddress == UINT32_C(0x00123456));
+    assert(pageTranslationCacheContext.callCount == 1u);
+    assert(pageTranslationCacheContext.linearAddress == UINT32_C(0x00123456));
+    assert(pageTranslationCacheContext.allEntries == 0u);
+
+    hyperdos_x86_invalidate_all_page_translation_cache_entries(&processor);
+    assert(processor.translationLookasideBufferInvalidationCount == 2u);
+    assert(!processor.lastInvalidatedLinearAddressValid);
+    assert(pageTranslationCacheContext.callCount == 2u);
+    assert(pageTranslationCacheContext.allEntries == 1u);
+
+    hyperdos_x86_invalidate_internal_cache(&processor);
+    assert(processor.internalCacheInvalidationCount == 1u);
+    assert(internalCacheContext.callCount == 1u);
+    assert(internalCacheContext.writeBackModifiedLines == 0u);
+
+    hyperdos_x86_write_back_and_invalidate_internal_cache(&processor);
+    assert(processor.internalCacheInvalidationCount == 2u);
+    assert(internalCacheContext.callCount == 2u);
+    assert(internalCacheContext.writeBackModifiedLines == 1u);
+    free(memory);
+}
+
 static void test_x86_general_register_word_operations_preserve_upper_word(void)
 {
     static const uint8_t byteRegisterProgram[] = {
@@ -4684,8 +4924,8 @@ static void test_pointing_device_bios_callback_from_auxiliary_interrupt(void)
                                            HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
                                            (uint16_t)(TEST_PROGRAM_STACK_POINTER));
     hyperdos_x86_set_flags_word(processor, (uint16_t)(HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_INTERRUPT_ENABLE));
-    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
-    memcpy(&machine->pc.processorMemory[callbackPhysicalAddress], callbackBytes, sizeof(callbackBytes));
+    test_write_guest_memory_bytes(&machine->pc, programPhysicalAddress, programBytes, sizeof(programBytes));
+    test_write_guest_memory_bytes(&machine->pc, callbackPhysicalAddress, callbackBytes, sizeof(callbackBytes));
 
     hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, (uint16_t)(0xC207u));
     hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_BASE, (uint16_t)(0u));
@@ -4719,25 +4959,33 @@ static void test_pointing_device_bios_callback_from_auxiliary_interrupt(void)
         assert(result == HYPERDOS_X86_EXECUTION_HALTED);
     }
 
-    assert((machine->pc.processorMemory[resultPhysicalAddress] & TEST_AUXILIARY_MOUSE_LEFT_BUTTON) != 0u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + 1u] == 0u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_HORIZONTAL_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET] == 4u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_HORIZONTAL_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET + 1u] == 0u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_VERTICAL_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET] == 0xFEu);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_VERTICAL_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET + 1u] == 0u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_PADDING_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET] == 0u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_PADDING_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET + 1u] == 0u);
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_MARKER_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET] ==
+    assert((test_read_guest_memory_byte(&machine->pc, resultPhysicalAddress) & TEST_AUXILIARY_MOUSE_LEFT_BUTTON) != 0u);
+    assert(test_read_guest_memory_byte(&machine->pc, resultPhysicalAddress + 1u) == 0u);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_HORIZONTAL_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET) == 4u);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_HORIZONTAL_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET + 1u) == 0u);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_VERTICAL_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET) == 0xFEu);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_VERTICAL_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET + 1u) == 0u);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_PADDING_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET) == 0u);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_PADDING_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET + 1u) == 0u);
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_MARKER_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET) ==
            (uint8_t)(((uint16_t)TEST_CALLBACK_RESULT_WORD) & (uint16_t)TEST_BYTE_MASK));
-    assert(machine->pc.processorMemory[resultPhysicalAddress + TEST_CALLBACK_MARKER_OFFSET -
-                                       TEST_CALLBACK_RESULT_OFFSET + 1u] ==
+    assert(test_read_guest_memory_byte(&machine->pc,
+                                       resultPhysicalAddress + TEST_CALLBACK_MARKER_OFFSET -
+                                               TEST_CALLBACK_RESULT_OFFSET + 1u) ==
            (uint8_t)(((uint16_t)TEST_CALLBACK_RESULT_WORD) >> (unsigned)TEST_DOS_SERVICE_REGISTER_SHIFT));
     free(machine);
 }
@@ -4788,15 +5036,13 @@ static void test_keyboard_bios_status_return_flags(void)
                                            (uint16_t)(HYPERDOS_PC_KEYBOARD_BIOS_STATUS_SERVICE
                                                       << HYPERDOS_PC_KEYBOARD_BIOS_SERVICE_REGISTER_SHIFT));
     hyperdos_x86_set_flags_word(processor, (uint16_t)(HYPERDOS_X86_FLAG_CARRY));
-    machine->pc.processorMemory[flagsPhysicalAddress]      = HYPERDOS_X86_FLAG_CARRY;
-    machine->pc.processorMemory[flagsPhysicalAddress + 1u] = 0u;
-    result                                                 = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+    test_write_guest_memory_byte(&machine->pc, flagsPhysicalAddress, HYPERDOS_X86_FLAG_CARRY);
+    test_write_guest_memory_byte(&machine->pc, flagsPhysicalAddress + 1u, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
                                                        HYPERDOS_PC_BIOS_KEYBOARD_SOFTWARE_SERVICE_INTERRUPT,
                                                        &machine->biosRuntime);
     assert(result == HYPERDOS_X86_EXECUTION_OK);
-    flags = (uint16_t)(machine->pc.processorMemory[flagsPhysicalAddress] |
-                       ((uint16_t)machine->pc.processorMemory[flagsPhysicalAddress + 1u]
-                        << HYPERDOS_X86_BYTE_BIT_COUNT));
+    flags = test_read_guest_memory_word(&machine->pc, flagsPhysicalAddress);
     assert((flags & HYPERDOS_X86_FLAG_ZERO) != 0u);
     assert((flags & HYPERDOS_X86_FLAG_CARRY) != 0u);
     assert((flags & HYPERDOS_X86_FLAG_INTERRUPT_ENABLE) != 0u);
@@ -4810,17 +5056,15 @@ static void test_keyboard_bios_status_return_flags(void)
                                            (uint16_t)(HYPERDOS_PC_KEYBOARD_BIOS_STATUS_SERVICE
                                                       << HYPERDOS_PC_KEYBOARD_BIOS_SERVICE_REGISTER_SHIFT));
     hyperdos_x86_set_flags_word(processor, (uint16_t)(0u));
-    machine->pc.processorMemory[flagsPhysicalAddress]      = HYPERDOS_X86_FLAG_ZERO;
-    machine->pc.processorMemory[flagsPhysicalAddress + 1u] = 0u;
-    result                                                 = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+    test_write_guest_memory_byte(&machine->pc, flagsPhysicalAddress, HYPERDOS_X86_FLAG_ZERO);
+    test_write_guest_memory_byte(&machine->pc, flagsPhysicalAddress + 1u, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
                                                        HYPERDOS_PC_BIOS_KEYBOARD_SOFTWARE_SERVICE_INTERRUPT,
                                                        &machine->biosRuntime);
     assert(result == HYPERDOS_X86_EXECUTION_OK);
     assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
            TEST_KEYBOARD_FUNCTION_KEY_SIX_WORD);
-    flags = (uint16_t)(machine->pc.processorMemory[flagsPhysicalAddress] |
-                       ((uint16_t)machine->pc.processorMemory[flagsPhysicalAddress + 1u]
-                        << HYPERDOS_X86_BYTE_BIT_COUNT));
+    flags = test_read_guest_memory_word(&machine->pc, flagsPhysicalAddress);
     assert((flags & HYPERDOS_X86_FLAG_ZERO) == 0u);
     assert((flags & HYPERDOS_X86_FLAG_CARRY) == 0u);
     assert((flags & HYPERDOS_X86_FLAG_INTERRUPT_ENABLE) != 0u);
@@ -4830,15 +5074,13 @@ static void test_keyboard_bios_status_return_flags(void)
                                            (uint16_t)(HYPERDOS_PC_KEYBOARD_BIOS_EXTENDED_STATUS_SERVICE
                                                       << HYPERDOS_PC_KEYBOARD_BIOS_SERVICE_REGISTER_SHIFT));
     hyperdos_x86_set_flags_word(processor, (uint16_t)(0u));
-    machine->pc.processorMemory[flagsPhysicalAddress]      = HYPERDOS_X86_FLAG_CARRY | HYPERDOS_X86_FLAG_ZERO;
-    machine->pc.processorMemory[flagsPhysicalAddress + 1u] = 0u;
-    result                                                 = hyperdos_pc_bios_runtime_handle_interrupt(processor,
+    test_write_guest_memory_byte(&machine->pc, flagsPhysicalAddress, HYPERDOS_X86_FLAG_CARRY | HYPERDOS_X86_FLAG_ZERO);
+    test_write_guest_memory_byte(&machine->pc, flagsPhysicalAddress + 1u, 0u);
+    result = hyperdos_pc_bios_runtime_handle_interrupt(processor,
                                                        HYPERDOS_PC_BIOS_KEYBOARD_SOFTWARE_SERVICE_INTERRUPT,
                                                        &machine->biosRuntime);
     assert(result == HYPERDOS_X86_EXECUTION_OK);
-    flags = (uint16_t)(machine->pc.processorMemory[flagsPhysicalAddress] |
-                       ((uint16_t)machine->pc.processorMemory[flagsPhysicalAddress + 1u]
-                        << HYPERDOS_X86_BYTE_BIT_COUNT));
+    flags = test_read_guest_memory_word(&machine->pc, flagsPhysicalAddress);
     assert((flags & HYPERDOS_X86_FLAG_ZERO) == 0u);
     assert((flags & HYPERDOS_X86_FLAG_CARRY) != 0u);
     assert((flags & HYPERDOS_X86_FLAG_INTERRUPT_ENABLE) != 0u);
@@ -4883,7 +5125,7 @@ static void test_keyboard_bios_status_return_flags_through_firmware_stub(void)
     hyperdos_x86_set_general_register_word(processor,
                                            HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER,
                                            (uint16_t)(TEST_PROGRAM_STACK_POINTER));
-    memcpy(&machine->pc.processorMemory[programPhysicalAddress], programBytes, sizeof(programBytes));
+    test_write_guest_memory_bytes(&machine->pc, programPhysicalAddress, programBytes, sizeof(programBytes));
     assert(hyperdos_pc_keyboard_bios_push_key_word(&machine->keyboardBios,
                                                    &machine->keyboardBiosInterface,
                                                    &machine->pc,
@@ -5156,6 +5398,58 @@ static void test_pc_system_bios_timer_tick_data_area(void)
     assert(hyperdos_pc_bios_data_area_read_double_word(pc, HYPERDOS_PC_BIOS_DATA_AREA_TIMER_TICK_COUNT_OFFSET) == 0u);
     assert(hyperdos_pc_bios_data_area_read_byte(pc, HYPERDOS_PC_BIOS_DATA_AREA_TIMER_MIDNIGHT_FLAG_OFFSET) == 1u);
     free(pc);
+}
+
+static void test_pc_bios_runtime_services_timer_interrupts_inside_large_slice(void)
+{
+    enum
+    {
+        TEST_PROGRAM_SEGMENT        = 0x2000u,
+        TEST_STACK_SEGMENT          = 0x3000u,
+        TEST_STACK_POINTER          = 0xFFFEu,
+        TEST_PROGRAM_SEGMENT_SIZE   = 0x10000u,
+        TEST_TIMER_INTERRUPT_MARGIN = 4096u,
+        TEST_NO_OPERATION           = 0x90u
+    };
+
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    hyperdos_x86_execution_result          result    = HYPERDOS_X86_EXECUTION_OK;
+    uint32_t programPhysicalAddress                  = (uint32_t)TEST_PROGRAM_SEGMENT << HYPERDOS_X86_SEGMENT_SHIFT;
+    uint32_t instructionByteIndex                    = 0u;
+    uint64_t instructionLimit         = TEST_PC_DEFAULT_TIMER_INTERRUPT_CLOCK_COUNT + TEST_TIMER_INTERRUPT_MARGIN;
+    uint64_t executedInstructionCount = 0u;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.pcModel = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    hyperdos_pc_bios_runtime_initialize_data_area(&machine->biosRuntime, NULL, 1u);
+    hyperdos_pc_bios_install_interrupt_vector_stubs(&machine->pc);
+
+    processor = &machine->pc.processor;
+    hyperdos_x86_set_interrupt_handler(processor, hyperdos_pc_bios_runtime_handle_interrupt, &machine->biosRuntime);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_CODE, TEST_PROGRAM_SEGMENT);
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_STACK, TEST_STACK_SEGMENT);
+    hyperdos_x86_set_instruction_pointer_word(processor, 0u);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_STACK_POINTER, TEST_STACK_POINTER);
+    hyperdos_x86_set_flags_word(processor, (uint16_t)(HYPERDOS_X86_FLAG_RESERVED | HYPERDOS_X86_FLAG_INTERRUPT_ENABLE));
+
+    for (instructionByteIndex = 0u; instructionByteIndex < TEST_PROGRAM_SEGMENT_SIZE; ++instructionByteIndex)
+    {
+        test_write_guest_memory_byte(&machine->pc, programPhysicalAddress + instructionByteIndex, TEST_NO_OPERATION);
+    }
+
+    result = hyperdos_pc_bios_runtime_execute_processor_slice(&machine->biosRuntime,
+                                                              instructionLimit,
+                                                              &executedInstructionCount);
+    assert(result == HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED);
+    assert(executedInstructionCount == instructionLimit);
+    assert(hyperdos_pc_bios_data_area_read_double_word(&machine->pc,
+                                                       HYPERDOS_PC_BIOS_DATA_AREA_TIMER_TICK_COUNT_OFFSET) != 0u);
+    free(machine);
 }
 
 static void test_maskable_external_interrupt_request(void)
@@ -6513,6 +6807,23 @@ static uint32_t test_read_memory_double_word(const hyperdos_x86_processor*      
     return value;
 }
 
+static uint64_t test_read_memory_quad_word(const hyperdos_x86_processor*       processor,
+                                           hyperdos_x86_segment_register_index segmentRegister,
+                                           uint16_t                            offset)
+{
+    uint64_t value     = 0u;
+    size_t   byteIndex = 0u;
+
+    for (byteIndex = 0u; byteIndex < 8u; ++byteIndex)
+    {
+        uint8_t byteValue = 0u;
+        assert(hyperdos_x86_read_memory_byte(processor, segmentRegister, (uint16_t)(offset + byteIndex), &byteValue) ==
+               HYPERDOS_X86_EXECUTION_OK);
+        value |= (uint64_t)byteValue << (byteIndex * 8u);
+    }
+    return value;
+}
+
 static void test_wait_and_escape_coprocessor(void)
 {
     static const uint8_t escapeProgram[] = {
@@ -6652,6 +6963,77 @@ static void test_8087_single_precision_add(void)
     free(memory);
 }
 
+static void test_8087_extended_real_and_packed_decimal_instructions(void)
+{
+    static const uint8_t program[] = {
+        0xD9u, 0xE8u, 0xDBu, 0x3Eu, 0x30u, 0x02u, 0xDBu, 0x2Eu, 0x30u, 0x02u, 0xDFu, 0x36u,
+        0x40u, 0x02u, 0xDFu, 0x26u, 0x40u, 0x02u, 0xDFu, 0x3Eu, 0x50u, 0x02u, 0xF4u,
+    };
+    uint8_t*                      memory = NULL;
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_8087_initialize(&floatingPointUnit);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_8087_wait, hyperdos_8087_escape, &floatingPointUnit);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(test_read_memory_quad_word(&processor,
+                                      HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                      TEST_8087_INTEGER_RESULT_OFFSET) == 1u);
+    assert(floatingPointUnit.tagWord == HYPERDOS_8087_TAG_WORD_DEFAULT);
+    free(memory);
+}
+
+static void test_8087_transcendental_and_saved_state_instructions(void)
+{
+    static const uint8_t program[] = {
+        0xD9u, 0xE8u, 0xD9u, 0xFAu, 0xDFu, 0x1Eu, 0x50u, 0x02u, 0xD9u, 0xE8u, 0xD9u,
+        0xF0u, 0xDFu, 0x1Eu, 0x52u, 0x02u, 0xD9u, 0xE8u, 0xDDu, 0x36u, 0x00u, 0x03u,
+        0xD9u, 0xEEu, 0xDDu, 0x26u, 0x00u, 0x03u, 0xDFu, 0x1Eu, 0x54u, 0x02u, 0xF4u,
+    };
+    uint8_t*                      memory = NULL;
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_8087_initialize(&floatingPointUnit);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_8087_wait, hyperdos_8087_escape, &floatingPointUnit);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert(test_read_memory_word(&processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_8087_INTEGER_RESULT_OFFSET) ==
+           1u);
+    assert(test_read_memory_word(&processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                 (uint16_t)(TEST_8087_INTEGER_RESULT_OFFSET + 2u)) == 1u);
+    assert(test_read_memory_word(&processor,
+                                 HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                 (uint16_t)(TEST_8087_INTEGER_RESULT_OFFSET + 4u)) == 1u);
+    free(memory);
+}
+
 static void test_80287_set_protected_mode_instruction(void)
 {
     static const uint8_t setProtectedModeProgram[] = {
@@ -6724,6 +7106,132 @@ static void test_80287_initialize_instruction_preserves_protected_mode(void)
     free(memory);
 }
 
+static void test_8087_operation_matrix_covers_supported_and_unsupported_forms(void)
+{
+    assert(hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087,
+                                               TEST_8087_ESCAPE_D9,
+                                               TEST_8087_OPERATION_EXAMINE_STACK_TOP));
+    assert(hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087,
+                                               TEST_8087_ESCAPE_DB,
+                                               TEST_8087_OPERATION_DISABLE_INTERRUPTS));
+    assert(!hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087,
+                                                TEST_8087_ESCAPE_DB,
+                                                TEST_8087_OPERATION_SET_PROTECTED_MODE));
+    assert(hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_80287,
+                                               TEST_8087_ESCAPE_DB,
+                                               TEST_8087_OPERATION_SET_PROTECTED_MODE));
+    assert(!hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087, TEST_8087_ESCAPE_D9, 0xD1u));
+    assert(!hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087, TEST_8087_ESCAPE_D9, 0x0Eu));
+    assert(hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087, TEST_8087_ESCAPE_D9, 0x06u));
+    assert(!hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087, TEST_8087_ESCAPE_DF, 0xC0u));
+    assert(hyperdos_x87_operation_is_supported(HYPERDOS_X87_MODEL_8087,
+                                               TEST_8087_ESCAPE_DF,
+                                               TEST_8087_OPERATION_STORE_STATUS_WORD_TO_ACCUMULATOR));
+}
+
+static void test_8087_unsupported_operation_returns_unsupported_instruction(void)
+{
+    static const uint8_t program[] = {
+        TEST_8087_ESCAPE_DB,
+        TEST_8087_OPERATION_SET_PROTECTED_MODE,
+        0xF4u,
+    };
+    uint8_t*                      memory = NULL;
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_8087_initialize(&floatingPointUnit);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_8087_wait, hyperdos_8087_escape, &floatingPointUnit);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION);
+    free(memory);
+}
+
+static void test_80287_reserved_register_operation_sets_invalid_operation_status(void)
+{
+    static const uint8_t program[] = {
+        TEST_8087_ESCAPE_DB,
+        TEST_8087_OPERATION_RESERVED_REGISTER,
+        TEST_8087_ESCAPE_DF,
+        TEST_8087_OPERATION_STORE_STATUS_WORD_TO_ACCUMULATOR,
+        0xF4u,
+    };
+    uint8_t*                      memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_x87_initialize(&floatingPointUnit, HYPERDOS_X87_MODEL_80287);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_x87_wait, hyperdos_x87_escape, &floatingPointUnit);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert((hyperdos_x86_get_general_register_word(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) &
+            (TEST_8087_STATUS_INVALID_OPERATION | TEST_8087_STATUS_ERROR_SUMMARY)) ==
+           (TEST_8087_STATUS_INVALID_OPERATION | TEST_8087_STATUS_ERROR_SUMMARY));
+    free(memory);
+}
+
+static void test_8087_examine_stack_top_and_disable_interrupts_instruction(void)
+{
+    static const uint8_t program[] = {
+        TEST_8087_ESCAPE_DB,
+        TEST_8087_OPERATION_DISABLE_INTERRUPTS,
+        TEST_8087_ESCAPE_D9,
+        0xE8u,
+        TEST_8087_ESCAPE_D9,
+        TEST_8087_OPERATION_EXAMINE_STACK_TOP,
+        TEST_8087_ESCAPE_DF,
+        TEST_8087_OPERATION_STORE_STATUS_WORD_TO_ACCUMULATOR,
+        0xF4u,
+    };
+    uint8_t*                      memory = NULL;
+    hyperdos_x86_processor        processor;
+    hyperdos_8087                 floatingPointUnit;
+    hyperdos_x86_execution_result result = HYPERDOS_X86_EXECUTION_OK;
+
+    memory = (uint8_t*)calloc(HYPERDOS_X86_MEMORY_SIZE, 1u);
+    assert(memory != NULL);
+    assert(hyperdos_x86_initialize_processor(&processor, memory, HYPERDOS_X86_MEMORY_SIZE) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    hyperdos_8087_initialize(&floatingPointUnit);
+    hyperdos_x86_attach_coprocessor(&processor, hyperdos_8087_wait, hyperdos_8087_escape, &floatingPointUnit);
+    assert(hyperdos_x86_load_dos_program(&processor,
+                                         program,
+                                         sizeof(program),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+
+    result = hyperdos_x86_execute(&processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    assert((hyperdos_x86_get_general_register(&processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) & 0x4700u) ==
+           0x0400u);
+    free(memory);
+}
+
 static void test_pc_text_code_pages(void)
 {
     assert(hyperdos_pc_text_code_page_437_unicode_character('A') == 'A');
@@ -6761,6 +7269,281 @@ static void test_pc_machine_initializes_core_devices(void)
     free(machine);
 }
 
+static void test_pc_at_extended_memory_and_address_line_20(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor       = NULL;
+    uint32_t                               physicalAddress = 0u;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    processor = &machine->pc.processor;
+
+    assert(hyperdos_pc_get_extended_memory_size_kilobytes(&machine->pc) == HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES);
+    assert((uint16_t)(test_read_cmos_register(&machine->pc, TEST_PC_CMOS_EXTENDED_MEMORY_LOW_REGISTER) |
+                      ((uint16_t)test_read_cmos_register(&machine->pc, TEST_PC_CMOS_EXTENDED_MEMORY_HIGH_REGISTER)
+                       << HYPERDOS_X86_BYTE_BIT_COUNT)) == HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES);
+
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0xFFFFu);
+    hyperdos_pc_set_address_line_20_enabled(&machine->pc, 0u);
+    assert(hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                              HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                                              0x0010u,
+                                                              &physicalAddress) == HYPERDOS_X86_EXECUTION_OK);
+    assert(physicalAddress == HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE);
+    assert(hyperdos_bus_translate_memory_address_for_device(&machine->pc.bus, physicalAddress) == 0x00000u);
+    assert(hyperdos_x86_write_memory_byte(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0010u, 0x12u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, 0x00000u) == 0x12u);
+
+    hyperdos_pc_set_address_line_20_enabled(&machine->pc, 1u);
+    assert(hyperdos_x86_translate_logical_to_physical_address(processor,
+                                                              HYPERDOS_X86_SEGMENT_REGISTER_DATA,
+                                                              0x0010u,
+                                                              &physicalAddress) == HYPERDOS_X86_EXECUTION_OK);
+    assert(physicalAddress == HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE);
+    assert(hyperdos_x86_write_memory_byte(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, 0x0010u, 0x34u) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE) == 0x34u);
+
+    hyperdos_x86_write_input_output_byte(processor,
+                                         TEST_PC_SYSTEM_CONTROL_PORT_A,
+                                         TEST_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT);
+    assert(hyperdos_pc_get_address_line_20_enabled(&machine->pc));
+    hyperdos_x86_write_input_output_byte(processor, TEST_PC_SYSTEM_CONTROL_PORT_A, 0u);
+    assert(!hyperdos_pc_get_address_line_20_enabled(&machine->pc));
+    hyperdos_x86_write_input_output_byte(processor,
+                                         TEST_KEYBOARD_CONTROLLER_STATUS_COMMAND_PORT,
+                                         TEST_KEYBOARD_CONTROLLER_COMMAND_WRITE_OUTPUT_PORT);
+    hyperdos_x86_write_input_output_byte(processor,
+                                         TEST_KEYBOARD_CONTROLLER_DATA_PORT,
+                                         0x01u | TEST_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT);
+    assert(hyperdos_pc_get_address_line_20_enabled(&machine->pc));
+
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
+    assert(hyperdos_pc_system_bios_handle_system_services_interrupt(
+                   processor,
+                   &machine->pc,
+                   &machine->systemBios,
+                   TEST_PC_SYSTEM_BIOS_GET_EXTENDED_MEMORY_SIZE_SERVICE) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES);
+
+    free(machine);
+}
+
+static void test_pc_at_configurable_memory_reporting(void)
+{
+    enum
+    {
+        TEST_CONVENTIONAL_MEMORY_KILOBYTES = 512u,
+        TEST_EXTENDED_MEMORY_KILOBYTES     = 2048u
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+    uint32_t lastExtendedMemoryAddress = HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE + TEST_EXTENDED_MEMORY_KILOBYTES * 1024u -
+                                         1u;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel              = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel                     = HYPERDOS_PC_MODEL_AT;
+    configuration.conventionalMemoryKilobytes = TEST_CONVENTIONAL_MEMORY_KILOBYTES;
+    configuration.extendedMemoryKilobytes     = TEST_EXTENDED_MEMORY_KILOBYTES;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    processor = &machine->pc.processor;
+
+    assert(hyperdos_pc_get_conventional_memory_size_kilobytes(&machine->pc) == TEST_CONVENTIONAL_MEMORY_KILOBYTES);
+    assert(hyperdos_pc_get_extended_memory_size_kilobytes(&machine->pc) == TEST_EXTENDED_MEMORY_KILOBYTES);
+    assert((uint16_t)(test_read_cmos_register(&machine->pc, TEST_PC_CMOS_BASE_MEMORY_LOW_REGISTER) |
+                      ((uint16_t)test_read_cmos_register(&machine->pc, TEST_PC_CMOS_BASE_MEMORY_HIGH_REGISTER)
+                       << HYPERDOS_X86_BYTE_BIT_COUNT)) == TEST_CONVENTIONAL_MEMORY_KILOBYTES);
+    assert((uint16_t)(test_read_cmos_register(&machine->pc, TEST_PC_CMOS_EXTENDED_MEMORY_LOW_REGISTER) |
+                      ((uint16_t)test_read_cmos_register(&machine->pc, TEST_PC_CMOS_EXTENDED_MEMORY_HIGH_REGISTER)
+                       << HYPERDOS_X86_BYTE_BIT_COUNT)) == TEST_EXTENDED_MEMORY_KILOBYTES);
+
+    hyperdos_pc_bios_runtime_initialize_data_area(&machine->biosRuntime, NULL, 1u);
+    assert(hyperdos_pc_bios_data_area_read_word(&machine->pc,
+                                                HYPERDOS_PC_BIOS_DATA_AREA_CONVENTIONAL_MEMORY_SIZE_OFFSET) ==
+           TEST_CONVENTIONAL_MEMORY_KILOBYTES);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
+    assert(hyperdos_pc_system_bios_handle_memory_size_interrupt(processor, &machine->pc) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           TEST_CONVENTIONAL_MEMORY_KILOBYTES);
+    hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
+    assert(hyperdos_pc_system_bios_handle_system_services_interrupt(
+                   processor,
+                   &machine->pc,
+                   &machine->systemBios,
+                   TEST_PC_SYSTEM_BIOS_GET_EXTENDED_MEMORY_SIZE_SERVICE) == HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_x86_get_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR) ==
+           TEST_EXTENDED_MEMORY_KILOBYTES);
+
+    hyperdos_pc_set_address_line_20_enabled(&machine->pc, 1u);
+    hyperdos_bus_write_memory_byte_if_mapped(&machine->pc.bus, lastExtendedMemoryAddress, 0xA5u);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, lastExtendedMemoryAddress) == 0xA5u);
+    hyperdos_bus_write_memory_byte_if_mapped(&machine->pc.bus, lastExtendedMemoryAddress + 1u, 0x5Au);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, lastExtendedMemoryAddress + 1u) == 0xFFu);
+
+    free(machine);
+}
+
+static void test_80286_protected_mode_descriptor_accesses_extended_memory(void)
+{
+    enum
+    {
+        TEST_GLOBAL_DESCRIPTOR_TABLE_BASE     = 0x0500u,
+        TEST_DATA_DESCRIPTOR_ADDRESS          = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0008u,
+        TEST_EXTENDED_DATA_DESCRIPTOR_ADDRESS = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE + 0x0010u,
+        TEST_CODE_SELECTOR                    = 0x0008u,
+        TEST_DATA_SELECTOR                    = 0x0010u,
+        TEST_CODE_BASE                        = 0x2000u,
+        TEST_CODE_DESCRIPTOR_ACCESS           = 0x9Au,
+        TEST_DATA_DESCRIPTOR_LIMIT            = 0x00FFu,
+        TEST_DATA_DESCRIPTOR_ACCESS           = 0x92u,
+        TEST_DATA_OFFSET                      = 0x0020u
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_processor*                processor = NULL;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    processor = &machine->pc.processor;
+
+    hyperdos_pc_set_address_line_20_enabled(&machine->pc, 1u);
+    test_write_80286_segment_descriptor_to_pc(&machine->pc,
+                                              TEST_DATA_DESCRIPTOR_ADDRESS,
+                                              TEST_CODE_BASE,
+                                              HYPERDOS_X86_WORD_MASK,
+                                              TEST_CODE_DESCRIPTOR_ACCESS);
+    test_write_80286_segment_descriptor_to_pc(&machine->pc,
+                                              TEST_EXTENDED_DATA_DESCRIPTOR_ADDRESS,
+                                              HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE,
+                                              TEST_DATA_DESCRIPTOR_LIMIT,
+                                              TEST_DATA_DESCRIPTOR_ACCESS);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, TEST_EXTENDED_DATA_DESCRIPTOR_ADDRESS + 4u) ==
+           0x10u);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus, TEST_EXTENDED_DATA_DESCRIPTOR_ADDRESS + 5u) ==
+           TEST_DATA_DESCRIPTOR_ACCESS);
+    processor->globalDescriptorTable.base                                   = TEST_GLOBAL_DESCRIPTOR_TABLE_BASE;
+    processor->globalDescriptorTable.limit                                  = 0x0017u;
+    processor->machineStatusWord                                            = 0x0001u;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].selector   = TEST_CODE_SELECTOR;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].base       = TEST_CODE_BASE;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].limit      = HYPERDOS_X86_WORD_MASK;
+    processor->segmentStates[HYPERDOS_X86_SEGMENT_REGISTER_CODE].attributes = TEST_CODE_DESCRIPTOR_ACCESS;
+    assert(processor->processorModel == HYPERDOS_X86_PROCESSOR_MODEL_80286);
+
+    hyperdos_x86_set_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_DATA_SELECTOR);
+    assert(hyperdos_x86_get_segment_register(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA) == TEST_DATA_SELECTOR);
+    assert(hyperdos_x86_get_segment_base(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA) ==
+           HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE);
+    assert(hyperdos_x86_write_memory_byte(processor, HYPERDOS_X86_SEGMENT_REGISTER_DATA, TEST_DATA_OFFSET, 0x5Au) ==
+           HYPERDOS_X86_EXECUTION_OK);
+    assert(hyperdos_bus_read_memory_byte_or_open_bus(&machine->pc.bus,
+                                                     HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE + TEST_DATA_OFFSET) == 0x5Au);
+
+    free(machine);
+}
+
+static void test_pc_machine_applies_chipset_profile_independently_from_pc_model(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_XT;
+    configuration.chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_AT_286;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert(hyperdos_pc_system_bios_get_model_identifier(&machine->systemBios) ==
+           HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_XT);
+    assert(machine->pc.chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_286);
+    assert(machine->pc.slaveProgrammableInterruptControllerEnabled != 0u);
+    assert(hyperdos_pc_get_extended_memory_size_kilobytes(&machine->pc) == HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES);
+    free(machine);
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_AT;
+    configuration.chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_XT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert(hyperdos_pc_system_bios_get_model_identifier(&machine->systemBios) ==
+           HYPERDOS_PC_SYSTEM_BIOS_MODEL_IDENTIFIER_AT);
+    assert(machine->pc.chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_XT);
+    assert(machine->pc.slaveProgrammableInterruptControllerEnabled == 0u);
+    assert(hyperdos_pc_get_extended_memory_size_kilobytes(&machine->pc) == 0u);
+    assert(hyperdos_bus_read_input_output_byte_or_open_bus(&machine->pc.bus, HYPERDOS_PC_CMOS_DATA_PORT) == 0xFFu);
+    assert(hyperdos_bus_read_input_output_byte_or_open_bus(&machine->pc.bus, TEST_PC_SYSTEM_CONTROL_PORT_A) == 0xFFu);
+    free(machine);
+}
+
+static void test_pc_at_wires_second_direct_memory_access_controller_and_page_registers(void)
+{
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+
+    hyperdos_bus_write_input_output_byte_if_mapped(&machine->pc.bus,
+                                                   HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT,
+                                                   0x34u);
+    hyperdos_bus_write_input_output_byte_if_mapped(&machine->pc.bus,
+                                                   HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT,
+                                                   0x12u);
+    hyperdos_bus_write_input_output_byte_if_mapped(&machine->pc.bus,
+                                                   HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT + 2u,
+                                                   0x78u);
+    hyperdos_bus_write_input_output_byte_if_mapped(&machine->pc.bus,
+                                                   HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT + 2u,
+                                                   0x56u);
+    assert(machine->pc.secondDirectMemoryAccessController.channels[0].baseAddress == 0x1234u);
+    assert(machine->pc.secondDirectMemoryAccessController.channels[0].baseCount == 0x5678u);
+
+    hyperdos_bus_write_input_output_byte_if_mapped(&machine->pc.bus,
+                                                   HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT + 3u,
+                                                   0xABu);
+    assert(hyperdos_bus_read_input_output_byte_or_open_bus(&machine->pc.bus,
+                                                           HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT +
+                                                                   3u) == 0xABu);
+    free(machine);
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_8088;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_XT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert(hyperdos_bus_read_input_output_byte_or_open_bus(
+                   &machine->pc.bus,
+                   HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT) == 0xFFu);
+    assert(hyperdos_bus_read_input_output_byte_or_open_bus(&machine->pc.bus,
+                                                           HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT +
+                                                                   3u) == 0xFFu);
+    free(machine);
+}
+
 static void test_pc_machine_selects_80287_for_80286_coprocessor(void)
 {
     hyperdos_pc_machine*                   machine = NULL;
@@ -6792,6 +7575,47 @@ static void test_pc_machine_uses_explicit_coprocessor_model(void)
     assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
     assert(hyperdos_x87_get_model(&machine->pc.floatingPointUnit) == HYPERDOS_X87_MODEL_8087);
     assert(machine->biosRuntime.coprocessorEnabled != 0u);
+    free(machine);
+}
+
+static void test_pc_machine_leaves_processor_extension_emulation_clear_without_software_emulator(void)
+{
+    static const uint8_t initializeCoprocessorProgram[] = {
+        TEST_8087_ESCAPE_DB,
+        0xE3u,
+        0xF4u,
+    };
+    hyperdos_pc_machine*                   machine = NULL;
+    hyperdos_pc_machine_boot_configuration configuration;
+    hyperdos_x86_execution_result          result = HYPERDOS_X86_EXECUTION_OK;
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel        = HYPERDOS_PC_MODEL_AT;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert((hyperdos_x86_get_control_register(&machine->pc.processor, 0u) &
+            HYPERDOS_X86_CONTROL_REGISTER_ZERO_EMULATE_COPROCESSOR) == 0u);
+    assert(hyperdos_x86_load_dos_program(&machine->pc.processor,
+                                         initializeCoprocessorProgram,
+                                         sizeof(initializeCoprocessorProgram),
+                                         HYPERDOS_X86_DEFAULT_DOS_SEGMENT,
+                                         "",
+                                         0u) == HYPERDOS_X86_EXECUTION_OK);
+    result = hyperdos_x86_execute(&machine->pc.processor, TEST_DEFAULT_INSTRUCTION_LIMIT);
+    assert(result == HYPERDOS_X86_EXECUTION_HALTED);
+    free(machine);
+
+    machine = (hyperdos_pc_machine*)calloc(1u, sizeof(*machine));
+    assert(machine != NULL);
+    memset(&configuration, 0, sizeof(configuration));
+    configuration.processorModel     = HYPERDOS_X86_PROCESSOR_MODEL_80286;
+    configuration.pcModel            = HYPERDOS_PC_MODEL_AT;
+    configuration.coprocessorEnabled = 1u;
+    assert(hyperdos_pc_machine_initialize_for_boot(machine, &configuration));
+    assert((hyperdos_x86_get_control_register(&machine->pc.processor, 0u) &
+            HYPERDOS_X86_CONTROL_REGISTER_ZERO_EMULATE_COPROCESSOR) == 0u);
     free(machine);
 }
 
@@ -7213,7 +8037,7 @@ static void test_disk_bios_reset_preserves_floppy_media_change_until_read(void)
     result = hyperdos_pc_disk_bios_handle_interrupt(processor, &machine->diskBiosInterface);
     assert(result == HYPERDOS_X86_EXECUTION_OK);
     assert((hyperdos_x86_get_flags_word(processor) & HYPERDOS_X86_FLAG_CARRY) == 0u);
-    assert(machine->pc.processorMemory[TEST_DISK_TRANSFER_OFFSET] == TEST_DISK_SAMPLE_BYTE);
+    assert(test_read_guest_memory_byte(&machine->pc, TEST_DISK_TRANSFER_OFFSET) == TEST_DISK_SAMPLE_BYTE);
 
     free(machine);
     hyperdos_pc_disk_image_free(&diskImage);
@@ -7324,7 +8148,7 @@ static void test_disk_bios_xt_reports_floppy_change_line_for_disk_swaps(void)
     result = hyperdos_pc_disk_bios_handle_interrupt(processor, &machine->diskBiosInterface);
     assert(result == HYPERDOS_X86_EXECUTION_OK);
     assert((hyperdos_x86_get_flags_word(processor) & HYPERDOS_X86_FLAG_CARRY) == 0u);
-    assert(machine->pc.processorMemory[TEST_DISK_TRANSFER_OFFSET] == TEST_DISK_SAMPLE_BYTE);
+    assert(test_read_guest_memory_byte(&machine->pc, TEST_DISK_TRANSFER_OFFSET) == TEST_DISK_SAMPLE_BYTE);
 
     free(machine);
     hyperdos_pc_disk_image_free(&diskImage);
@@ -7364,8 +8188,9 @@ static void test_video_bios_palette_services_update_video_graphics_array_state(v
 
     for (registerIndex = 0u; registerIndex < TEST_VIDEO_BIOS_PALETTE_REGISTER_COUNT + 1u; ++registerIndex)
     {
-        machine->pc.processorMemory[TEST_VIDEO_BIOS_PALETTE_TABLE_OFFSET + registerIndex] = (uint8_t)(0x20u +
-                                                                                                      registerIndex);
+        test_write_guest_memory_byte(&machine->pc,
+                                     TEST_VIDEO_BIOS_PALETTE_TABLE_OFFSET + (uint32_t)registerIndex,
+                                     (uint8_t)(0x20u + registerIndex));
     }
     hyperdos_x86_set_general_register_word(processor,
                                            HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
@@ -7389,12 +8214,12 @@ static void test_video_bios_palette_services_update_video_graphics_array_state(v
     assert(machine->pc.colorGraphicsAdapter.attributeControllerRegisters
                    [TEST_VIDEO_BIOS_ATTRIBUTE_OVERSCAN_COLOR_REGISTER] == 0x30u);
 
-    machine->pc.processorMemory[TEST_VIDEO_BIOS_DAC_TABLE_OFFSET]      = 0x01u;
-    machine->pc.processorMemory[TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 1u] = 0x02u;
-    machine->pc.processorMemory[TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 2u] = 0x03u;
-    machine->pc.processorMemory[TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 3u] = 0x04u;
-    machine->pc.processorMemory[TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 4u] = 0x05u;
-    machine->pc.processorMemory[TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 5u] = 0x06u;
+    test_write_guest_memory_byte(&machine->pc, TEST_VIDEO_BIOS_DAC_TABLE_OFFSET, 0x01u);
+    test_write_guest_memory_byte(&machine->pc, TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 1u, 0x02u);
+    test_write_guest_memory_byte(&machine->pc, TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 2u, 0x03u);
+    test_write_guest_memory_byte(&machine->pc, TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 3u, 0x04u);
+    test_write_guest_memory_byte(&machine->pc, TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 4u, 0x05u);
+    test_write_guest_memory_byte(&machine->pc, TEST_VIDEO_BIOS_DAC_TABLE_OFFSET + 5u, 0x06u);
     hyperdos_x86_set_general_register_word(processor,
                                            HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
                                            (uint16_t)((TEST_VIDEO_BIOS_PALETTE_SERVICE
@@ -7515,6 +8340,8 @@ int main(void)
     test_80286_processor_extension_trap_precedes_coprocessor_handler();
     test_80286_wait_uses_coprocessor_when_task_switched_without_monitor_processor();
     test_external_bus_cycle_count_profiles();
+    test_80386_and_80486_external_bus_profiles();
+    test_80486_control_register_zero_and_cache_invalidation_hooks();
     test_x86_general_register_word_operations_preserve_upper_word();
     test_load_data_segment_pointer();
     test_repeated_byte_move();
@@ -7535,8 +8362,14 @@ int main(void)
     test_pc_interval_timer_input_frequency_is_independent_from_processor_frequency();
     test_pc_speaker_callback_from_port_control();
     test_pc_system_bios_timer_tick_data_area();
+    test_pc_bios_runtime_services_timer_interrupts_inside_large_slice();
     test_pc_system_bios_identity_can_disable_at_services();
     test_pc_system_bios_configuration_table_survives_interrupt_vector_stubs();
+    test_pc_at_extended_memory_and_address_line_20();
+    test_pc_at_configurable_memory_reporting();
+    test_80286_protected_mode_descriptor_accesses_extended_memory();
+    test_pc_machine_applies_chipset_profile_independently_from_pc_model();
+    test_pc_at_wires_second_direct_memory_access_controller_and_page_registers();
     test_pc_storage_maps_configured_bios_drive_numbers();
     test_disk_bios_reports_only_available_fixed_disks();
     test_pc_storage_updates_at_cmos_drive_configuration();
@@ -7570,11 +8403,18 @@ int main(void)
     test_wait_and_escape_coprocessor();
     test_8087_environment_instructions();
     test_8087_single_precision_add();
+    test_8087_extended_real_and_packed_decimal_instructions();
+    test_8087_transcendental_and_saved_state_instructions();
     test_80287_set_protected_mode_instruction();
     test_80287_initialize_instruction_preserves_protected_mode();
+    test_8087_operation_matrix_covers_supported_and_unsupported_forms();
+    test_8087_unsupported_operation_returns_unsupported_instruction();
+    test_80287_reserved_register_operation_sets_invalid_operation_status();
+    test_8087_examine_stack_top_and_disable_interrupts_instruction();
     test_pc_text_code_pages();
     test_pc_machine_initializes_core_devices();
     test_pc_machine_selects_80287_for_80286_coprocessor();
     test_pc_machine_uses_explicit_coprocessor_model();
+    test_pc_machine_leaves_processor_extension_emulation_clear_without_software_emulator();
     return 0;
 }

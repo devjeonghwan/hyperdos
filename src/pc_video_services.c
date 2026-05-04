@@ -180,8 +180,7 @@ static void hyperdos_pc_video_services_trace(hyperdos_pc_video_services* videoSe
 
 static uint8_t read_guest_memory_byte(const hyperdos_pc_video_services* videoServices, uint32_t physicalAddress)
 {
-    return hyperdos_bus_read_memory_byte_or_open_bus(&videoServices->pc->bus,
-                                                     physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
+    return hyperdos_bus_read_memory_byte_or_open_bus(&videoServices->pc->bus, physicalAddress);
 }
 
 static uint16_t read_guest_memory_word(const hyperdos_pc_video_services* videoServices, uint32_t physicalAddress)
@@ -202,9 +201,7 @@ static uint32_t read_guest_memory_double_word(const hyperdos_pc_video_services* 
 
 static void write_guest_memory_byte(hyperdos_pc_video_services* videoServices, uint32_t physicalAddress, uint8_t value)
 {
-    hyperdos_bus_write_memory_byte_if_mapped(&videoServices->pc->bus,
-                                             physicalAddress & HYPERDOS_X86_ADDRESS_MASK,
-                                             value);
+    hyperdos_bus_write_memory_byte_if_mapped(&videoServices->pc->bus, physicalAddress, value);
 }
 
 static void write_guest_memory_word(hyperdos_pc_video_services* videoServices, uint32_t physicalAddress, uint16_t value)

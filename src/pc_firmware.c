@@ -9,7 +9,7 @@ enum
 
 static void hyperdos_pc_firmware_write_guest_memory_byte(hyperdos_pc* pc, uint32_t physicalAddress, uint8_t value)
 {
-    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress & HYPERDOS_X86_ADDRESS_MASK, value);
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress, value);
 }
 
 static void hyperdos_pc_firmware_write_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress, uint16_t value)
@@ -22,7 +22,15 @@ static void hyperdos_pc_firmware_write_guest_memory_word(hyperdos_pc* pc, uint32
 
 void hyperdos_pc_firmware_write_byte(hyperdos_pc* pc, uint32_t physicalAddress, uint8_t value)
 {
-    pc->processorMemory[physicalAddress & HYPERDOS_X86_ADDRESS_MASK] = value;
+    uint32_t busAddress = hyperdos_bus_translate_memory_address_for_device(&pc->bus, physicalAddress);
+
+    if (busAddress >= HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE &&
+        busAddress < HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE + HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE)
+    {
+        pc->basicInputOutputSystemReadOnlyMemoryBytes[busAddress - HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE] = value;
+        return;
+    }
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress, value);
 }
 
 void hyperdos_pc_firmware_install_interrupt_vector_stub(hyperdos_pc* pc,

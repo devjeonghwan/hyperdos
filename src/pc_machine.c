@@ -1,10 +1,5 @@
 #include "hyperdos/pc_machine.h"
 
-enum
-{
-    HYPERDOS_PC_MACHINE_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE = 2u
-};
-
 static hyperdos_x87_model hyperdos_pc_machine_get_coprocessor_model(
         const hyperdos_pc_machine_boot_configuration* configuration)
 {
@@ -23,16 +18,76 @@ static hyperdos_x87_model hyperdos_pc_machine_get_coprocessor_model(
     return HYPERDOS_X87_MODEL_8087;
 }
 
+static hyperdos_pc_chipset_profile hyperdos_pc_machine_get_chipset_profile(
+        const hyperdos_pc_machine_boot_configuration* configuration)
+{
+    if (configuration->chipsetProfile != HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT)
+    {
+        return configuration->chipsetProfile;
+    }
+    return configuration->pcModel == HYPERDOS_PC_MODEL_AT ? HYPERDOS_PC_CHIPSET_PROFILE_AT_286
+                                                          : HYPERDOS_PC_CHIPSET_PROFILE_XT;
+}
+
+static uint32_t hyperdos_pc_machine_get_extended_memory_kilobytes(
+        const hyperdos_pc_machine_boot_configuration* configuration,
+        hyperdos_pc_chipset_profile                   chipsetProfile)
+{
+    if (configuration->extendedMemoryKilobytes != 0u)
+    {
+        return configuration->extendedMemoryKilobytes;
+    }
+    if (chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_286 || chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_386 ||
+        chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_486)
+    {
+        return HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES;
+    }
+    return 0u;
+}
+
+static int hyperdos_pc_machine_chipset_profile_is_at_compatible(hyperdos_pc_chipset_profile chipsetProfile)
+{
+    return chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_286 ||
+           chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_386 || chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_486;
+}
+
+static hyperdos_programmable_interval_timer_model hyperdos_pc_machine_get_interval_timer_model(
+        const hyperdos_pc_machine_boot_configuration* configuration,
+        hyperdos_pc_chipset_profile                   chipsetProfile)
+{
+    if (configuration->intervalTimerModel != HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_DEFAULT)
+    {
+        return configuration->intervalTimerModel;
+    }
+    if (hyperdos_pc_machine_chipset_profile_is_at_compatible(chipsetProfile))
+    {
+        return HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8254;
+    }
+    return HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8253;
+}
+
+static hyperdos_universal_asynchronous_receiver_transmitter_model hyperdos_pc_machine_get_first_serial_port_model(
+        const hyperdos_pc_machine_boot_configuration* configuration)
+{
+    if (configuration->firstSerialPortModel != HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_DEFAULT)
+    {
+        return configuration->firstSerialPortModel;
+    }
+    return HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_8250;
+}
+
 int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                          machine,
                                             const hyperdos_pc_machine_boot_configuration* configuration)
 {
-    hyperdos_x87_model coprocessorModel = HYPERDOS_X87_MODEL_NONE;
+    hyperdos_x87_model          coprocessorModel = HYPERDOS_X87_MODEL_NONE;
+    hyperdos_pc_chipset_profile chipsetProfile   = HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT;
 
     if (machine == NULL || configuration == NULL)
     {
         return 0;
     }
     coprocessorModel = hyperdos_pc_machine_get_coprocessor_model(configuration);
+    chipsetProfile   = hyperdos_pc_machine_get_chipset_profile(configuration);
 
     hyperdos_pc_keyboard_bios_reset(&machine->keyboardBios);
     hyperdos_pc_system_bios_reset(&machine->systemBios);
@@ -48,40 +103,20 @@ int hyperdos_pc_machine_initialize_for_boot(hyperdos_pc_machine*                
                                                      configuration->traceFloppyController,
                                                      configuration->userContext);
 
-    if (!hyperdos_pc_initialize(&machine->pc))
+    if (!hyperdos_pc_initialize_with_configuration(&machine->pc,
+                                                   chipsetProfile,
+                                                   configuration->conventionalMemoryKilobytes,
+                                                   hyperdos_pc_machine_get_extended_memory_kilobytes(configuration,
+                                                                                                     chipsetProfile),
+                                                   hyperdos_pc_machine_get_interval_timer_model(configuration,
+                                                                                                chipsetProfile),
+                                                   hyperdos_pc_machine_get_first_serial_port_model(configuration)))
     {
         return 0;
     }
     if (configuration->processorFrequencyHertz != 0u)
     {
         hyperdos_pc_set_processor_frequency_hertz(&machine->pc, configuration->processorFrequencyHertz);
-    }
-    if (configuration->pcModel == HYPERDOS_PC_MODEL_AT &&
-        hyperdos_bus_map_input_output(&machine->pc.bus,
-                                      HYPERDOS_PC_CMOS_ADDRESS_PORT,
-                                      HYPERDOS_PC_CMOS_PORT_COUNT,
-                                      &machine->pc.realTimeClock,
-                                      hyperdos_pc_cmos_read_input_output_byte,
-                                      hyperdos_pc_cmos_write_input_output_byte) != HYPERDOS_BUS_ACCESS_OK)
-    {
-        return 0;
-    }
-    if (configuration->pcModel == HYPERDOS_PC_MODEL_AT &&
-        hyperdos_bus_map_input_output(&machine->pc.bus,
-                                      HYPERDOS_PC_SLAVE_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT,
-                                      HYPERDOS_PC_SLAVE_INTERRUPT_CONTROLLER_PORT_COUNT,
-                                      &machine->pc.slaveProgrammableInterruptController,
-                                      hyperdos_programmable_interrupt_controller_read_byte,
-                                      hyperdos_programmable_interrupt_controller_write_byte) != HYPERDOS_BUS_ACCESS_OK)
-    {
-        return 0;
-    }
-    machine->pc.slaveProgrammableInterruptControllerEnabled = configuration->pcModel == HYPERDOS_PC_MODEL_AT ? 1u : 0u;
-    if (machine->pc.slaveProgrammableInterruptControllerEnabled != 0u)
-    {
-        machine->pc.programmableInterruptController.interruptMaskRegister =
-                (uint8_t)(machine->pc.programmableInterruptController.interruptMaskRegister &
-                          ~(1u << HYPERDOS_PC_MACHINE_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE));
     }
     hyperdos_x86_set_processor_model(&machine->pc.processor, configuration->processorModel);
     hyperdos_pc_set_speaker_state_change_function(&machine->pc,

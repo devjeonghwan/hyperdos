@@ -344,6 +344,8 @@ hyperdos_x87_model hyperdos_x87_get_model(const hyperdos_8087* coprocessor);
 
 int hyperdos_x87_is_protected_mode_enabled(const hyperdos_8087* coprocessor);
 
+int hyperdos_x87_operation_is_supported(hyperdos_x87_model model, uint8_t operationCode, uint8_t registerMemoryByte);
+
 hyperdos_x86_execution_result hyperdos_x87_wait(hyperdos_x86_processor* processor, void* userContext);
 
 hyperdos_x86_execution_result hyperdos_x87_escape(hyperdos_x86_processor*                     processor,

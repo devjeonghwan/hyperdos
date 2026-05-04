@@ -15,6 +15,31 @@ typedef enum hyperdos_bus_cycle_type
     HYPERDOS_BUS_CYCLE_MEMORY_WRITE
 } hyperdos_bus_cycle_type;
 
+typedef enum hyperdos_pc_chipset_profile
+{
+    HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT = 0,
+    HYPERDOS_PC_CHIPSET_PROFILE_PC,
+    HYPERDOS_PC_CHIPSET_PROFILE_XT,
+    HYPERDOS_PC_CHIPSET_PROFILE_AT_286,
+    HYPERDOS_PC_CHIPSET_PROFILE_AT_386,
+    HYPERDOS_PC_CHIPSET_PROFILE_AT_486
+} hyperdos_pc_chipset_profile;
+
+typedef enum hyperdos_programmable_interval_timer_model
+{
+    HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_DEFAULT = 0,
+    HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8253,
+    HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8254
+} hyperdos_programmable_interval_timer_model;
+
+typedef enum hyperdos_universal_asynchronous_receiver_transmitter_model
+{
+    HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_DEFAULT = 0,
+    HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_8250,
+    HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_16450,
+    HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_16550A
+} hyperdos_universal_asynchronous_receiver_transmitter_model;
+
 typedef struct hyperdos_intel_8284_clock_generator
 {
     uint32_t             crystalFrequencyHertz;

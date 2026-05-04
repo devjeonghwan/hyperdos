@@ -32,6 +32,8 @@ typedef void (*hyperdos_bus_observe_memory_write)(void*    observerContext,
                                                   uint8_t  oldValue,
                                                   uint8_t  newValue);
 
+typedef uint32_t (*hyperdos_bus_translate_memory_address)(void* translatorContext, uint32_t physicalAddress);
+
 typedef uint8_t (*hyperdos_bus_read_input_output_byte)(void* device, uint16_t port);
 
 typedef void (*hyperdos_bus_write_input_output_byte)(void* device, uint16_t port, uint8_t value);
@@ -72,21 +74,23 @@ typedef struct hyperdos_clock_device
 
 typedef struct hyperdos_bus
 {
-    hyperdos_memory_mapping           memoryMappings[HYPERDOS_BUS_MAXIMUM_MEMORY_MAPPINGS];
-    size_t                            memoryMappingCount;
-    hyperdos_input_output_mapping     inputOutputMappings[HYPERDOS_BUS_MAXIMUM_INPUT_OUTPUT_MAPPINGS];
-    size_t                            inputOutputMappingCount;
-    hyperdos_clock_device             clockDevices[HYPERDOS_BUS_MAXIMUM_CLOCK_DEVICES];
-    size_t                            clockDeviceCount;
-    hyperdos_bus_observe_memory_write memoryWriteObserver;
-    void*                             memoryWriteObserverContext;
-    uint64_t                          clockCount;
-    hyperdos_signal_line              readyLine;
-    hyperdos_signal_line              interruptRequestLine;
-    hyperdos_signal_line              nonMaskableInterruptLine;
-    hyperdos_signal_line              holdRequestLine;
-    hyperdos_signal_line              holdAcknowledgeLine;
-    hyperdos_signal_line              resetLine;
+    hyperdos_memory_mapping               memoryMappings[HYPERDOS_BUS_MAXIMUM_MEMORY_MAPPINGS];
+    size_t                                memoryMappingCount;
+    hyperdos_input_output_mapping         inputOutputMappings[HYPERDOS_BUS_MAXIMUM_INPUT_OUTPUT_MAPPINGS];
+    size_t                                inputOutputMappingCount;
+    hyperdos_clock_device                 clockDevices[HYPERDOS_BUS_MAXIMUM_CLOCK_DEVICES];
+    size_t                                clockDeviceCount;
+    hyperdos_bus_observe_memory_write     memoryWriteObserver;
+    void*                                 memoryWriteObserverContext;
+    hyperdos_bus_translate_memory_address memoryAddressTranslator;
+    void*                                 memoryAddressTranslatorContext;
+    uint64_t                              clockCount;
+    hyperdos_signal_line                  readyLine;
+    hyperdos_signal_line                  interruptRequestLine;
+    hyperdos_signal_line                  nonMaskableInterruptLine;
+    hyperdos_signal_line                  holdRequestLine;
+    hyperdos_signal_line                  holdAcknowledgeLine;
+    hyperdos_signal_line                  resetLine;
 } hyperdos_bus;
 
 void hyperdos_signal_line_initialize(hyperdos_signal_line* line, const char* name, hyperdos_signal_level initialLevel);
@@ -116,6 +120,12 @@ hyperdos_bus_access_result hyperdos_bus_attach_clock_device(hyperdos_bus*       
 void hyperdos_bus_set_memory_write_observer(hyperdos_bus*                     bus,
                                             hyperdos_bus_observe_memory_write observer,
                                             void*                             observerContext);
+
+void hyperdos_bus_set_memory_address_translator(hyperdos_bus*                         bus,
+                                                hyperdos_bus_translate_memory_address translator,
+                                                void*                                 translatorContext);
+
+uint32_t hyperdos_bus_translate_memory_address_for_device(hyperdos_bus* bus, uint32_t physicalAddress);
 
 void hyperdos_bus_set_memory_mapping_observer_old_value_read_enabled(hyperdos_bus* bus,
                                                                      uint32_t      firstAddress,

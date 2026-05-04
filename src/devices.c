@@ -1,5 +1,6 @@
 #include "hyperdos/devices.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,8 +9,11 @@ enum
 {
     HYPERDOS_OPEN_BUS_BYTE                                               = 0xFFu,
     HYPERDOS_X86_TWO_BIT_COUNT                                           = 2u,
+    HYPERDOS_X86_NIBBLE_BIT_COUNT                                        = 4u,
+    HYPERDOS_X86_NIBBLE_MASK                                             = 0x0Fu,
     HYPERDOS_X86_LOW_TWO_BITS_MASK                                       = 0x03u,
     HYPERDOS_X86_LOW_THREE_BITS_MASK                                     = 0x07u,
+    HYPERDOS_X87_OPERATION_INDEX_SHIFT                                   = 3u,
     HYPERDOS_INTERRUPT_CONTROLLER_COMMAND_PORT_OFFSET                    = 0u,
     HYPERDOS_INTERRUPT_CONTROLLER_DATA_PORT_OFFSET                       = 1u,
     HYPERDOS_INTERRUPT_CONTROLLER_INITIALIZATION_COMMAND                 = 0x10u,
@@ -233,6 +237,7 @@ enum
     HYPERDOS_8087_REGISTER_MEMORY_INITIALIZE                         = 0xE3u,
     HYPERDOS_8087_REGISTER_MEMORY_CLEAR_EXCEPTIONS                   = 0xE2u,
     HYPERDOS_8087_REGISTER_MEMORY_SET_PROTECTED_MODE                 = 0xE4u,
+    HYPERDOS_8087_REGISTER_MEMORY_RESERVED_FIRST                     = 0xE5u,
     HYPERDOS_8087_REGISTER_MEMORY_STORE_STATUS_ACCUMULATOR           = 0xE0u,
     HYPERDOS_8087_REGISTER_MEMORY_MASK                               = 0x07u,
     HYPERDOS_8087_REGISTER_MEMORY_GROUP_MASK                         = 0xF8u,
@@ -245,6 +250,10 @@ enum
     HYPERDOS_8087_STATUS_ZERO_DIVIDE                                 = 0x0004u,
     HYPERDOS_8087_STATUS_STACK_FAULT                                 = 0x0040u,
     HYPERDOS_8087_STATUS_ERROR_SUMMARY                               = 0x0080u,
+    HYPERDOS_8087_STATUS_CONDITION_ZERO_BIT                          = 0x0100u,
+    HYPERDOS_8087_STATUS_CONDITION_ONE_BIT                           = 0x0200u,
+    HYPERDOS_8087_STATUS_CONDITION_TWO_BIT                           = 0x0400u,
+    HYPERDOS_8087_STATUS_CONDITION_THREE_BIT                         = 0x4000u,
     HYPERDOS_8087_STATUS_CONDITION_ZERO                              = 0x4700u,
     HYPERDOS_8087_STATUS_CONDITION_ZERO_OR_UNORDERED                 = 0x4000u,
     HYPERDOS_8087_STATUS_CONDITION_LESS_THAN                         = 0x0100u,
@@ -266,8 +275,112 @@ enum
     HYPERDOS_8087_ENVIRONMENT_INSTRUCTION_OFFSET                     = 6u,
     HYPERDOS_8087_ENVIRONMENT_INSTRUCTION_SEGMENT                    = 8u,
     HYPERDOS_8087_ENVIRONMENT_OPERAND_OFFSET                         = 10u,
-    HYPERDOS_8087_ENVIRONMENT_OPERAND_SEGMENT                        = 12u
+    HYPERDOS_8087_ENVIRONMENT_OPERAND_SEGMENT                        = 12u,
+    HYPERDOS_8087_ENVIRONMENT_BYTE_COUNT                             = 14u,
+    HYPERDOS_8087_EXTENDED_REAL_BYTE_COUNT                           = 10u,
+    HYPERDOS_8087_EXTENDED_REAL_SIGNIFICAND_BYTE_COUNT               = 8u,
+    HYPERDOS_8087_EXTENDED_REAL_EXPONENT_OFFSET                      = 8u,
+    HYPERDOS_8087_EXTENDED_REAL_EXPONENT_BIAS                        = 16383,
+    HYPERDOS_8087_EXTENDED_REAL_SIGN_BIT                             = 0x8000u,
+    HYPERDOS_8087_EXTENDED_REAL_EXPONENT_MASK                        = 0x7FFFu,
+    HYPERDOS_8087_BCD_BYTE_COUNT                                     = 10u,
+    HYPERDOS_8087_BCD_DIGIT_BYTE_COUNT                               = 9u,
+    HYPERDOS_8087_BCD_NEGATIVE_SIGN                                  = 0x80u
 };
+
+typedef enum hyperdos_x87_operand_form
+{
+    HYPERDOS_X87_OPERAND_FORM_MEMORY = 0u,
+    HYPERDOS_X87_OPERAND_FORM_REGISTER
+} hyperdos_x87_operand_form;
+
+typedef struct hyperdos_x87_operation_matrix_entry
+{
+    uint8_t                   operationCode;
+    hyperdos_x87_operand_form operandForm;
+    uint8_t                   firstOperationIndex;
+    uint8_t                   lastOperationIndex;
+    uint8_t                   firstRegisterMemoryByte;
+    uint8_t                   lastRegisterMemoryByte;
+    hyperdos_x87_model        minimumModel;
+} hyperdos_x87_operation_matrix_entry;
+
+static const hyperdos_x87_operation_matrix_entry hyperdos_x87_operation_matrix[] = {
+    {HYPERDOS_8087_ESCAPE_D8, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 0u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_MEMORY,   2u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DA, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DB, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 0u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DB, HYPERDOS_X87_OPERAND_FORM_MEMORY,   2u, 3u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DB, HYPERDOS_X87_OPERAND_FORM_MEMORY,   5u, 5u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DB, HYPERDOS_X87_OPERAND_FORM_MEMORY,   7u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DC, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DD, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 0u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DD, HYPERDOS_X87_OPERAND_FORM_MEMORY,   2u, 4u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DD, HYPERDOS_X87_OPERAND_FORM_MEMORY,   6u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DE, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DF, HYPERDOS_X87_OPERAND_FORM_MEMORY,   0u, 0u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DF, HYPERDOS_X87_OPERAND_FORM_MEMORY,   2u, 7u, 0x00u, 0x00u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D8, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xC0u, 0xFFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xC0u, 0xCFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xD0u, 0xD0u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE0u, 0xE1u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE4u, 0xE5u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE8u, 0xEFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xF0u, 0xF4u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xF6u, 0xFAu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_D9, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xFCu, 0xFDu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DB, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE0u, 0xE3u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DB, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE4u, 0xE4u, HYPERDOS_X87_MODEL_80287},
+    {HYPERDOS_8087_ESCAPE_DC, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xC0u, 0xCFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DC, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE0u, 0xFFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DD, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xC0u, 0xDFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DE, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xC0u, 0xCFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DE, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xD9u, 0xD9u, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DE, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE0u, 0xFFu, HYPERDOS_X87_MODEL_8087 },
+    {HYPERDOS_8087_ESCAPE_DF, HYPERDOS_X87_OPERAND_FORM_REGISTER, 0u, 0u, 0xE0u, 0xE0u, HYPERDOS_X87_MODEL_8087 },
+};
+
+static size_t hyperdos_x87_operation_matrix_count(void)
+{
+    return sizeof(hyperdos_x87_operation_matrix) / sizeof(hyperdos_x87_operation_matrix[0]);
+}
+
+int hyperdos_x87_operation_is_supported(hyperdos_x87_model model, uint8_t operationCode, uint8_t registerMemoryByte)
+{
+    size_t                    matrixIndex    = 0u;
+    uint8_t                   isRegisterForm = (registerMemoryByte & 0xC0u) == 0xC0u ? 1u : 0u;
+    hyperdos_x87_operand_form operandForm    = isRegisterForm != 0u ? HYPERDOS_X87_OPERAND_FORM_REGISTER
+                                                                    : HYPERDOS_X87_OPERAND_FORM_MEMORY;
+    uint8_t                   operationIndex = (uint8_t)((registerMemoryByte >> HYPERDOS_X87_OPERATION_INDEX_SHIFT) &
+                                       HYPERDOS_X86_LOW_THREE_BITS_MASK);
+
+    if (model == HYPERDOS_X87_MODEL_NONE)
+    {
+        return 0;
+    }
+    for (matrixIndex = 0u; matrixIndex < hyperdos_x87_operation_matrix_count(); ++matrixIndex)
+    {
+        const hyperdos_x87_operation_matrix_entry* entry = &hyperdos_x87_operation_matrix[matrixIndex];
+        if (model >= entry->minimumModel && operationCode == entry->operationCode &&
+            operandForm == entry->operandForm &&
+            ((operandForm == HYPERDOS_X87_OPERAND_FORM_MEMORY && operationIndex >= entry->firstOperationIndex &&
+              operationIndex <= entry->lastOperationIndex) ||
+             (operandForm == HYPERDOS_X87_OPERAND_FORM_REGISTER &&
+              registerMemoryByte >= entry->firstRegisterMemoryByte &&
+              registerMemoryByte <= entry->lastRegisterMemoryByte)))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int hyperdos_x87_operation_is_reserved_register_encoding(uint8_t operationCode, uint8_t registerMemoryByte)
+{
+    return operationCode == HYPERDOS_8087_ESCAPE_DB &&
+           registerMemoryByte >= HYPERDOS_8087_REGISTER_MEMORY_RESERVED_FIRST;
+}
 
 static void hyperdos_8087_update_tag_word(hyperdos_8087* coprocessor)
 {
@@ -484,6 +597,127 @@ static void hyperdos_8087_write_double_precision_real(hyperdos_x86_processor*   
     hyperdos_8087_write_memory_quad_word(processor, segmentRegister, offset, binaryValue);
 }
 
+static long double hyperdos_8087_read_extended_precision_real(const hyperdos_x86_processor*       processor,
+                                                              hyperdos_x86_segment_register_index segmentRegister,
+                                                              uint16_t                            offset)
+{
+    uint64_t    significand  = hyperdos_8087_read_memory_quad_word(processor, segmentRegister, offset);
+    uint16_t    signExponent = hyperdos_8087_read_memory_word(processor,
+                                                           segmentRegister,
+                                                           (uint16_t)(offset +
+                                                                      HYPERDOS_8087_EXTENDED_REAL_EXPONENT_OFFSET));
+    uint16_t    exponent     = (uint16_t)(signExponent & HYPERDOS_8087_EXTENDED_REAL_EXPONENT_MASK);
+    long double value        = 0.0L;
+
+    if (exponent == 0u && significand == 0u)
+    {
+        return (signExponent & HYPERDOS_8087_EXTENDED_REAL_SIGN_BIT) != 0u ? -0.0L : 0.0L;
+    }
+    if (exponent == HYPERDOS_8087_EXTENDED_REAL_EXPONENT_MASK)
+    {
+        value = (long double)HUGE_VAL;
+    }
+    else
+    {
+        value = ldexpl((long double)significand,
+                       exponent - HYPERDOS_8087_EXTENDED_REAL_EXPONENT_BIAS -
+                               (HYPERDOS_8087_EXTENDED_REAL_SIGNIFICAND_BYTE_COUNT * HYPERDOS_X86_BYTE_BIT_COUNT - 1));
+    }
+    return (signExponent & HYPERDOS_8087_EXTENDED_REAL_SIGN_BIT) != 0u ? -value : value;
+}
+
+static void hyperdos_8087_write_extended_precision_real(hyperdos_x86_processor*             processor,
+                                                        hyperdos_x86_segment_register_index segmentRegister,
+                                                        uint16_t                            offset,
+                                                        long double                         value)
+{
+    uint16_t signExponent = 0u;
+    uint64_t significand  = 0u;
+
+    if (value != 0.0L)
+    {
+        int         exponent        = 0;
+        long double absoluteValue   = value < 0.0L ? -value : value;
+        long double normalized      = frexpl(absoluteValue, &exponent);
+        long double significandReal = ldexpl(normalized,
+                                             HYPERDOS_8087_EXTENDED_REAL_SIGNIFICAND_BYTE_COUNT *
+                                                     HYPERDOS_X86_BYTE_BIT_COUNT);
+
+        signExponent = (uint16_t)(exponent - 1 + HYPERDOS_8087_EXTENDED_REAL_EXPONENT_BIAS);
+        if (value < 0.0L)
+        {
+            signExponent = (uint16_t)(signExponent | HYPERDOS_8087_EXTENDED_REAL_SIGN_BIT);
+        }
+        significand = significandReal >= (long double)UINT64_MAX ? UINT64_MAX : (uint64_t)significandReal;
+    }
+
+    hyperdos_8087_write_memory_quad_word(processor, segmentRegister, offset, significand);
+    hyperdos_8087_write_memory_word(processor,
+                                    segmentRegister,
+                                    (uint16_t)(offset + HYPERDOS_8087_EXTENDED_REAL_EXPONENT_OFFSET),
+                                    signExponent);
+}
+
+static long double hyperdos_8087_read_packed_decimal(const hyperdos_x86_processor*       processor,
+                                                     hyperdos_x86_segment_register_index segmentRegister,
+                                                     uint16_t                            offset)
+{
+    long double multiplier = 1.0L;
+    long double value      = 0.0L;
+    size_t      byteIndex  = 0u;
+    uint8_t     signByte   = 0u;
+
+    for (byteIndex = 0u; byteIndex < HYPERDOS_8087_BCD_DIGIT_BYTE_COUNT; ++byteIndex)
+    {
+        uint8_t byteValue = 0u;
+        (void)hyperdos_x86_read_memory_byte(processor, segmentRegister, (uint16_t)(offset + byteIndex), &byteValue);
+        value      += (long double)(byteValue & HYPERDOS_X86_NIBBLE_MASK) * multiplier;
+        multiplier *= 10.0L;
+        value += (long double)((byteValue >> HYPERDOS_X86_NIBBLE_BIT_COUNT) & HYPERDOS_X86_NIBBLE_MASK) * multiplier;
+        multiplier *= 10.0L;
+    }
+    (void)hyperdos_x86_read_memory_byte(processor,
+                                        segmentRegister,
+                                        (uint16_t)(offset + HYPERDOS_8087_BCD_DIGIT_BYTE_COUNT),
+                                        &signByte);
+    return (signByte & HYPERDOS_8087_BCD_NEGATIVE_SIGN) != 0u ? -value : value;
+}
+
+static void hyperdos_8087_write_packed_decimal(hyperdos_x86_processor*             processor,
+                                               hyperdos_x86_segment_register_index segmentRegister,
+                                               uint16_t                            offset,
+                                               long double                         value)
+{
+    uint64_t integerValue = 0u;
+    size_t   byteIndex    = 0u;
+
+    if (signbit(value))
+    {
+        integerValue = (uint64_t)-value;
+    }
+    else
+    {
+        integerValue = (uint64_t)value;
+    }
+
+    for (byteIndex = 0u; byteIndex < HYPERDOS_8087_BCD_DIGIT_BYTE_COUNT; ++byteIndex)
+    {
+        uint8_t lowDigit   = (uint8_t)(integerValue % 10u);
+        uint8_t highDigit  = 0u;
+        integerValue      /= 10u;
+        highDigit          = (uint8_t)(integerValue % 10u);
+        integerValue      /= 10u;
+        (void)hyperdos_x86_write_memory_byte(processor,
+                                             segmentRegister,
+                                             (uint16_t)(offset + byteIndex),
+                                             (uint8_t)(lowDigit | (highDigit << HYPERDOS_X86_NIBBLE_BIT_COUNT)));
+    }
+    (void)hyperdos_x86_write_memory_byte(processor,
+                                         segmentRegister,
+                                         (uint16_t)(offset + HYPERDOS_8087_BCD_DIGIT_BYTE_COUNT),
+                                         value < 0.0L ? HYPERDOS_8087_BCD_NEGATIVE_SIGN : 0u);
+}
+
 static int64_t hyperdos_8087_round_to_integer(const hyperdos_8087* coprocessor, long double value)
 {
     uint16_t roundingControl = (uint16_t)((coprocessor->controlWord >> HYPERDOS_8087_CONTROL_ROUNDING_SHIFT) &
@@ -515,6 +749,40 @@ static void hyperdos_8087_compare_values(hyperdos_8087* coprocessor, long double
     else if (leftValue == rightValue)
     {
         coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_ZERO_OR_UNORDERED;
+    }
+    hyperdos_8087_update_environment_words(coprocessor);
+}
+
+static void hyperdos_8087_examine_stack_top(hyperdos_8087* coprocessor)
+{
+    size_t      physicalRegister = hyperdos_8087_physical_stack_register(coprocessor, 0u);
+    long double value            = coprocessor->registers[physicalRegister];
+
+    coprocessor->statusWord &= (uint16_t)~(HYPERDOS_8087_STATUS_CONDITION_ZERO |
+                                           HYPERDOS_8087_STATUS_CONDITION_ONE_BIT);
+    if (value < 0.0L)
+    {
+        coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_ONE_BIT;
+    }
+    if (coprocessor->registerTags[physicalRegister] == HYPERDOS_8087_STACK_TAG_EMPTY)
+    {
+        coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_THREE_BIT | HYPERDOS_8087_STATUS_CONDITION_ZERO_BIT;
+    }
+    else if (coprocessor->registerTags[physicalRegister] == HYPERDOS_8087_STACK_TAG_ZERO || value == 0.0L)
+    {
+        coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_THREE_BIT;
+    }
+    else if (isnan(value))
+    {
+        coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_ZERO_BIT;
+    }
+    else if (isinf(value))
+    {
+        coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_TWO_BIT | HYPERDOS_8087_STATUS_CONDITION_ZERO_BIT;
+    }
+    else
+    {
+        coprocessor->statusWord |= HYPERDOS_8087_STATUS_CONDITION_TWO_BIT;
     }
     hyperdos_8087_update_environment_words(coprocessor);
 }
@@ -617,6 +885,93 @@ static void hyperdos_8087_execute_reversed_register_operation(hyperdos_8087* cop
     if (popAfterOperation)
     {
         hyperdos_8087_pop_stack_value(coprocessor);
+    }
+}
+
+static long double hyperdos_8087_logarithm_base_two(long double value)
+{
+    return logl(value) / logl(2.0L);
+}
+
+static void hyperdos_8087_clear_condition_code(hyperdos_8087* coprocessor)
+{
+    coprocessor->statusWord = (uint16_t)(coprocessor->statusWord & ~HYPERDOS_8087_STATUS_CONDITION_ZERO);
+}
+
+static void hyperdos_8087_decrement_stack_top(hyperdos_8087* coprocessor)
+{
+    coprocessor->stackTop = (uint8_t)((coprocessor->stackTop - 1u) & HYPERDOS_8087_REGISTER_MEMORY_MASK);
+    hyperdos_8087_update_environment_words(coprocessor);
+}
+
+static void hyperdos_8087_increment_stack_top(hyperdos_8087* coprocessor)
+{
+    coprocessor->stackTop = (uint8_t)((coprocessor->stackTop + 1u) & HYPERDOS_8087_REGISTER_MEMORY_MASK);
+    hyperdos_8087_update_environment_words(coprocessor);
+}
+
+static void hyperdos_8087_extract_significand_and_exponent(hyperdos_8087* coprocessor)
+{
+    long double value         = hyperdos_8087_read_stack_value(coprocessor, 0u);
+    long double absoluteValue = value < 0.0L ? -value : value;
+    int         exponent      = 0;
+    long double significand   = 0.0L;
+
+    if (absoluteValue != 0.0L)
+    {
+        significand = frexpl(absoluteValue, &exponent) * 2.0L;
+        --exponent;
+        if (value < 0.0L)
+        {
+            significand = -significand;
+        }
+    }
+    hyperdos_8087_write_stack_value(coprocessor, 0u, (long double)exponent);
+    hyperdos_8087_push_stack_value(coprocessor, significand);
+}
+
+static void hyperdos_8087_store_environment(hyperdos_x86_processor*                     processor,
+                                            const hyperdos_x86_coprocessor_instruction* instruction,
+                                            const hyperdos_8087*                        coprocessor);
+
+static void hyperdos_8087_load_environment(const hyperdos_x86_processor*               processor,
+                                           const hyperdos_x86_coprocessor_instruction* instruction,
+                                           hyperdos_8087*                              coprocessor);
+
+static void hyperdos_8087_store_state(hyperdos_x86_processor*                     processor,
+                                      const hyperdos_x86_coprocessor_instruction* instruction,
+                                      const hyperdos_8087*                        coprocessor)
+{
+    size_t stackIndex = 0u;
+
+    hyperdos_8087_store_environment(processor, instruction, coprocessor);
+    for (stackIndex = 0u; stackIndex < HYPERDOS_8087_REGISTER_COUNT; ++stackIndex)
+    {
+        hyperdos_8087_write_extended_precision_real(processor,
+                                                    instruction->segmentRegister,
+                                                    (uint16_t)(instruction->offset +
+                                                               HYPERDOS_8087_ENVIRONMENT_BYTE_COUNT +
+                                                               stackIndex * HYPERDOS_8087_EXTENDED_REAL_BYTE_COUNT),
+                                                    hyperdos_8087_read_stack_value(coprocessor, (uint8_t)stackIndex));
+    }
+}
+
+static void hyperdos_8087_load_state(const hyperdos_x86_processor*               processor,
+                                     const hyperdos_x86_coprocessor_instruction* instruction,
+                                     hyperdos_8087*                              coprocessor)
+{
+    size_t stackIndex = 0u;
+
+    hyperdos_8087_load_environment(processor, instruction, coprocessor);
+    for (stackIndex = 0u; stackIndex < HYPERDOS_8087_REGISTER_COUNT; ++stackIndex)
+    {
+        hyperdos_8087_write_stack_value(coprocessor,
+                                        (uint8_t)stackIndex,
+                                        hyperdos_8087_read_extended_precision_real(
+                                                processor,
+                                                instruction->segmentRegister,
+                                                (uint16_t)(instruction->offset + HYPERDOS_8087_ENVIRONMENT_BYTE_COUNT +
+                                                           stackIndex * HYPERDOS_8087_EXTENDED_REAL_BYTE_COUNT)));
     }
 }
 
@@ -777,6 +1132,13 @@ static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_processor*    
                                                                                          instruction->segmentRegister,
                                                                                          instruction->offset));
         }
+        else if (instruction->operationIndex == 5u)
+        {
+            hyperdos_8087_push_stack_value(coprocessor,
+                                           hyperdos_8087_read_extended_precision_real(processor,
+                                                                                      instruction->segmentRegister,
+                                                                                      instruction->offset));
+        }
         else if (instruction->operationIndex == 2u || instruction->operationIndex == 3u)
         {
             integerValue = hyperdos_8087_round_to_integer(coprocessor, stackValue);
@@ -788,6 +1150,14 @@ static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_processor*    
             {
                 hyperdos_8087_pop_stack_value(coprocessor);
             }
+        }
+        else if (instruction->operationIndex == 7u)
+        {
+            hyperdos_8087_write_extended_precision_real(processor,
+                                                        instruction->segmentRegister,
+                                                        instruction->offset,
+                                                        stackValue);
+            hyperdos_8087_pop_stack_value(coprocessor);
         }
         break;
     case HYPERDOS_8087_ESCAPE_DC:
@@ -822,11 +1192,11 @@ static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_processor*    
         }
         else if (instruction->operationIndex == 4u)
         {
-            hyperdos_8087_load_environment(processor, instruction, coprocessor);
+            hyperdos_8087_load_state(processor, instruction, coprocessor);
         }
         else if (instruction->operationIndex == 6u)
         {
-            hyperdos_8087_store_environment(processor, instruction, coprocessor);
+            hyperdos_8087_store_state(processor, instruction, coprocessor);
             hyperdos_8087_initialize_programming_state(coprocessor);
         }
         else if (instruction->operationIndex == 7u)
@@ -873,6 +1243,22 @@ static void hyperdos_8087_execute_memory_instruction(hyperdos_x86_processor*    
                                                    hyperdos_8087_read_memory_quad_word(processor,
                                                                                        instruction->segmentRegister,
                                                                                        instruction->offset));
+        }
+        else if (instruction->operationIndex == 4u)
+        {
+            hyperdos_8087_push_stack_value(coprocessor,
+                                           hyperdos_8087_read_packed_decimal(processor,
+                                                                             instruction->segmentRegister,
+                                                                             instruction->offset));
+        }
+        else if (instruction->operationIndex == 6u)
+        {
+            integerValue = hyperdos_8087_round_to_integer(coprocessor, stackValue);
+            hyperdos_8087_write_packed_decimal(processor,
+                                               instruction->segmentRegister,
+                                               instruction->offset,
+                                               (long double)integerValue);
+            hyperdos_8087_pop_stack_value(coprocessor);
         }
         else if (instruction->operationIndex == 7u)
         {
@@ -927,17 +1313,113 @@ static void hyperdos_8087_execute_register_instruction(hyperdos_x86_processor*  
         {
             hyperdos_8087_compare_values(coprocessor, hyperdos_8087_read_stack_value(coprocessor, 0u), 0.0L);
         }
+        else if (instruction->registerMemoryByte == 0xE5u)
+        {
+            hyperdos_8087_examine_stack_top(coprocessor);
+        }
         else if (instruction->registerMemoryByte == 0xE8u)
         {
             hyperdos_8087_push_stack_value(coprocessor, 1.0L);
+        }
+        else if (instruction->registerMemoryByte == 0xE9u)
+        {
+            hyperdos_8087_push_stack_value(coprocessor, hyperdos_8087_logarithm_base_two(10.0L));
+        }
+        else if (instruction->registerMemoryByte == 0xEAu)
+        {
+            hyperdos_8087_push_stack_value(coprocessor, hyperdos_8087_logarithm_base_two(2.71828182845904523536L));
         }
         else if (instruction->registerMemoryByte == 0xEBu)
         {
             hyperdos_8087_push_stack_value(coprocessor, 3.14159265358979323846264338327950288L);
         }
+        else if (instruction->registerMemoryByte == 0xECu)
+        {
+            hyperdos_8087_push_stack_value(coprocessor, logl(2.0L) / logl(10.0L));
+        }
+        else if (instruction->registerMemoryByte == 0xEDu)
+        {
+            hyperdos_8087_push_stack_value(coprocessor, logl(2.0L));
+        }
         else if (instruction->registerMemoryByte == 0xEEu)
         {
             hyperdos_8087_push_stack_value(coprocessor, 0.0L);
+        }
+        else if (instruction->registerMemoryByte == 0xF0u)
+        {
+            hyperdos_8087_write_stack_value(coprocessor,
+                                            0u,
+                                            powl(2.0L, hyperdos_8087_read_stack_value(coprocessor, 0u)) - 1.0L);
+        }
+        else if (instruction->registerMemoryByte == 0xF1u)
+        {
+            hyperdos_8087_write_stack_value(coprocessor,
+                                            1u,
+                                            hyperdos_8087_read_stack_value(coprocessor, 1u) *
+                                                    hyperdos_8087_logarithm_base_two(
+                                                            hyperdos_8087_read_stack_value(coprocessor, 0u)));
+            hyperdos_8087_pop_stack_value(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xF2u)
+        {
+            hyperdos_8087_write_stack_value(coprocessor, 0u, tanl(hyperdos_8087_read_stack_value(coprocessor, 0u)));
+            hyperdos_8087_push_stack_value(coprocessor, 1.0L);
+        }
+        else if (instruction->registerMemoryByte == 0xF3u)
+        {
+            hyperdos_8087_write_stack_value(coprocessor,
+                                            1u,
+                                            atan2l(hyperdos_8087_read_stack_value(coprocessor, 1u),
+                                                   hyperdos_8087_read_stack_value(coprocessor, 0u)));
+            hyperdos_8087_pop_stack_value(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xF4u)
+        {
+            hyperdos_8087_extract_significand_and_exponent(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xF6u)
+        {
+            hyperdos_8087_decrement_stack_top(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xF7u)
+        {
+            hyperdos_8087_increment_stack_top(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xF8u)
+        {
+            hyperdos_8087_write_stack_value(coprocessor,
+                                            0u,
+                                            fmodl(hyperdos_8087_read_stack_value(coprocessor, 0u),
+                                                  hyperdos_8087_read_stack_value(coprocessor, 1u)));
+            hyperdos_8087_clear_condition_code(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xF9u)
+        {
+            hyperdos_8087_write_stack_value(coprocessor,
+                                            1u,
+                                            hyperdos_8087_read_stack_value(coprocessor, 1u) *
+                                                    hyperdos_8087_logarithm_base_two(
+                                                            hyperdos_8087_read_stack_value(coprocessor, 0u) + 1.0L));
+            hyperdos_8087_pop_stack_value(coprocessor);
+        }
+        else if (instruction->registerMemoryByte == 0xFAu)
+        {
+            hyperdos_8087_write_stack_value(coprocessor, 0u, sqrtl(hyperdos_8087_read_stack_value(coprocessor, 0u)));
+        }
+        else if (instruction->registerMemoryByte == 0xFCu)
+        {
+            hyperdos_8087_write_stack_value(
+                    coprocessor,
+                    0u,
+                    (long double)hyperdos_8087_round_to_integer(coprocessor,
+                                                                hyperdos_8087_read_stack_value(coprocessor, 0u)));
+        }
+        else if (instruction->registerMemoryByte == 0xFDu)
+        {
+            hyperdos_8087_write_stack_value(coprocessor,
+                                            0u,
+                                            ldexpl(hyperdos_8087_read_stack_value(coprocessor, 0u),
+                                                   (int)hyperdos_8087_read_stack_value(coprocessor, 1u)));
         }
         break;
     case HYPERDOS_8087_ESCAPE_DB:
@@ -3366,7 +3848,6 @@ hyperdos_x86_execution_result hyperdos_x87_escape(hyperdos_x86_processor*       
     {
         return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
-
     coprocessor->lastInstructionSegment = processor->lastInstructionSegment;
     coprocessor->lastInstructionOffset  = (uint16_t)processor->lastInstructionOffset;
     if (!instruction->isRegister)
@@ -3375,6 +3856,21 @@ hyperdos_x86_execution_result hyperdos_x87_escape(hyperdos_x86_processor*       
         coprocessor->lastOperandOffset  = instruction->offset;
     }
     hyperdos_8087_update_environment_words(coprocessor);
+
+    if (!hyperdos_x87_operation_is_supported(coprocessor->model,
+                                             instruction->operationCode,
+                                             instruction->registerMemoryByte))
+    {
+        if (instruction->isRegister &&
+            hyperdos_x87_operation_is_reserved_register_encoding(instruction->operationCode,
+                                                                 instruction->registerMemoryByte))
+        {
+            hyperdos_8087_mark_error(coprocessor, HYPERDOS_8087_STATUS_INVALID_OPERATION);
+            hyperdos_8087_update_environment_words(coprocessor);
+            return HYPERDOS_X86_EXECUTION_OK;
+        }
+        return HYPERDOS_X86_EXECUTION_UNSUPPORTED_INSTRUCTION;
+    }
 
     if (instruction->isRegister)
     {

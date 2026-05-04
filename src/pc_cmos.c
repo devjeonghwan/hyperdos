@@ -16,6 +16,8 @@ enum
     HYPERDOS_PC_CMOS_EQUIPMENT_REGISTER                                     = 0x14u,
     HYPERDOS_PC_CMOS_BASE_MEMORY_LOW_REGISTER                               = 0x15u,
     HYPERDOS_PC_CMOS_BASE_MEMORY_HIGH_REGISTER                              = 0x16u,
+    HYPERDOS_PC_CMOS_EXTENDED_MEMORY_LOW_REGISTER                           = 0x17u,
+    HYPERDOS_PC_CMOS_EXTENDED_MEMORY_HIGH_REGISTER                          = 0x18u,
     HYPERDOS_PC_CMOS_FIRST_FIXED_DISK_EXTENDED_TYPE_REGISTER                = 0x19u,
     HYPERDOS_PC_CMOS_SECOND_FIXED_DISK_EXTENDED_TYPE_REGISTER               = 0x1Au,
     HYPERDOS_PC_CMOS_FIRST_FIXED_DISK_PARAMETER_BASE_REGISTER               = 0x1Bu,
@@ -123,6 +125,16 @@ void hyperdos_pc_cmos_set_equipment_flags(hyperdos_pc_cmos* cmos, uint16_t equip
         return;
     }
     cmos->registers[HYPERDOS_PC_CMOS_EQUIPMENT_REGISTER] = (uint8_t)(equipmentFlags & 0x00FFu);
+}
+
+void hyperdos_pc_cmos_set_base_memory_size_kilobytes(hyperdos_pc_cmos* cmos, uint16_t memorySizeKilobytes)
+{
+    hyperdos_pc_cmos_write_word_to_registers(cmos, HYPERDOS_PC_CMOS_BASE_MEMORY_LOW_REGISTER, memorySizeKilobytes);
+}
+
+void hyperdos_pc_cmos_set_extended_memory_size_kilobytes(hyperdos_pc_cmos* cmos, uint16_t memorySizeKilobytes)
+{
+    hyperdos_pc_cmos_write_word_to_registers(cmos, HYPERDOS_PC_CMOS_EXTENDED_MEMORY_LOW_REGISTER, memorySizeKilobytes);
 }
 
 void hyperdos_pc_cmos_set_floppy_drive_type(hyperdos_pc_cmos* cmos, uint8_t driveNumber, uint8_t driveType)

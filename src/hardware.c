@@ -157,6 +157,27 @@ void hyperdos_bus_set_memory_write_observer(hyperdos_bus*                     bu
     bus->memoryWriteObserverContext = observerContext;
 }
 
+void hyperdos_bus_set_memory_address_translator(hyperdos_bus*                         bus,
+                                                hyperdos_bus_translate_memory_address translator,
+                                                void*                                 translatorContext)
+{
+    if (bus == NULL)
+    {
+        return;
+    }
+    bus->memoryAddressTranslator        = translator;
+    bus->memoryAddressTranslatorContext = translatorContext;
+}
+
+uint32_t hyperdos_bus_translate_memory_address_for_device(hyperdos_bus* bus, uint32_t physicalAddress)
+{
+    if (bus == NULL || bus->memoryAddressTranslator == NULL)
+    {
+        return physicalAddress;
+    }
+    return bus->memoryAddressTranslator(bus->memoryAddressTranslatorContext, physicalAddress);
+}
+
 void hyperdos_bus_set_memory_mapping_observer_old_value_read_enabled(hyperdos_bus* bus,
                                                                      uint32_t      firstAddress,
                                                                      uint32_t      byteCount,
@@ -191,6 +212,7 @@ uint8_t hyperdos_bus_read_memory_byte_or_open_bus(hyperdos_bus* bus, uint32_t ph
         return HYPERDOS_OPEN_BUS_BYTE;
     }
 
+    physicalAddress = hyperdos_bus_translate_memory_address_for_device(bus, physicalAddress);
     for (mappingIndex = 0; mappingIndex < bus->memoryMappingCount; ++mappingIndex)
     {
         hyperdos_memory_mapping* mapping = &bus->memoryMappings[mappingIndex];
@@ -211,6 +233,7 @@ void hyperdos_bus_write_memory_byte_if_mapped(hyperdos_bus* bus, uint32_t physic
         return;
     }
 
+    physicalAddress = hyperdos_bus_translate_memory_address_for_device(bus, physicalAddress);
     for (mappingIndex = 0; mappingIndex < bus->memoryMappingCount; ++mappingIndex)
     {
         hyperdos_memory_mapping* mapping = &bus->memoryMappings[mappingIndex];

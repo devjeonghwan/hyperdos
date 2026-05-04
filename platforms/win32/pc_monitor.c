@@ -5,6 +5,7 @@
 #include <commdlg.h>
 
 #include <commctrl.h>
+#include <mmsystem.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 
@@ -61,6 +62,7 @@ enum
     HYPERDOS_MONITOR_VIDEO_PREVIEW_WIDTH                  = 80u,
     HYPERDOS_MONITOR_VIDEO_PREVIEW_HEIGHT                 = 50u,
     HYPERDOS_MONITOR_INSTRUCTIONS_PER_SLICE               = 32768u,
+    HYPERDOS_MONITOR_PACING_TIMER_RESOLUTION_MILLISECONDS = 1u,
     HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MINIMUM   = -127,
     HYPERDOS_MONITOR_HOST_MOUSE_PACKET_MOVEMENT_MAXIMUM   = 127,
     HYPERDOS_MONITOR_STATUS_BAR_TEXT_CAPACITY             = 320u,
@@ -172,24 +174,29 @@ static char    globalMemoryTracePath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static char    globalGuestMemoryDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static char    globalTextScreenDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
 static char    globalVideoStateDumpPath[HYPERDOS_MONITOR_PATH_CAPACITY];
-static hyperdos_monitor_memory_watch      globalMemoryWatches[HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY];
-static size_t                             globalMemoryWatchCount;
-static uint32_t                           globalMemoryStopPhysicalAddress;
-static uint8_t                            globalMemoryStopByteValue;
-static int                                globalMemoryStopByteEnabled;
-static hyperdos_monitor_coprocessor_model globalCoprocessorModel;
-static uint32_t                           globalProcessorFrequencyHertz;
-static int                                globalGuestClockThrottleEnabled;
-static hyperdos_x86_processor_model       globalProcessorModel;
-static hyperdos_pc_model                  globalPcModel;
-static int                                globalDivideErrorReturnsToFaultingInstruction;
-static int                                globalCpuTraceStartsEnabled;
-static FILE*                              globalDiskTraceFile;
-static FILE*                              globalMemoryTraceFile;
-static CRITICAL_SECTION                   globalDiskTraceCriticalSection;
-static int                                globalDiskTraceCriticalSectionInitialized;
-static HFONT                              globalTextFontHandle;
-static HFONT                              globalCodePage437TextFontHandle;
+static hyperdos_monitor_memory_watch              globalMemoryWatches[HYPERDOS_MONITOR_MEMORY_WATCH_CAPACITY];
+static size_t                                     globalMemoryWatchCount;
+static uint32_t                                   globalMemoryStopPhysicalAddress;
+static uint8_t                                    globalMemoryStopByteValue;
+static int                                        globalMemoryStopByteEnabled;
+static hyperdos_monitor_coprocessor_model         globalCoprocessorModel;
+static uint32_t                                   globalProcessorFrequencyHertz;
+static int                                        globalGuestClockThrottleEnabled;
+static hyperdos_x86_processor_model               globalProcessorModel;
+static hyperdos_pc_model                          globalPcModel;
+static hyperdos_pc_chipset_profile                globalChipsetProfile;
+static uint32_t                                   globalConventionalMemoryKilobytes;
+static uint32_t                                   globalExtendedMemoryKilobytes;
+static hyperdos_programmable_interval_timer_model globalIntervalTimerModel;
+static hyperdos_universal_asynchronous_receiver_transmitter_model globalFirstSerialPortModel;
+static int                                                        globalDivideErrorReturnsToFaultingInstruction;
+static int                                                        globalCpuTraceStartsEnabled;
+static FILE*                                                      globalDiskTraceFile;
+static FILE*                                                      globalMemoryTraceFile;
+static CRITICAL_SECTION                                           globalDiskTraceCriticalSection;
+static int                                                        globalDiskTraceCriticalSectionInitialized;
+static HFONT                                                      globalTextFontHandle;
+static HFONT                                                      globalCodePage437TextFontHandle;
 static uint16_t globalCodePage437GlyphRows[HYPERDOS_MONITOR_CHARACTER_COUNT][HYPERDOS_MONITOR_CHARACTER_HEIGHT];
 static int      globalCodePage437GlyphRowsInitialized;
 static hyperdos_monitor_text_character_set globalTextCharacterSet = HYPERDOS_MONITOR_TEXT_CHARACTER_SET_CODE_PAGE_437;
@@ -812,9 +819,8 @@ static int parse_memory_watch_address(const char* text, hyperdos_monitor_memory_
         return 0;
     }
 
-    memoryWatch->firstPhysicalAddress = physicalAddress & HYPERDOS_X86_ADDRESS_MASK;
-    memoryWatch->lastPhysicalAddress  = (memoryWatch->firstPhysicalAddress + (uint32_t)(byteCount - 1u)) &
-                                       HYPERDOS_X86_ADDRESS_MASK;
+    memoryWatch->firstPhysicalAddress = physicalAddress;
+    memoryWatch->lastPhysicalAddress  = memoryWatch->firstPhysicalAddress + (uint32_t)(byteCount - 1u);
     copy_string_to_buffer(memoryWatch->text, sizeof(memoryWatch->text), text);
     return 1;
 }
@@ -1846,13 +1852,12 @@ static void refresh_keyboard_input_state(hyperdos_win32_boot_state* bootState)
 
 static uint8_t read_guest_memory_byte(hyperdos_win32_boot_state* bootState, uint32_t physicalAddress)
 {
-    return hyperdos_bus_read_memory_byte_or_open_bus(&bootState->machine.pc.bus,
-                                                     physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
+    return hyperdos_bus_read_memory_byte_or_open_bus(&bootState->machine.pc.bus, physicalAddress);
 }
 
 static uint8_t read_guest_instruction_byte(hyperdos_win32_boot_state* bootState, uint16_t segment, uint16_t offset)
 {
-    uint32_t physicalAddress = (((uint32_t)segment << HYPERDOS_X86_SEGMENT_SHIFT) + offset) & HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t physicalAddress = ((uint32_t)segment << HYPERDOS_X86_SEGMENT_SHIFT) + offset;
 
     return read_guest_memory_byte(bootState, physicalAddress);
 }
@@ -1907,8 +1912,7 @@ static void observe_guest_memory_write(void*    observerContext,
     {
         return;
     }
-    processor        = &bootState->machine.pc.processor;
-    physicalAddress &= HYPERDOS_X86_ADDRESS_MASK;
+    processor = &bootState->machine.pc.processor;
     if (physical_address_is_keyboard_shift_data_area(physicalAddress))
     {
         ++bootState->keyboardDataAreaShiftWriteSequence;
@@ -2053,9 +2057,8 @@ static void capture_cpu_trace_entry(hyperdos_win32_boot_state* bootState)
     }
     for (stackWordIndex = 0u; stackWordIndex < HYPERDOS_MONITOR_CPU_TRACE_STACK_WORD_COUNT; ++stackWordIndex)
     {
-        uint32_t physicalAddress = (((uint32_t)traceEntry->stackSegment << HYPERDOS_X86_SEGMENT_SHIFT) +
-                                    (uint16_t)(traceEntry->stackPointer + stackWordIndex * HYPERDOS_X86_WORD_SIZE)) &
-                                   HYPERDOS_X86_ADDRESS_MASK;
+        uint32_t physicalAddress = ((uint32_t)traceEntry->stackSegment << HYPERDOS_X86_SEGMENT_SHIFT) +
+                                   (uint16_t)(traceEntry->stackPointer + stackWordIndex * HYPERDOS_X86_WORD_SIZE);
         traceEntry->stackWords[stackWordIndex] = read_guest_memory_word(bootState, physicalAddress);
     }
 }
@@ -2131,13 +2134,26 @@ static void write_cpu_trace_file(hyperdos_win32_boot_state* bootState)
 
 static void write_guest_memory_dump_file(hyperdos_win32_boot_state* bootState)
 {
+    uint8_t* dumpBytes     = NULL;
+    size_t   dumpByteIndex = 0u;
+    size_t   dumpByteCount = HYPERDOS_X86_MEMORY_SIZE;
+
     if (globalGuestMemoryDumpPath[0] == '\0')
     {
         return;
     }
-    (void)write_binary_file(globalGuestMemoryDumpPath,
-                            bootState->machine.pc.processorMemory,
-                            sizeof(bootState->machine.pc.processorMemory));
+    dumpBytes = (uint8_t*)malloc(dumpByteCount);
+    if (dumpBytes == NULL)
+    {
+        return;
+    }
+    for (dumpByteIndex = 0u; dumpByteIndex < dumpByteCount; ++dumpByteIndex)
+    {
+        dumpBytes[dumpByteIndex] = hyperdos_bus_read_memory_byte_or_open_bus(&bootState->machine.pc.bus,
+                                                                             (uint32_t)dumpByteIndex);
+    }
+    (void)write_binary_file(globalGuestMemoryDumpPath, dumpBytes, dumpByteCount);
+    free(dumpBytes);
 }
 
 static void lock_keyboard_for_bios(void* userContext)
@@ -2228,14 +2244,19 @@ static int initialize_boot_from_disk_images(hyperdos_win32_boot_state* bootState
     bootState->lastVideoStateDumpTick = 0u;
 
     memset(&machineConfiguration, 0, sizeof(machineConfiguration));
-    machineConfiguration.userContext             = bootState;
-    machineConfiguration.processorModel          = globalProcessorModel;
-    machineConfiguration.pcModel                 = globalPcModel;
-    machineConfiguration.processorFrequencyHertz = globalProcessorFrequencyHertz;
-    machineConfiguration.floppyDriveCount        = (uint8_t)bootState->floppyDriveCount;
-    machineConfiguration.fixedDiskDriveCount     = HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT;
-    machineConfiguration.coprocessorEnabled      = (uint8_t)coprocessor_model_is_present(globalCoprocessorModel);
-    machineConfiguration.coprocessorModel        = get_machine_coprocessor_model(globalCoprocessorModel);
+    machineConfiguration.userContext                 = bootState;
+    machineConfiguration.processorModel              = globalProcessorModel;
+    machineConfiguration.pcModel                     = globalPcModel;
+    machineConfiguration.chipsetProfile              = globalChipsetProfile;
+    machineConfiguration.conventionalMemoryKilobytes = globalConventionalMemoryKilobytes;
+    machineConfiguration.extendedMemoryKilobytes     = globalExtendedMemoryKilobytes;
+    machineConfiguration.intervalTimerModel          = globalIntervalTimerModel;
+    machineConfiguration.firstSerialPortModel        = globalFirstSerialPortModel;
+    machineConfiguration.processorFrequencyHertz     = globalProcessorFrequencyHertz;
+    machineConfiguration.floppyDriveCount            = (uint8_t)bootState->floppyDriveCount;
+    machineConfiguration.fixedDiskDriveCount         = HYPERDOS_MONITOR_FIXED_DISK_DRIVE_COUNT;
+    machineConfiguration.coprocessorEnabled          = (uint8_t)coprocessor_model_is_present(globalCoprocessorModel);
+    machineConfiguration.coprocessorModel            = get_machine_coprocessor_model(globalCoprocessorModel);
     machineConfiguration.divideErrorReturnsToFaultingInstruction = (uint8_t)
             globalDivideErrorReturnsToFaultingInstruction;
     machineConfiguration.lockKeyboard                         = lock_keyboard_for_bios;
@@ -2375,8 +2396,9 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
     ULONGLONG                  lastRenderTick           = GetTickCount64();
     LARGE_INTEGER              performanceCounterFrequency;
     LARGE_INTEGER              hostPerformanceCounterBase;
-    uint64_t                   guestClockBase         = 0u;
-    int                        emulationPacingEnabled = 0;
+    uint64_t                   guestClockBase             = 0u;
+    int                        emulationPacingEnabled     = 0;
+    int                        highResolutionTimerEnabled = 0;
 
     if (globalGuestClockThrottleEnabled)
     {
@@ -2384,6 +2406,11 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
                                                              &hostPerformanceCounterBase,
                                                              &guestClockBase,
                                                              bootState);
+        if (emulationPacingEnabled &&
+            timeBeginPeriod(HYPERDOS_MONITOR_PACING_TIMER_RESOLUTION_MILLISECONDS) == TIMERR_NOERROR)
+        {
+            highResolutionTimerEnabled = 1;
+        }
     }
 
     while (InterlockedCompareExchange(&bootState->stopRequested, 0, 0) == 0 &&
@@ -2484,6 +2511,10 @@ static DWORD WINAPI emulation_thread_main(void* parameter)
     write_video_state_dump_file(bootState);
     write_cpu_trace_file(bootState);
     write_guest_memory_dump_file(bootState);
+    if (highResolutionTimerEnabled)
+    {
+        timeEndPeriod(HYPERDOS_MONITOR_PACING_TIMER_RESOLUTION_MILLISECONDS);
+    }
     return 0;
 }
 
@@ -4412,44 +4443,48 @@ static void pace_emulation_to_guest_clock(const hyperdos_win32_boot_state* bootS
                                           const LARGE_INTEGER*             hostPerformanceCounterBase,
                                           uint64_t                         guestClockBase)
 {
+    const double readyThresholdSeconds       = 0.0005;
+    const double coarseSleepThresholdSeconds = 0.0030;
+
     LARGE_INTEGER hostPerformanceCounter;
     uint64_t      guestElapsedClockCount  = 0u;
     uint32_t      processorFrequencyHertz = 0u;
     double        hostElapsedSeconds      = 0.0;
     double        guestElapsedSeconds     = 0.0;
     double        guestAheadSeconds       = 0.0;
-    DWORD         sleepMilliseconds       = 0u;
 
     if (bootState == NULL || performanceCounterFrequency == NULL || hostPerformanceCounterBase == NULL ||
         performanceCounterFrequency->QuadPart <= 0)
     {
         return;
     }
-    processorFrequencyHertz = bootState->machine.pc.clockGenerator.processorFrequencyHertz;
-    if (processorFrequencyHertz == 0u || bootState->machine.pc.clockGenerator.generatedClockCount < guestClockBase ||
-        !QueryPerformanceCounter(&hostPerformanceCounter))
+    while (InterlockedCompareExchange((volatile LONG*)&bootState->stopRequested, 0, 0) == 0)
     {
-        return;
-    }
+        processorFrequencyHertz = bootState->machine.pc.clockGenerator.processorFrequencyHertz;
+        if (processorFrequencyHertz == 0u ||
+            bootState->machine.pc.clockGenerator.generatedClockCount < guestClockBase ||
+            !QueryPerformanceCounter(&hostPerformanceCounter))
+        {
+            return;
+        }
 
-    guestElapsedClockCount = bootState->machine.pc.clockGenerator.generatedClockCount - guestClockBase;
-    hostElapsedSeconds     = (double)(hostPerformanceCounter.QuadPart - hostPerformanceCounterBase->QuadPart) /
-                         (double)performanceCounterFrequency->QuadPart;
-    guestElapsedSeconds = (double)guestElapsedClockCount / (double)processorFrequencyHertz;
-    guestAheadSeconds   = guestElapsedSeconds - hostElapsedSeconds;
-    if (guestAheadSeconds < 0.002)
-    {
-        return;
-    }
-
-    sleepMilliseconds = (DWORD)(guestAheadSeconds * 1000.0);
-    if (sleepMilliseconds > HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS)
-    {
-        sleepMilliseconds = HYPERDOS_MONITOR_RENDER_TIMER_PERIOD_MILLISECONDS;
-    }
-    if (sleepMilliseconds != 0u)
-    {
-        Sleep(sleepMilliseconds);
+        guestElapsedClockCount = bootState->machine.pc.clockGenerator.generatedClockCount - guestClockBase;
+        hostElapsedSeconds     = (double)(hostPerformanceCounter.QuadPart - hostPerformanceCounterBase->QuadPart) /
+                             (double)performanceCounterFrequency->QuadPart;
+        guestElapsedSeconds = (double)guestElapsedClockCount / (double)processorFrequencyHertz;
+        guestAheadSeconds   = guestElapsedSeconds - hostElapsedSeconds;
+        if (guestAheadSeconds <= readyThresholdSeconds)
+        {
+            return;
+        }
+        if (guestAheadSeconds >= coarseSleepThresholdSeconds)
+        {
+            Sleep(HYPERDOS_MONITOR_PACING_TIMER_RESOLUTION_MILLISECONDS);
+        }
+        else if (!SwitchToThread())
+        {
+            Sleep(0);
+        }
     }
 }
 
@@ -4458,10 +4493,15 @@ static void render_guest_display_message(hyperdos_win32_boot_state* bootState, c
     hyperdos_pc_machine_boot_configuration machineConfiguration;
 
     memset(&machineConfiguration, 0, sizeof(machineConfiguration));
-    machineConfiguration.userContext             = bootState;
-    machineConfiguration.processorModel          = globalProcessorModel;
-    machineConfiguration.pcModel                 = globalPcModel;
-    machineConfiguration.processorFrequencyHertz = globalProcessorFrequencyHertz;
+    machineConfiguration.userContext                 = bootState;
+    machineConfiguration.processorModel              = globalProcessorModel;
+    machineConfiguration.pcModel                     = globalPcModel;
+    machineConfiguration.chipsetProfile              = globalChipsetProfile;
+    machineConfiguration.conventionalMemoryKilobytes = globalConventionalMemoryKilobytes;
+    machineConfiguration.extendedMemoryKilobytes     = globalExtendedMemoryKilobytes;
+    machineConfiguration.intervalTimerModel          = globalIntervalTimerModel;
+    machineConfiguration.firstSerialPortModel        = globalFirstSerialPortModel;
+    machineConfiguration.processorFrequencyHertz     = globalProcessorFrequencyHertz;
     if (hyperdos_pc_machine_initialize_for_boot(&bootState->machine, &machineConfiguration))
     {
         hyperdos_pc_render_text_message(&bootState->machine.pc, message);
@@ -5168,7 +5208,7 @@ static void set_coprocessor_model(HWND                               windowHandl
 
 static int boot_state_processor_is_initialized(const hyperdos_win32_boot_state* bootState)
 {
-    return bootState != NULL && bootState->machine.pc.processor.memory != NULL;
+    return bootState != NULL && bootState->machine.pc.processor.bus == &bootState->machine.pc.bus;
 }
 
 static int stop_emulation_thread_for_live_configuration_change(hyperdos_win32_boot_state* bootState)
@@ -6173,6 +6213,161 @@ static int parse_processor_model_text(const char* text, hyperdos_x86_processor_m
     return 0;
 }
 
+static int parse_pc_model_text(const char* text, hyperdos_pc_model* pcModel)
+{
+    if (text == NULL || pcModel == NULL)
+    {
+        return 0;
+    }
+    if (_stricmp(text, "xt") == 0 || _stricmp(text, "pc-xt") == 0 || _stricmp(text, "pc_xt") == 0)
+    {
+        *pcModel = HYPERDOS_PC_MODEL_XT;
+        return 1;
+    }
+    if (_stricmp(text, "at") == 0 || _stricmp(text, "pc-at") == 0 || _stricmp(text, "pc_at") == 0)
+    {
+        *pcModel = HYPERDOS_PC_MODEL_AT;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_chipset_profile_text(const char* text, hyperdos_pc_chipset_profile* chipsetProfile)
+{
+    if (text == NULL || chipsetProfile == NULL)
+    {
+        return 0;
+    }
+    if (_stricmp(text, "default") == 0)
+    {
+        *chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT;
+        return 1;
+    }
+    if (_stricmp(text, "pc") == 0 || _stricmp(text, "ibm-pc") == 0 || _stricmp(text, "ibm_pc") == 0)
+    {
+        *chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_PC;
+        return 1;
+    }
+    if (_stricmp(text, "xt") == 0 || _stricmp(text, "pc-xt") == 0 || _stricmp(text, "pc_xt") == 0)
+    {
+        *chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_XT;
+        return 1;
+    }
+    if (_stricmp(text, "at") == 0 || _stricmp(text, "at286") == 0 || _stricmp(text, "at-286") == 0 ||
+        _stricmp(text, "at_286") == 0)
+    {
+        *chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_AT_286;
+        return 1;
+    }
+    if (_stricmp(text, "at386") == 0 || _stricmp(text, "at-386") == 0 || _stricmp(text, "at_386") == 0)
+    {
+        *chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_AT_386;
+        return 1;
+    }
+    if (_stricmp(text, "at486") == 0 || _stricmp(text, "at-486") == 0 || _stricmp(text, "at_486") == 0)
+    {
+        *chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_AT_486;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_memory_size_kilobytes(const char* text, uint32_t* memoryKilobytes)
+{
+    char*  endPointer  = NULL;
+    double parsedValue = 0.0;
+    double multiplier  = 1.0;
+
+    if (text == NULL || memoryKilobytes == NULL)
+    {
+        return 0;
+    }
+    parsedValue = strtod(text, &endPointer);
+    if (endPointer == text || parsedValue < 0.0)
+    {
+        return 0;
+    }
+    while (*endPointer != '\0' && isspace((unsigned char)*endPointer))
+    {
+        ++endPointer;
+    }
+    if (*endPointer == '\0' || _stricmp(endPointer, "k") == 0 || _stricmp(endPointer, "kb") == 0 ||
+        _stricmp(endPointer, "kib") == 0)
+    {
+        multiplier = 1.0;
+    }
+    else if (_stricmp(endPointer, "m") == 0 || _stricmp(endPointer, "mb") == 0 || _stricmp(endPointer, "mib") == 0)
+    {
+        multiplier = 1024.0;
+    }
+    else
+    {
+        return 0;
+    }
+    parsedValue *= multiplier;
+    if (parsedValue > 4294967295.0)
+    {
+        return 0;
+    }
+    *memoryKilobytes = (uint32_t)(parsedValue + 0.5);
+    return 1;
+}
+
+static int parse_interval_timer_model_text(const char* text, hyperdos_programmable_interval_timer_model* timerModel)
+{
+    if (text == NULL || timerModel == NULL)
+    {
+        return 0;
+    }
+    if (_stricmp(text, "default") == 0)
+    {
+        *timerModel = HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_DEFAULT;
+        return 1;
+    }
+    if (_stricmp(text, "8253") == 0)
+    {
+        *timerModel = HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8253;
+        return 1;
+    }
+    if (_stricmp(text, "8254") == 0)
+    {
+        *timerModel = HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8254;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_first_serial_port_model_text(
+        const char*                                                 text,
+        hyperdos_universal_asynchronous_receiver_transmitter_model* firstSerialPortModel)
+{
+    if (text == NULL || firstSerialPortModel == NULL)
+    {
+        return 0;
+    }
+    if (_stricmp(text, "default") == 0)
+    {
+        *firstSerialPortModel = HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_DEFAULT;
+        return 1;
+    }
+    if (_stricmp(text, "8250") == 0)
+    {
+        *firstSerialPortModel = HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_8250;
+        return 1;
+    }
+    if (_stricmp(text, "16450") == 0)
+    {
+        *firstSerialPortModel = HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_16450;
+        return 1;
+    }
+    if (_stricmp(text, "16550a") == 0 || _stricmp(text, "16550A") == 0 || _stricmp(text, "16550") == 0)
+    {
+        *firstSerialPortModel = HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_16550A;
+        return 1;
+    }
+    return 0;
+}
+
 static int set_command_line_error_text(char* errorText, size_t errorTextSize, const char* format, ...)
 {
     va_list arguments;
@@ -6212,8 +6407,13 @@ int hyperdos_win32_pc_monitor_configure_from_command_line(const char* commandLin
     globalCoprocessorModel                        = HYPERDOS_MONITOR_COPROCESSOR_MODEL_NONE;
     globalProcessorFrequencyHertz                 = HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ;
     globalGuestClockThrottleEnabled               = 1;
-    globalProcessorModel                          = HYPERDOS_X86_PROCESSOR_MODEL_80186;
+    globalProcessorModel                          = HYPERDOS_X86_PROCESSOR_MODEL_80286;
     globalPcModel                                 = HYPERDOS_PC_MODEL_AT;
+    globalChipsetProfile                          = HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT;
+    globalConventionalMemoryKilobytes             = 0u;
+    globalExtendedMemoryKilobytes                 = 0u;
+    globalIntervalTimerModel                      = HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_DEFAULT;
+    globalFirstSerialPortModel                    = HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_DEFAULT;
     globalCpuTraceStartsEnabled                   = 0;
     globalDivideErrorReturnsToFaultingInstruction = 0;
 
@@ -6332,6 +6532,98 @@ int hyperdos_win32_pc_monitor_configure_from_command_line(const char* commandLin
                                                    argument);
             }
             globalProcessorModel = processorModel;
+            continue;
+        }
+        if (strcmp(argument, "--xt") == 0 || strcmp(argument, "--at") == 0)
+        {
+            hyperdos_pc_model pcModel = HYPERDOS_PC_MODEL_XT;
+            if (!parse_pc_model_text(argument + 2u, &pcModel))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalPcModel = pcModel;
+            continue;
+        }
+        if (strncmp(argument, "--pc-model=", 11u) == 0)
+        {
+            hyperdos_pc_model pcModel = HYPERDOS_PC_MODEL_XT;
+            if (!parse_pc_model_text(argument + 11u, &pcModel))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalPcModel = pcModel;
+            continue;
+        }
+        if (strncmp(argument, "--chipset-profile=", 18u) == 0)
+        {
+            hyperdos_pc_chipset_profile chipsetProfile = HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT;
+            if (!parse_chipset_profile_text(argument + 18u, &chipsetProfile))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalChipsetProfile = chipsetProfile;
+            continue;
+        }
+        if (strncmp(argument, "--conventional-memory=", 22u) == 0)
+        {
+            uint32_t memoryKilobytes = 0u;
+            if (!parse_memory_size_kilobytes(argument + 22u, &memoryKilobytes))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalConventionalMemoryKilobytes = memoryKilobytes;
+            continue;
+        }
+        if (strncmp(argument, "--extended-memory=", 18u) == 0)
+        {
+            uint32_t memoryKilobytes = 0u;
+            if (!parse_memory_size_kilobytes(argument + 18u, &memoryKilobytes))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalExtendedMemoryKilobytes = memoryKilobytes;
+            continue;
+        }
+        if (strncmp(argument, "--timer-model=", 14u) == 0)
+        {
+            hyperdos_programmable_interval_timer_model timerModel = HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_DEFAULT;
+            if (!parse_interval_timer_model_text(argument + 14u, &timerModel))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalIntervalTimerModel = timerModel;
+            continue;
+        }
+        if (strncmp(argument, "--serial-model=", 15u) == 0)
+        {
+            hyperdos_universal_asynchronous_receiver_transmitter_model
+                    firstSerialPortModel = HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_DEFAULT;
+            if (!parse_first_serial_port_model_text(argument + 15u, &firstSerialPortModel))
+            {
+                return set_command_line_error_text(errorText,
+                                                   errorTextSize,
+                                                   "Invalid command-line value: %s",
+                                                   argument);
+            }
+            globalFirstSerialPortModel = firstSerialPortModel;
             continue;
         }
         if (strncmp(argument, "--processor-clock=", 18u) == 0)

@@ -630,9 +630,7 @@ static hyperdos_x86_execution_result hyperdos_pc_disk_bios_handle_transfer(
         for (byteIndex = 0; byteIndex < transferByteCount; ++byteIndex)
         {
             transferBytes[byteIndex] = hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus,
-                                                                                 (transferAddress +
-                                                                                  (uint32_t)byteIndex) &
-                                                                                         HYPERDOS_X86_ADDRESS_MASK);
+                                                                                 transferAddress + (uint32_t)byteIndex);
         }
         transferResult = hyperdos_pc_disk_image_write_sectors(diskImage,
                                                               logicalBlockAddress,
@@ -650,8 +648,7 @@ static hyperdos_x86_execution_result hyperdos_pc_disk_bios_handle_transfer(
             for (byteIndex = 0; byteIndex < transferByteCount; ++byteIndex)
             {
                 hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
-                                                         (transferAddress + (uint32_t)byteIndex) &
-                                                                 HYPERDOS_X86_ADDRESS_MASK,
+                                                         transferAddress + (uint32_t)byteIndex,
                                                          transferBytes[byteIndex]);
             }
         }

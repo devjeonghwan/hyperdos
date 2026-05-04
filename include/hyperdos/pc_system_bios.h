@@ -53,14 +53,13 @@ uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled,
                                                      uint8_t floppyDriveCount,
                                                      uint8_t pointingDevicePresent);
 
-uint16_t hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes(void);
-
 hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(hyperdos_x86_processor* processor,
                                                                                  uint8_t coprocessorEnabled,
                                                                                  uint8_t floppyDriveCount,
                                                                                  uint8_t pointingDevicePresent);
 
-hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(hyperdos_x86_processor* processor);
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(hyperdos_x86_processor* processor,
+                                                                                   const hyperdos_pc*      pc);
 
 hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_serial_interrupt(hyperdos_x86_processor* processor,
                                                                               uint8_t                 serviceNumber);

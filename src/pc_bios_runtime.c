@@ -17,7 +17,8 @@ enum
     HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_BYTE_COUNT       = 3u,
     HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_PACKET_ALWAYS_ONE       = 0x08u,
     HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_STATUS_MASK    = 0xFBu,
-    HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_PADDING_WORD   = 0x0000u
+    HYPERDOS_PC_BIOS_RUNTIME_AUXILIARY_CALLBACK_PADDING_WORD   = 0x0000u,
+    HYPERDOS_PC_BIOS_RUNTIME_CLOCK_STEP_INSTRUCTION_COUNT      = 1024u
 };
 
 static void hyperdos_pc_bios_runtime_trace(hyperdos_pc_bios_runtime* biosRuntime, const char* format, ...)
@@ -39,15 +40,14 @@ static void hyperdos_pc_bios_runtime_trace(hyperdos_pc_bios_runtime* biosRuntime
 static uint8_t hyperdos_pc_bios_runtime_read_guest_memory_byte(const hyperdos_pc_bios_runtime* biosRuntime,
                                                                uint32_t                        physicalAddress)
 {
-    return hyperdos_bus_read_memory_byte_or_open_bus(&biosRuntime->pc->bus,
-                                                     physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
+    return hyperdos_bus_read_memory_byte_or_open_bus(&biosRuntime->pc->bus, physicalAddress);
 }
 
 static uint8_t hyperdos_pc_bios_runtime_read_guest_instruction_byte(const hyperdos_pc_bios_runtime* biosRuntime,
                                                                     uint16_t                        segment,
                                                                     uint16_t                        offset)
 {
-    uint32_t physicalAddress = ((((uint32_t)segment) << 4u) + offset) & HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t physicalAddress = (((uint32_t)segment) << 4u) + offset;
 
     return hyperdos_pc_bios_runtime_read_guest_memory_byte(biosRuntime, physicalAddress);
 }
@@ -128,7 +128,7 @@ void hyperdos_pc_bios_runtime_initialize_data_area(hyperdos_pc_bios_runtime*    
     hyperdos_pc_cmos_set_equipment_flags(&biosRuntime->pc->realTimeClock, equipmentFlags);
     hyperdos_pc_bios_data_area_write_word(biosRuntime->pc,
                                           HYPERDOS_PC_BIOS_DATA_AREA_CONVENTIONAL_MEMORY_SIZE_OFFSET,
-                                          hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes());
+                                          hyperdos_pc_get_conventional_memory_size_kilobytes(biosRuntime->pc));
     hyperdos_pc_system_bios_initialize_data_area(biosRuntime->pc);
     hyperdos_pc_keyboard_bios_initialize_data_area(biosRuntime->keyboardBios, biosRuntime->pc);
     hyperdos_pc_disk_bios_initialize_data_area(biosRuntime->pc, activeFloppyDisk, fixedDiskCount);
@@ -414,7 +414,7 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_handle_interrupt(hyperdos
     }
     if (interruptNumber == HYPERDOS_PC_BIOS_MEMORY_SIZE_SERVICE_INTERRUPT)
     {
-        return hyperdos_pc_system_bios_handle_memory_size_interrupt(processor);
+        return hyperdos_pc_system_bios_handle_memory_size_interrupt(processor, biosRuntime->pc);
     }
     if (interruptNumber == HYPERDOS_PC_BIOS_SERIAL_SERVICE_INTERRUPT)
     {
@@ -495,9 +495,8 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_execute_processor_slice(h
                                                                                uint64_t  instructionLimit,
                                                                                uint64_t* executedInstructionCount)
 {
-    hyperdos_x86_execution_result executionResult                 = HYPERDOS_X86_EXECUTION_OK;
-    uint64_t                      previousInstructionCount        = 0u;
-    uint64_t                      currentExecutedInstructionCount = 0u;
+    hyperdos_x86_execution_result executionResult               = HYPERDOS_X86_EXECUTION_OK;
+    uint64_t                      totalExecutedInstructionCount = 0u;
 
     if (executedInstructionCount != NULL)
     {
@@ -514,18 +513,45 @@ hyperdos_x86_execution_result hyperdos_pc_bios_runtime_execute_processor_slice(h
         return executionResult;
     }
 
-    previousInstructionCount        = biosRuntime->pc->processor.executedInstructionCount;
-    executionResult                 = hyperdos_x86_execute(&biosRuntime->pc->processor, instructionLimit);
-    currentExecutedInstructionCount = biosRuntime->pc->processor.executedInstructionCount - previousInstructionCount;
-    if (currentExecutedInstructionCount != 0u)
+    while (biosRuntime->pc->processor.executedInstructionCount < instructionLimit)
     {
-        hyperdos_intel_8284_clock_generator_step(&biosRuntime->pc->clockGenerator,
-                                                 &biosRuntime->pc->bus,
-                                                 currentExecutedInstructionCount);
+        uint64_t previousInstructionCount        = biosRuntime->pc->processor.executedInstructionCount;
+        uint64_t remainingInstructionCount       = instructionLimit - previousInstructionCount;
+        uint64_t currentInstructionLimit         = instructionLimit;
+        uint64_t currentExecutedInstructionCount = 0u;
+
+        if (remainingInstructionCount > HYPERDOS_PC_BIOS_RUNTIME_CLOCK_STEP_INSTRUCTION_COUNT)
+        {
+            currentInstructionLimit = previousInstructionCount + HYPERDOS_PC_BIOS_RUNTIME_CLOCK_STEP_INSTRUCTION_COUNT;
+        }
+
+        executionResult                 = hyperdos_x86_execute(&biosRuntime->pc->processor, currentInstructionLimit);
+        currentExecutedInstructionCount = biosRuntime->pc->processor.executedInstructionCount -
+                                          previousInstructionCount;
+        totalExecutedInstructionCount += currentExecutedInstructionCount;
+        if (currentExecutedInstructionCount != 0u)
+        {
+            hyperdos_intel_8284_clock_generator_step(&biosRuntime->pc->clockGenerator,
+                                                     &biosRuntime->pc->bus,
+                                                     currentExecutedInstructionCount);
+        }
+        if (executionResult != HYPERDOS_X86_EXECUTION_STEP_LIMIT_REACHED)
+        {
+            break;
+        }
+        if (biosRuntime->pc->processor.executedInstructionCount >= instructionLimit)
+        {
+            break;
+        }
+        executionResult = hyperdos_pc_bios_runtime_service_pending_hardware_interrupts(biosRuntime);
+        if (executionResult != HYPERDOS_X86_EXECUTION_OK)
+        {
+            break;
+        }
     }
     if (executedInstructionCount != NULL)
     {
-        *executedInstructionCount = currentExecutedInstructionCount;
+        *executedInstructionCount = totalExecutedInstructionCount;
     }
     return executionResult;
 }

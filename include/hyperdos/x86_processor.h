@@ -16,15 +16,16 @@
 
 enum
 {
-    HYPERDOS_X86_BYTE_BIT_COUNT = 8u,
-    HYPERDOS_X86_WORD_BIT_COUNT = 16u,
-    HYPERDOS_X86_BYTE_SIZE      = 1u,
-    HYPERDOS_X86_WORD_SIZE      = 2u,
-    HYPERDOS_X86_SEGMENT_SHIFT  = 4u,
-    HYPERDOS_X86_LOW_BYTE_MASK  = 0x00FFu,
-    HYPERDOS_X86_BYTE_MASK      = HYPERDOS_X86_LOW_BYTE_MASK,
-    HYPERDOS_X86_HIGH_BYTE_MASK = 0xFF00u,
-    HYPERDOS_X86_WORD_MASK      = 0xFFFFu
+    HYPERDOS_X86_BYTE_BIT_COUNT         = 8u,
+    HYPERDOS_X86_WORD_BIT_COUNT         = 16u,
+    HYPERDOS_X86_BYTE_SIZE              = 1u,
+    HYPERDOS_X86_WORD_SIZE              = 2u,
+    HYPERDOS_X86_CONTROL_REGISTER_COUNT = 4u,
+    HYPERDOS_X86_SEGMENT_SHIFT          = 4u,
+    HYPERDOS_X86_LOW_BYTE_MASK          = 0x00FFu,
+    HYPERDOS_X86_BYTE_MASK              = HYPERDOS_X86_LOW_BYTE_MASK,
+    HYPERDOS_X86_HIGH_BYTE_MASK         = 0xFF00u,
+    HYPERDOS_X86_WORD_MASK              = 0xFFFFu
 };
 
 typedef enum hyperdos_x86_execution_result
@@ -74,13 +75,28 @@ typedef enum hyperdos_x86_flag_mask
     HYPERDOS_X86_FLAG_OVERFLOW         = 0x0800u
 } hyperdos_x86_flag_mask;
 
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_PROTECTION_ENABLE   UINT32_C(0x00000001)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_MONITOR_COPROCESSOR UINT32_C(0x00000002)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_EMULATE_COPROCESSOR UINT32_C(0x00000004)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_TASK_SWITCHED       UINT32_C(0x00000008)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_EXTENSION_TYPE      UINT32_C(0x00000010)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_NUMERIC_ERROR       UINT32_C(0x00000020)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_WRITE_PROTECT       UINT32_C(0x00010000)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_ALIGNMENT_MASK      UINT32_C(0x00040000)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_NOT_WRITE_THROUGH   UINT32_C(0x20000000)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_CACHE_DISABLE       UINT32_C(0x40000000)
+#define HYPERDOS_X86_CONTROL_REGISTER_ZERO_PAGING_ENABLE       UINT32_C(0x80000000)
+
 typedef enum hyperdos_x86_processor_model
 {
-    HYPERDOS_X86_PROCESSOR_MODEL_8086  = 0,
-    HYPERDOS_X86_PROCESSOR_MODEL_8088  = 1,
-    HYPERDOS_X86_PROCESSOR_MODEL_80186 = 2,
-    HYPERDOS_X86_PROCESSOR_MODEL_80188 = 3,
-    HYPERDOS_X86_PROCESSOR_MODEL_80286 = 4
+    HYPERDOS_X86_PROCESSOR_MODEL_8086     = 0,
+    HYPERDOS_X86_PROCESSOR_MODEL_8088     = 1,
+    HYPERDOS_X86_PROCESSOR_MODEL_80186    = 2,
+    HYPERDOS_X86_PROCESSOR_MODEL_80188    = 3,
+    HYPERDOS_X86_PROCESSOR_MODEL_80286    = 4,
+    HYPERDOS_X86_PROCESSOR_MODEL_80386_DX = 5,
+    HYPERDOS_X86_PROCESSOR_MODEL_80386_SX = 6,
+    HYPERDOS_X86_PROCESSOR_MODEL_80486    = 7
 } hyperdos_x86_processor_model;
 
 typedef struct hyperdos_x86_segment_state
@@ -104,6 +120,15 @@ typedef hyperdos_x86_execution_result (*hyperdos_x86_interrupt_handler)(struct h
                                                                         uint8_t                        interruptNumber,
                                                                         void*                          userContext);
 
+typedef void (*hyperdos_x86_page_translation_cache_invalidation_handler)(struct hyperdos_x86_processor* processor,
+                                                                         uint32_t                       linearAddress,
+                                                                         uint8_t                        allEntries,
+                                                                         void*                          userContext);
+
+typedef void (*hyperdos_x86_internal_cache_invalidation_handler)(struct hyperdos_x86_processor* processor,
+                                                                 uint8_t                        writeBackModifiedLines,
+                                                                 void*                          userContext);
+
 typedef struct hyperdos_x86_coprocessor_instruction
 {
     uint8_t                             operationCode;
@@ -125,47 +150,52 @@ typedef hyperdos_x86_execution_result (*hyperdos_x86_coprocessor_escape_handler)
 
 typedef struct hyperdos_x86_processor
 {
-    uint32_t                                generalRegisters[8];
-    hyperdos_x86_segment_state              segmentStates[4];
-    hyperdos_x86_descriptor_table_state     globalDescriptorTable;
-    hyperdos_x86_descriptor_table_state     localDescriptorTable;
-    hyperdos_x86_descriptor_table_state     interruptDescriptorTable;
-    hyperdos_x86_segment_state              taskRegister;
-    uint32_t                                instructionPointer;
-    uint32_t                                flags;
-    uint16_t                                machineStatusWord;
-    uint16_t                                relocationRegister;
-    uint16_t                                localDescriptorTableSelector;
-    uint16_t                                taskRegisterSelector;
-    uint8_t*                                memory;
-    size_t                                  memorySize;
-    uint64_t                                executedInstructionCount;
-    uint64_t                                externalBusCycleCount;
-    uint8_t                                 halted;
-    uint8_t                                 maskableInterruptInhibitCount;
-    uint8_t                                 pendingExceptionActive;
-    uint8_t                                 pendingExceptionType;
-    uint8_t                                 pendingExceptionHasErrorCode;
-    uint16_t                                pendingExceptionErrorCode;
-    uint8_t                                 exceptionDeliveryActive;
-    uint8_t                                 exceptionDeliveryType;
-    uint8_t                                 processorShutdownActive;
-    uint8_t                                 lastOperationCode;
-    uint16_t                                lastInstructionSegment;
-    uint32_t                                lastInstructionOffset;
-    uint8_t                                 processorModel;
-    uint8_t                                 divideErrorReturnsToFaultingInstruction;
-    struct hyperdos_bus*                    bus;
-    hyperdos_x86_interrupt_handler          interruptHandler;
-    void*                                   userContext;
-    hyperdos_x86_coprocessor_wait_handler   coprocessorWaitHandler;
-    hyperdos_x86_coprocessor_escape_handler coprocessorEscapeHandler;
-    void*                                   coprocessorContext;
+    uint32_t                                                 generalRegisters[8];
+    hyperdos_x86_segment_state                               segmentStates[4];
+    hyperdos_x86_descriptor_table_state                      globalDescriptorTable;
+    hyperdos_x86_descriptor_table_state                      localDescriptorTable;
+    hyperdos_x86_descriptor_table_state                      interruptDescriptorTable;
+    hyperdos_x86_segment_state                               taskRegister;
+    uint32_t                                                 instructionPointer;
+    uint32_t                                                 flags;
+    uint16_t                                                 machineStatusWord;
+    uint32_t                                                 controlRegisters[HYPERDOS_X86_CONTROL_REGISTER_COUNT];
+    uint16_t                                                 relocationRegister;
+    uint16_t                                                 localDescriptorTableSelector;
+    uint16_t                                                 taskRegisterSelector;
+    uint64_t                                                 executedInstructionCount;
+    uint64_t                                                 externalBusCycleCount;
+    uint64_t                                                 translationLookasideBufferInvalidationCount;
+    uint64_t                                                 internalCacheInvalidationCount;
+    uint32_t                                                 lastInvalidatedLinearAddress;
+    uint8_t                                                  lastInvalidatedLinearAddressValid;
+    uint8_t                                                  halted;
+    uint8_t                                                  maskableInterruptInhibitCount;
+    uint8_t                                                  pendingExceptionActive;
+    uint8_t                                                  pendingExceptionType;
+    uint8_t                                                  pendingExceptionHasErrorCode;
+    uint16_t                                                 pendingExceptionErrorCode;
+    uint8_t                                                  exceptionDeliveryActive;
+    uint8_t                                                  exceptionDeliveryType;
+    uint8_t                                                  processorShutdownActive;
+    uint8_t                                                  lastOperationCode;
+    uint16_t                                                 lastInstructionSegment;
+    uint32_t                                                 lastInstructionOffset;
+    uint8_t                                                  processorModel;
+    uint8_t                                                  divideErrorReturnsToFaultingInstruction;
+    struct hyperdos_bus*                                     bus;
+    hyperdos_x86_page_translation_cache_invalidation_handler pageTranslationCacheInvalidationHandler;
+    void*                                                    pageTranslationCacheInvalidationContext;
+    hyperdos_x86_internal_cache_invalidation_handler         internalCacheInvalidationHandler;
+    void*                                                    internalCacheInvalidationContext;
+    hyperdos_x86_interrupt_handler                           interruptHandler;
+    void*                                                    userContext;
+    hyperdos_x86_coprocessor_wait_handler                    coprocessorWaitHandler;
+    hyperdos_x86_coprocessor_escape_handler                  coprocessorEscapeHandler;
+    void*                                                    coprocessorContext;
 } hyperdos_x86_processor;
 
-hyperdos_x86_execution_result hyperdos_x86_initialize_processor(hyperdos_x86_processor* processor,
-                                                                uint8_t*                memory,
-                                                                size_t                  memorySize);
+hyperdos_x86_execution_result hyperdos_x86_initialize_processor(hyperdos_x86_processor* processor);
 
 void hyperdos_x86_reset_processor(hyperdos_x86_processor* processor);
 
@@ -187,6 +217,36 @@ uint16_t hyperdos_x86_get_relocation_register(const hyperdos_x86_processor* proc
 void hyperdos_x86_set_relocation_register(hyperdos_x86_processor* processor, uint16_t value);
 
 void hyperdos_x86_attach_bus(hyperdos_x86_processor* processor, struct hyperdos_bus* bus);
+
+uint8_t hyperdos_x86_get_external_data_bus_byte_count(const hyperdos_x86_processor* processor);
+
+uint32_t hyperdos_x86_get_external_address_mask(const hyperdos_x86_processor* processor);
+
+uint32_t hyperdos_x86_get_control_register(const hyperdos_x86_processor* processor, uint8_t registerIndex);
+
+void hyperdos_x86_set_control_register(hyperdos_x86_processor* processor, uint8_t registerIndex, uint32_t value);
+
+int hyperdos_x86_control_register_zero_cache_disable_enabled(const hyperdos_x86_processor* processor);
+
+int hyperdos_x86_control_register_zero_not_write_through_enabled(const hyperdos_x86_processor* processor);
+
+void hyperdos_x86_set_page_translation_cache_invalidation_handler(
+        hyperdos_x86_processor*                                  processor,
+        hyperdos_x86_page_translation_cache_invalidation_handler invalidationHandler,
+        void*                                                    userContext);
+
+void hyperdos_x86_set_internal_cache_invalidation_handler(
+        hyperdos_x86_processor*                          processor,
+        hyperdos_x86_internal_cache_invalidation_handler invalidationHandler,
+        void*                                            userContext);
+
+void hyperdos_x86_invalidate_page_translation_cache_entry(hyperdos_x86_processor* processor, uint32_t linearAddress);
+
+void hyperdos_x86_invalidate_all_page_translation_cache_entries(hyperdos_x86_processor* processor);
+
+void hyperdos_x86_invalidate_internal_cache(hyperdos_x86_processor* processor);
+
+void hyperdos_x86_write_back_and_invalidate_internal_cache(hyperdos_x86_processor* processor);
 
 hyperdos_x86_execution_result hyperdos_x86_load_dos_program(hyperdos_x86_processor* processor,
                                                             const uint8_t*          programBytes,

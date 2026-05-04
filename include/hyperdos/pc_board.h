@@ -11,39 +11,46 @@
 
 enum
 {
-    HYPERDOS_PC_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT       = 0x0020u,
-    HYPERDOS_PC_SLAVE_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT = 0x00A0u,
-    HYPERDOS_PC_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT         = 0x0000u,
-    HYPERDOS_PC_PROGRAMMABLE_INTERVAL_TIMER_PORT             = 0x0040u,
-    HYPERDOS_PC_KEYBOARD_CONTROLLER_DATA_PORT                = 0x0060u,
-    HYPERDOS_PC_KEYBOARD_CONTROLLER_COMMAND_PORT             = 0x0064u,
-    HYPERDOS_PC_PROGRAMMABLE_PERIPHERAL_INTERFACE_PORT       = 0x0061u,
-    HYPERDOS_PC_FIRST_SERIAL_PORT                            = 0x03F8u,
-    HYPERDOS_PC_VIDEO_MONOCHROME_COMPATIBILITY_PORT          = 0x03B0u,
-    HYPERDOS_PC_COLOR_GRAPHICS_ADAPTER_PORT                  = HYPERDOS_COLOR_GRAPHICS_ADAPTER_INPUT_OUTPUT_PORT,
-    HYPERDOS_PC_COLOR_GRAPHICS_ADAPTER_PORT_COUNT            = HYPERDOS_COLOR_GRAPHICS_ADAPTER_INPUT_OUTPUT_PORT_COUNT,
-    HYPERDOS_PC_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT_COUNT   = 16u,
-    HYPERDOS_PC_SERIAL_PORT_COUNT                            = 8u,
-    HYPERDOS_PC_VIDEO_MONOCHROME_COMPATIBILITY_PORT_COUNT    = 16u,
-    HYPERDOS_PC_KEYBOARD_CONTROLLER_PORT_COUNT               = 1u,
-    HYPERDOS_PC_KEYBOARD_CONTROLLER_COMMAND_PORT_COUNT       = 1u,
-    HYPERDOS_PC_PERIPHERAL_INTERFACE_PORT_COUNT              = 3u,
-    HYPERDOS_PC_INTERVAL_TIMER_PORT_COUNT                    = 4u,
-    HYPERDOS_PC_INTERRUPT_CONTROLLER_PORT_COUNT              = 2u,
-    HYPERDOS_PC_SLAVE_INTERRUPT_CONTROLLER_PORT_COUNT        = 2u,
-    HYPERDOS_PC_DEFAULT_INTERRUPT_VECTOR_BASE                = 0x08u,
-    HYPERDOS_PC_DEFAULT_INTERRUPT_MASK                       = 0xFCu,
-    HYPERDOS_PC_BOOT_SECTOR_ADDRESS                          = 0x7C00u,
-    HYPERDOS_PC_BOOT_SECTOR_BYTE_COUNT                       = 512u,
-    HYPERDOS_PC_BOOT_STACK_POINTER                           = 0x7C00u,
-    HYPERDOS_PC_BIOS_RESET_VECTOR_SEGMENT                    = 0xFFFFu,
-    HYPERDOS_PC_BIOS_RESET_VECTOR_OFFSET                     = 0x0000u,
-    HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE                   = 0xF0000u,
-    HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE                   = 0x10000u,
-    HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ                 = 14318181u,
-    HYPERDOS_PC_8284_PROCESSOR_CLOCK_DIVISOR                 = 3u,
-    HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR           = 12u,
-    HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ            = HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ /
+    HYPERDOS_PC_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT         = 0x0020u,
+    HYPERDOS_PC_SLAVE_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT   = 0x00A0u,
+    HYPERDOS_PC_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT           = 0x0000u,
+    HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT = 0x00C0u,
+    HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT     = 0x0080u,
+    HYPERDOS_PC_PROGRAMMABLE_INTERVAL_TIMER_PORT               = 0x0040u,
+    HYPERDOS_PC_KEYBOARD_CONTROLLER_DATA_PORT                  = 0x0060u,
+    HYPERDOS_PC_KEYBOARD_CONTROLLER_COMMAND_PORT               = 0x0064u,
+    HYPERDOS_PC_PROGRAMMABLE_PERIPHERAL_INTERFACE_PORT         = 0x0061u,
+    HYPERDOS_PC_FIRST_SERIAL_PORT                              = 0x03F8u,
+    HYPERDOS_PC_VIDEO_MONOCHROME_COMPATIBILITY_PORT            = 0x03B0u,
+    HYPERDOS_PC_COLOR_GRAPHICS_ADAPTER_PORT                    = HYPERDOS_COLOR_GRAPHICS_ADAPTER_INPUT_OUTPUT_PORT,
+    HYPERDOS_PC_COLOR_GRAPHICS_ADAPTER_PORT_COUNT          = HYPERDOS_COLOR_GRAPHICS_ADAPTER_INPUT_OUTPUT_PORT_COUNT,
+    HYPERDOS_PC_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT_COUNT = 16u,
+    HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT_COUNT = 32u,
+    HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT_COUNT     = 16u,
+    HYPERDOS_PC_SERIAL_PORT_COUNT                                    = 8u,
+    HYPERDOS_PC_VIDEO_MONOCHROME_COMPATIBILITY_PORT_COUNT            = 16u,
+    HYPERDOS_PC_KEYBOARD_CONTROLLER_PORT_COUNT                       = 1u,
+    HYPERDOS_PC_KEYBOARD_CONTROLLER_COMMAND_PORT_COUNT               = 1u,
+    HYPERDOS_PC_PERIPHERAL_INTERFACE_PORT_COUNT                      = 3u,
+    HYPERDOS_PC_INTERVAL_TIMER_PORT_COUNT                            = 4u,
+    HYPERDOS_PC_INTERRUPT_CONTROLLER_PORT_COUNT                      = 2u,
+    HYPERDOS_PC_SLAVE_INTERRUPT_CONTROLLER_PORT_COUNT                = 2u,
+    HYPERDOS_PC_DEFAULT_INTERRUPT_VECTOR_BASE                        = 0x08u,
+    HYPERDOS_PC_DEFAULT_INTERRUPT_MASK                               = 0xFCu,
+    HYPERDOS_PC_BOOT_SECTOR_ADDRESS                                  = 0x7C00u,
+    HYPERDOS_PC_BOOT_SECTOR_BYTE_COUNT                               = 512u,
+    HYPERDOS_PC_BOOT_STACK_POINTER                                   = 0x7C00u,
+    HYPERDOS_PC_BIOS_RESET_VECTOR_SEGMENT                            = 0xFFFFu,
+    HYPERDOS_PC_BIOS_RESET_VECTOR_OFFSET                             = 0x0000u,
+    HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE                           = 0xF0000u,
+    HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE                           = 0x10000u,
+    HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE                              = 0x100000u,
+    HYPERDOS_PC_AT_EXTENDED_MEMORY_SIZE                              = 15u * 1024u * 1024u,
+    HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES                         = HYPERDOS_PC_AT_EXTENDED_MEMORY_SIZE / 1024u,
+    HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ                         = 14318181u,
+    HYPERDOS_PC_8284_PROCESSOR_CLOCK_DIVISOR                         = 3u,
+    HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR                   = 12u,
+    HYPERDOS_PC_DEFAULT_PROCESSOR_FREQUENCY_HERTZ                    = HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ /
                                                     HYPERDOS_PC_8284_PROCESSOR_CLOCK_DIVISOR,
     HYPERDOS_PC_INTERVAL_TIMER_INPUT_FREQUENCY_HERTZ = HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ /
                                                        HYPERDOS_PC_INTERVAL_TIMER_INPUT_CLOCK_DIVISOR,
@@ -54,42 +61,70 @@ typedef void (*hyperdos_pc_speaker_state_change_function)(void* userContext, uin
 
 typedef struct hyperdos_pc
 {
-    uint8_t                                              processorMemory[HYPERDOS_X86_MEMORY_SIZE];
-    hyperdos_x86_processor                               processor;
-    hyperdos_bus                                         bus;
-    hyperdos_random_access_memory                        randomAccessMemory;
-    hyperdos_read_only_memory                            basicInputOutputSystemReadOnlyMemory;
-    hyperdos_color_graphics_adapter                      colorGraphicsAdapter;
-    hyperdos_programmable_interrupt_controller           programmableInterruptController;
-    hyperdos_programmable_interrupt_controller           slaveProgrammableInterruptController;
-    hyperdos_direct_memory_access_controller             directMemoryAccessController;
-    hyperdos_programmable_interval_timer                 programmableIntervalTimer;
-    hyperdos_programmable_peripheral_interface           programmablePeripheralInterface;
-    hyperdos_pc_cmos                                     realTimeClock;
-    hyperdos_intel_8042_keyboard_controller              keyboardController;
-    hyperdos_universal_asynchronous_receiver_transmitter firstSerialPort;
-    hyperdos_8087                                        floatingPointUnit;
-    hyperdos_intel_8284_clock_generator                  clockGenerator;
-    hyperdos_intel_8288_bus_controller                   busController;
-    hyperdos_intel_8282_address_latch                    addressLatch;
-    hyperdos_intel_8286_bus_transceiver                  dataBusTransceiver;
-    hyperdos_pc_speaker_state_change_function            speakerStateChange;
-    void*                                                speakerStateUserContext;
-    uint64_t                                             programmableIntervalTimerInputClockRemainder;
-    uint64_t                                             programmableIntervalTimerInputClockNumerator;
-    uint64_t                                             programmableIntervalTimerInputClockDenominator;
-    uint32_t                                             speakerFrequencyHertz;
-    uint8_t                                              speakerEnabled;
-    uint8_t                                              slaveProgrammableInterruptControllerEnabled;
+    uint8_t                         conventionalMemory[HYPERDOS_CONVENTIONAL_MEMORY_SIZE];
+    uint8_t                         basicInputOutputSystemReadOnlyMemoryBytes[HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE];
+    uint8_t                         extendedMemory[HYPERDOS_PC_AT_EXTENDED_MEMORY_SIZE];
+    hyperdos_x86_processor          processor;
+    hyperdos_bus                    bus;
+    hyperdos_random_access_memory   randomAccessMemory;
+    hyperdos_random_access_memory   extendedRandomAccessMemory;
+    hyperdos_read_only_memory       basicInputOutputSystemReadOnlyMemory;
+    hyperdos_color_graphics_adapter colorGraphicsAdapter;
+    hyperdos_programmable_interrupt_controller                 programmableInterruptController;
+    hyperdos_programmable_interrupt_controller                 slaveProgrammableInterruptController;
+    hyperdos_direct_memory_access_controller                   directMemoryAccessController;
+    hyperdos_direct_memory_access_controller                   secondDirectMemoryAccessController;
+    uint8_t                                                    directMemoryAccessPageRegisters[16];
+    hyperdos_programmable_interval_timer                       programmableIntervalTimer;
+    hyperdos_programmable_peripheral_interface                 programmablePeripheralInterface;
+    hyperdos_pc_cmos                                           realTimeClock;
+    hyperdos_intel_8042_keyboard_controller                    keyboardController;
+    hyperdos_universal_asynchronous_receiver_transmitter       firstSerialPort;
+    hyperdos_8087                                              floatingPointUnit;
+    hyperdos_intel_8284_clock_generator                        clockGenerator;
+    hyperdos_intel_8288_bus_controller                         busController;
+    hyperdos_intel_8282_address_latch                          addressLatch;
+    hyperdos_intel_8286_bus_transceiver                        dataBusTransceiver;
+    hyperdos_pc_speaker_state_change_function                  speakerStateChange;
+    void*                                                      speakerStateUserContext;
+    uint64_t                                                   programmableIntervalTimerInputClockRemainder;
+    uint64_t                                                   programmableIntervalTimerInputClockNumerator;
+    uint64_t                                                   programmableIntervalTimerInputClockDenominator;
+    uint32_t                                                   speakerFrequencyHertz;
+    uint32_t                                                   conventionalMemoryKilobytes;
+    uint32_t                                                   extendedMemoryKilobytes;
+    hyperdos_pc_chipset_profile                                chipsetProfile;
+    hyperdos_programmable_interval_timer_model                 intervalTimerModel;
+    hyperdos_universal_asynchronous_receiver_transmitter_model firstSerialPortModel;
+    uint8_t                                                    speakerEnabled;
+    uint8_t                                                    slaveProgrammableInterruptControllerEnabled;
+    uint8_t                                                    addressLine20Enabled;
+    uint8_t                                                    systemControlPortA;
 } hyperdos_pc;
 
 typedef void (*hyperdos_pc_board_trace_function)(void* userContext, const char* message);
 
 int hyperdos_pc_initialize(hyperdos_pc* pc);
 
+int hyperdos_pc_initialize_with_configuration(
+        hyperdos_pc*                                               pc,
+        hyperdos_pc_chipset_profile                                chipsetProfile,
+        uint32_t                                                   conventionalMemoryKilobytes,
+        uint32_t                                                   extendedMemoryKilobytes,
+        hyperdos_programmable_interval_timer_model                 intervalTimerModel,
+        hyperdos_universal_asynchronous_receiver_transmitter_model firstSerialPortModel);
+
 uint32_t hyperdos_pc_get_processor_frequency_hertz(const hyperdos_pc* pc);
 
 uint32_t hyperdos_pc_get_interval_timer_input_frequency_hertz(const hyperdos_pc* pc);
+
+uint16_t hyperdos_pc_get_conventional_memory_size_kilobytes(const hyperdos_pc* pc);
+
+uint16_t hyperdos_pc_get_extended_memory_size_kilobytes(const hyperdos_pc* pc);
+
+int hyperdos_pc_get_address_line_20_enabled(const hyperdos_pc* pc);
+
+void hyperdos_pc_set_address_line_20_enabled(hyperdos_pc* pc, uint8_t enabled);
 
 void hyperdos_pc_set_processor_frequency_hertz(hyperdos_pc* pc, uint32_t processorFrequencyHertz);
 

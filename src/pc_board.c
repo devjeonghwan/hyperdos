@@ -11,6 +11,12 @@ enum
     HYPERDOS_PC_TEXT_ATTRIBUTE                              = 0x0Fu,
     HYPERDOS_PC_OPEN_BUS_BYTE                               = 0xFFu,
     HYPERDOS_PC_MEMORY_BASE                                 = 0x00000u,
+    HYPERDOS_PC_ADDRESS_LINE_20                             = 0x00100000u,
+    HYPERDOS_PC_SYSTEM_CONTROL_PORT_A                       = 0x0092u,
+    HYPERDOS_PC_SYSTEM_CONTROL_PORT_A_COUNT                 = 1u,
+    HYPERDOS_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT   = 0x02u,
+    HYPERDOS_PC_KEYBOARD_CONTROLLER_ADDRESS_LINE_20_BIT     = 0x02u,
+    HYPERDOS_PC_KEYBOARD_CONTROLLER_RESET_LINE_BIT          = 0x01u,
     HYPERDOS_PC_TIMER_INTERRUPT_REQUEST_LINE                = 0u,
     HYPERDOS_PC_KEYBOARD_INTERRUPT_REQUEST_LINE             = 1u,
     HYPERDOS_PC_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE        = 2u,
@@ -61,6 +67,210 @@ uint32_t hyperdos_pc_get_interval_timer_input_frequency_hertz(const hyperdos_pc*
 {
     (void)pc;
     return HYPERDOS_PC_INTERVAL_TIMER_INPUT_FREQUENCY_HERTZ;
+}
+
+uint16_t hyperdos_pc_get_conventional_memory_size_kilobytes(const hyperdos_pc* pc)
+{
+    if (pc == NULL)
+    {
+        return 0u;
+    }
+    return (uint16_t)pc->conventionalMemoryKilobytes;
+}
+
+uint16_t hyperdos_pc_get_extended_memory_size_kilobytes(const hyperdos_pc* pc)
+{
+    if (pc == NULL)
+    {
+        return 0u;
+    }
+    return (uint16_t)pc->extendedMemoryKilobytes;
+}
+
+int hyperdos_pc_get_address_line_20_enabled(const hyperdos_pc* pc)
+{
+    return pc != NULL && pc->addressLine20Enabled != 0u;
+}
+
+static hyperdos_pc_chipset_profile hyperdos_pc_resolve_chipset_profile(hyperdos_pc_chipset_profile chipsetProfile)
+{
+    if (chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_DEFAULT)
+    {
+        return HYPERDOS_PC_CHIPSET_PROFILE_AT_286;
+    }
+    return chipsetProfile;
+}
+
+static int hyperdos_pc_chipset_profile_has_address_line_20_gate(hyperdos_pc_chipset_profile chipsetProfile)
+{
+    return chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_286 ||
+           chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_386 || chipsetProfile == HYPERDOS_PC_CHIPSET_PROFILE_AT_486;
+}
+
+static uint32_t hyperdos_pc_translate_processor_physical_address(void* device, uint32_t physicalAddress)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    if (pc == NULL || pc->addressLine20Enabled != 0u ||
+        !hyperdos_pc_chipset_profile_has_address_line_20_gate(pc->chipsetProfile))
+    {
+        return physicalAddress;
+    }
+    return physicalAddress & (uint32_t)~HYPERDOS_PC_ADDRESS_LINE_20;
+}
+
+void hyperdos_pc_set_address_line_20_enabled(hyperdos_pc* pc, uint8_t enabled)
+{
+    if (pc == NULL)
+    {
+        return;
+    }
+    pc->addressLine20Enabled = enabled != 0u ? 1u : 0u;
+    if (enabled != 0u)
+    {
+        pc->keyboardController.outputPort = (uint8_t)(pc->keyboardController.outputPort |
+                                                      HYPERDOS_PC_KEYBOARD_CONTROLLER_ADDRESS_LINE_20_BIT);
+        pc->systemControlPortA            = (uint8_t)(pc->systemControlPortA |
+                                           HYPERDOS_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT);
+    }
+    else
+    {
+        pc->keyboardController.outputPort = (uint8_t)(pc->keyboardController.outputPort &
+                                                      (uint8_t)~HYPERDOS_PC_KEYBOARD_CONTROLLER_ADDRESS_LINE_20_BIT);
+        pc->systemControlPortA            = (uint8_t)(pc->systemControlPortA &
+                                           (uint8_t)~HYPERDOS_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT);
+    }
+}
+
+static void hyperdos_pc_synchronize_reset_line_from_keyboard_controller(hyperdos_pc* pc)
+{
+    if (pc == NULL)
+    {
+        return;
+    }
+    hyperdos_signal_line_drive(&pc->bus.resetLine,
+                               (pc->keyboardController.outputPort & HYPERDOS_PC_KEYBOARD_CONTROLLER_RESET_LINE_BIT) !=
+                                               0u
+                                       ? HYPERDOS_SIGNAL_LOW
+                                       : HYPERDOS_SIGNAL_HIGH);
+}
+
+static void hyperdos_pc_synchronize_address_line_20_from_keyboard_controller(hyperdos_pc* pc)
+{
+    if (pc == NULL)
+    {
+        return;
+    }
+    hyperdos_pc_set_address_line_20_enabled(pc,
+                                            (uint8_t)((pc->keyboardController.outputPort &
+                                                       HYPERDOS_PC_KEYBOARD_CONTROLLER_ADDRESS_LINE_20_BIT) != 0u));
+    hyperdos_pc_synchronize_reset_line_from_keyboard_controller(pc);
+}
+
+static uint8_t hyperdos_pc_read_keyboard_controller_byte(void* device, uint16_t port)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    if (pc == NULL)
+    {
+        return HYPERDOS_PC_OPEN_BUS_BYTE;
+    }
+    return hyperdos_intel_8042_keyboard_controller_read_byte(&pc->keyboardController, port);
+}
+
+static void hyperdos_pc_write_keyboard_controller_byte(void* device, uint16_t port, uint8_t value)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    if (pc == NULL)
+    {
+        return;
+    }
+    hyperdos_intel_8042_keyboard_controller_write_byte(&pc->keyboardController, port, value);
+    hyperdos_pc_synchronize_address_line_20_from_keyboard_controller(pc);
+}
+
+static uint8_t hyperdos_pc_read_system_control_port_a_byte(void* device, uint16_t port)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    (void)port;
+    if (pc == NULL)
+    {
+        return HYPERDOS_PC_OPEN_BUS_BYTE;
+    }
+    return pc->systemControlPortA;
+}
+
+static void hyperdos_pc_write_system_control_port_a_byte(void* device, uint16_t port, uint8_t value)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    (void)port;
+    if (pc == NULL)
+    {
+        return;
+    }
+    pc->systemControlPortA = value;
+    hyperdos_pc_set_address_line_20_enabled(pc,
+                                            (uint8_t)((value & HYPERDOS_PC_SYSTEM_CONTROL_PORT_A_ADDRESS_LINE_20_BIT) !=
+                                                      0u));
+}
+
+static uint16_t hyperdos_pc_translate_second_direct_memory_access_controller_port(uint16_t port)
+{
+    return (uint16_t)((port - HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT) >> 1u);
+}
+
+static uint8_t hyperdos_pc_read_second_direct_memory_access_controller_byte(void* device, uint16_t port)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    if (pc == NULL)
+    {
+        return HYPERDOS_PC_OPEN_BUS_BYTE;
+    }
+    return hyperdos_direct_memory_access_controller_read_byte(
+            &pc->secondDirectMemoryAccessController,
+            hyperdos_pc_translate_second_direct_memory_access_controller_port(port));
+}
+
+static void hyperdos_pc_write_second_direct_memory_access_controller_byte(void* device, uint16_t port, uint8_t value)
+{
+    hyperdos_pc* pc = (hyperdos_pc*)device;
+
+    if (pc == NULL)
+    {
+        return;
+    }
+    hyperdos_direct_memory_access_controller_write_byte(
+            &pc->secondDirectMemoryAccessController,
+            hyperdos_pc_translate_second_direct_memory_access_controller_port(port),
+            value);
+}
+
+static uint8_t hyperdos_pc_read_direct_memory_access_page_register_byte(void* device, uint16_t port)
+{
+    hyperdos_pc* pc            = (hyperdos_pc*)device;
+    uint16_t     registerIndex = (uint16_t)(port - HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT);
+
+    if (pc == NULL || registerIndex >= sizeof(pc->directMemoryAccessPageRegisters))
+    {
+        return HYPERDOS_PC_OPEN_BUS_BYTE;
+    }
+    return pc->directMemoryAccessPageRegisters[registerIndex];
+}
+
+static void hyperdos_pc_write_direct_memory_access_page_register_byte(void* device, uint16_t port, uint8_t value)
+{
+    hyperdos_pc* pc            = (hyperdos_pc*)device;
+    uint16_t     registerIndex = (uint16_t)(port - HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT);
+
+    if (pc == NULL || registerIndex >= sizeof(pc->directMemoryAccessPageRegisters))
+    {
+        return;
+    }
+    pc->directMemoryAccessPageRegisters[registerIndex] = value;
 }
 
 static uint32_t hyperdos_pc_get_speaker_frequency_hertz(const hyperdos_pc* pc)
@@ -226,45 +436,31 @@ static void hyperdos_pc_initialize_programmable_interval_timer(hyperdos_pc* pc)
                                                     HYPERDOS_PC_INTERVAL_TIMER_DEFAULT_COUNT_HIGH_BYTE);
 }
 
-int hyperdos_pc_initialize(hyperdos_pc* pc)
+static uint32_t hyperdos_pc_clamp_conventional_memory_kilobytes(uint32_t memoryKilobytes)
 {
-    if (pc == NULL)
+    uint32_t maximumMemoryKilobytes = HYPERDOS_CONVENTIONAL_MEMORY_SIZE / 1024u;
+
+    if (memoryKilobytes == 0u || memoryKilobytes > maximumMemoryKilobytes)
     {
-        return 0;
+        return maximumMemoryKilobytes;
     }
+    return memoryKilobytes;
+}
 
-    memset(pc, 0, sizeof(*pc));
-    hyperdos_bus_initialize(&pc->bus);
-    hyperdos_random_access_memory_initialize(&pc->randomAccessMemory,
-                                             pc->processorMemory,
-                                             HYPERDOS_CONVENTIONAL_MEMORY_SIZE,
-                                             HYPERDOS_PC_MEMORY_BASE);
-    hyperdos_read_only_memory_initialize(&pc->basicInputOutputSystemReadOnlyMemory,
-                                         pc->processorMemory + HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE,
-                                         HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE,
-                                         HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE);
-    hyperdos_color_graphics_adapter_initialize(&pc->colorGraphicsAdapter);
-    hyperdos_programmable_interrupt_controller_initialize(&pc->programmableInterruptController,
-                                                          HYPERDOS_PC_DEFAULT_INTERRUPT_VECTOR_BASE);
-    pc->programmableInterruptController.interruptMaskRegister = HYPERDOS_PC_DEFAULT_INTERRUPT_MASK;
-    hyperdos_programmable_interrupt_controller_initialize(&pc->slaveProgrammableInterruptController,
-                                                          HYPERDOS_PC_SLAVE_INTERRUPT_VECTOR_BASE);
-    hyperdos_direct_memory_access_controller_initialize(&pc->directMemoryAccessController);
-    hyperdos_pc_initialize_programmable_interval_timer(pc);
-    hyperdos_programmable_peripheral_interface_initialize(&pc->programmablePeripheralInterface);
-    hyperdos_pc_cmos_initialize(&pc->realTimeClock);
-    hyperdos_intel_8042_keyboard_controller_initialize(&pc->keyboardController);
-    hyperdos_universal_asynchronous_receiver_transmitter_initialize(&pc->firstSerialPort);
-    hyperdos_8087_initialize(&pc->floatingPointUnit);
-    hyperdos_intel_8284_clock_generator_initialize(&pc->clockGenerator, HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ);
-    hyperdos_pc_configure_interval_timer_input_clock_ratio(pc);
-    hyperdos_intel_8288_bus_controller_initialize(&pc->busController);
-    hyperdos_intel_8282_address_latch_initialize(&pc->addressLatch);
-    hyperdos_intel_8286_bus_transceiver_initialize(&pc->dataBusTransceiver);
+static uint32_t hyperdos_pc_clamp_extended_memory_kilobytes(uint32_t memoryKilobytes)
+{
+    if (memoryKilobytes > HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES)
+    {
+        return HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES;
+    }
+    return memoryKilobytes;
+}
 
+static int hyperdos_pc_wire_memory_regions(hyperdos_pc* pc)
+{
     if (hyperdos_bus_map_memory(&pc->bus,
                                 HYPERDOS_PC_MEMORY_BASE,
-                                HYPERDOS_CONVENTIONAL_MEMORY_SIZE,
+                                pc->conventionalMemoryKilobytes * 1024u,
                                 &pc->randomAccessMemory,
                                 hyperdos_random_access_memory_read_byte,
                                 hyperdos_random_access_memory_write_byte) != HYPERDOS_BUS_ACCESS_OK)
@@ -277,6 +473,16 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
                                 &pc->basicInputOutputSystemReadOnlyMemory,
                                 hyperdos_read_only_memory_read_byte,
                                 hyperdos_read_only_memory_write_byte) != HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    if (pc->extendedMemoryKilobytes != 0u &&
+        hyperdos_bus_map_memory(&pc->bus,
+                                HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE,
+                                pc->extendedMemoryKilobytes * 1024u,
+                                &pc->extendedRandomAccessMemory,
+                                hyperdos_random_access_memory_read_byte,
+                                hyperdos_random_access_memory_write_byte) != HYPERDOS_BUS_ACCESS_OK)
     {
         return 0;
     }
@@ -294,6 +500,11 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
             HYPERDOS_VIDEO_GRAPHICS_ARRAY_MEMORY_APERTURE_ADDRESS,
             HYPERDOS_VIDEO_GRAPHICS_ARRAY_MEMORY_APERTURE_SIZE,
             0);
+    return 1;
+}
+
+static int hyperdos_pc_wire_common_input_output_devices(hyperdos_pc* pc)
+{
     if (hyperdos_bus_map_input_output(&pc->bus,
                                       HYPERDOS_PC_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT,
                                       HYPERDOS_PC_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT_COUNT,
@@ -329,18 +540,18 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
     if (hyperdos_bus_map_input_output(&pc->bus,
                                       HYPERDOS_PC_KEYBOARD_CONTROLLER_DATA_PORT,
                                       HYPERDOS_PC_KEYBOARD_CONTROLLER_PORT_COUNT,
-                                      &pc->keyboardController,
-                                      hyperdos_intel_8042_keyboard_controller_read_byte,
-                                      hyperdos_intel_8042_keyboard_controller_write_byte) != HYPERDOS_BUS_ACCESS_OK)
+                                      pc,
+                                      hyperdos_pc_read_keyboard_controller_byte,
+                                      hyperdos_pc_write_keyboard_controller_byte) != HYPERDOS_BUS_ACCESS_OK)
     {
         return 0;
     }
     if (hyperdos_bus_map_input_output(&pc->bus,
                                       HYPERDOS_PC_KEYBOARD_CONTROLLER_COMMAND_PORT,
                                       HYPERDOS_PC_KEYBOARD_CONTROLLER_COMMAND_PORT_COUNT,
-                                      &pc->keyboardController,
-                                      hyperdos_intel_8042_keyboard_controller_read_byte,
-                                      hyperdos_intel_8042_keyboard_controller_write_byte) != HYPERDOS_BUS_ACCESS_OK)
+                                      pc,
+                                      hyperdos_pc_read_keyboard_controller_byte,
+                                      hyperdos_pc_write_keyboard_controller_byte) != HYPERDOS_BUS_ACCESS_OK)
     {
         return 0;
     }
@@ -383,15 +594,158 @@ int hyperdos_pc_initialize(hyperdos_pc* pc)
     {
         return 0;
     }
+    return 1;
+}
 
-    if (hyperdos_x86_initialize_processor(&pc->processor, pc->processorMemory, sizeof(pc->processorMemory)) !=
-        HYPERDOS_X86_EXECUTION_OK)
+static int hyperdos_pc_wire_at_input_output_devices(hyperdos_pc* pc)
+{
+    if (hyperdos_bus_map_input_output(&pc->bus,
+                                      HYPERDOS_PC_SYSTEM_CONTROL_PORT_A,
+                                      HYPERDOS_PC_SYSTEM_CONTROL_PORT_A_COUNT,
+                                      pc,
+                                      hyperdos_pc_read_system_control_port_a_byte,
+                                      hyperdos_pc_write_system_control_port_a_byte) != HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    if (hyperdos_bus_map_input_output(&pc->bus,
+                                      HYPERDOS_PC_CMOS_ADDRESS_PORT,
+                                      HYPERDOS_PC_CMOS_PORT_COUNT,
+                                      &pc->realTimeClock,
+                                      hyperdos_pc_cmos_read_input_output_byte,
+                                      hyperdos_pc_cmos_write_input_output_byte) != HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    if (hyperdos_bus_map_input_output(&pc->bus,
+                                      HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT,
+                                      HYPERDOS_PC_AT_SECOND_DIRECT_MEMORY_ACCESS_CONTROLLER_PORT_COUNT,
+                                      pc,
+                                      hyperdos_pc_read_second_direct_memory_access_controller_byte,
+                                      hyperdos_pc_write_second_direct_memory_access_controller_byte) !=
+        HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    if (hyperdos_bus_map_input_output(&pc->bus,
+                                      HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT,
+                                      HYPERDOS_PC_AT_DIRECT_MEMORY_ACCESS_PAGE_REGISTER_PORT_COUNT,
+                                      pc,
+                                      hyperdos_pc_read_direct_memory_access_page_register_byte,
+                                      hyperdos_pc_write_direct_memory_access_page_register_byte) !=
+        HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    if (hyperdos_bus_map_input_output(&pc->bus,
+                                      HYPERDOS_PC_SLAVE_PROGRAMMABLE_INTERRUPT_CONTROLLER_PORT,
+                                      HYPERDOS_PC_SLAVE_INTERRUPT_CONTROLLER_PORT_COUNT,
+                                      &pc->slaveProgrammableInterruptController,
+                                      hyperdos_programmable_interrupt_controller_read_byte,
+                                      hyperdos_programmable_interrupt_controller_write_byte) != HYPERDOS_BUS_ACCESS_OK)
+    {
+        return 0;
+    }
+    pc->slaveProgrammableInterruptControllerEnabled = 1u;
+    pc->programmableInterruptController.interruptMaskRegister =
+            (uint8_t)(pc->programmableInterruptController.interruptMaskRegister &
+                      ~(1u << HYPERDOS_PC_SLAVE_INTERRUPT_CASCADE_REQUEST_LINE));
+    return 1;
+}
+
+static int hyperdos_pc_wire_chipset_profile(hyperdos_pc* pc)
+{
+    if (!hyperdos_pc_wire_memory_regions(pc) || !hyperdos_pc_wire_common_input_output_devices(pc))
+    {
+        return 0;
+    }
+    if (hyperdos_pc_chipset_profile_has_address_line_20_gate(pc->chipsetProfile) &&
+        !hyperdos_pc_wire_at_input_output_devices(pc))
+    {
+        return 0;
+    }
+    return 1;
+}
+
+int hyperdos_pc_initialize_with_configuration(
+        hyperdos_pc*                                               pc,
+        hyperdos_pc_chipset_profile                                chipsetProfile,
+        uint32_t                                                   conventionalMemoryKilobytes,
+        uint32_t                                                   extendedMemoryKilobytes,
+        hyperdos_programmable_interval_timer_model                 intervalTimerModel,
+        hyperdos_universal_asynchronous_receiver_transmitter_model firstSerialPortModel)
+{
+    if (pc == NULL)
+    {
+        return 0;
+    }
+
+    memset(pc, 0, sizeof(*pc));
+    hyperdos_bus_initialize(&pc->bus);
+    hyperdos_bus_set_memory_address_translator(&pc->bus, hyperdos_pc_translate_processor_physical_address, pc);
+    pc->chipsetProfile              = hyperdos_pc_resolve_chipset_profile(chipsetProfile);
+    pc->intervalTimerModel          = intervalTimerModel;
+    pc->firstSerialPortModel        = firstSerialPortModel;
+    pc->conventionalMemoryKilobytes = hyperdos_pc_clamp_conventional_memory_kilobytes(conventionalMemoryKilobytes);
+    pc->extendedMemoryKilobytes     = hyperdos_pc_clamp_extended_memory_kilobytes(extendedMemoryKilobytes);
+    hyperdos_random_access_memory_initialize(&pc->randomAccessMemory,
+                                             pc->conventionalMemory,
+                                             pc->conventionalMemoryKilobytes * 1024u,
+                                             HYPERDOS_PC_MEMORY_BASE);
+    hyperdos_random_access_memory_initialize(&pc->extendedRandomAccessMemory,
+                                             pc->extendedMemory,
+                                             pc->extendedMemoryKilobytes * 1024u,
+                                             HYPERDOS_PC_AT_EXTENDED_MEMORY_BASE);
+    hyperdos_read_only_memory_initialize(&pc->basicInputOutputSystemReadOnlyMemory,
+                                         pc->basicInputOutputSystemReadOnlyMemoryBytes,
+                                         HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_SIZE,
+                                         HYPERDOS_PC_BIOS_READ_ONLY_MEMORY_BASE);
+    hyperdos_color_graphics_adapter_initialize(&pc->colorGraphicsAdapter);
+    hyperdos_programmable_interrupt_controller_initialize(&pc->programmableInterruptController,
+                                                          HYPERDOS_PC_DEFAULT_INTERRUPT_VECTOR_BASE);
+    pc->programmableInterruptController.interruptMaskRegister = HYPERDOS_PC_DEFAULT_INTERRUPT_MASK;
+    hyperdos_programmable_interrupt_controller_initialize(&pc->slaveProgrammableInterruptController,
+                                                          HYPERDOS_PC_SLAVE_INTERRUPT_VECTOR_BASE);
+    hyperdos_direct_memory_access_controller_initialize(&pc->directMemoryAccessController);
+    hyperdos_direct_memory_access_controller_initialize(&pc->secondDirectMemoryAccessController);
+    hyperdos_pc_initialize_programmable_interval_timer(pc);
+    hyperdos_programmable_peripheral_interface_initialize(&pc->programmablePeripheralInterface);
+    hyperdos_pc_cmos_initialize(&pc->realTimeClock);
+    hyperdos_pc_cmos_set_base_memory_size_kilobytes(&pc->realTimeClock, (uint16_t)pc->conventionalMemoryKilobytes);
+    hyperdos_pc_cmos_set_extended_memory_size_kilobytes(&pc->realTimeClock,
+                                                        hyperdos_pc_get_extended_memory_size_kilobytes(pc));
+    hyperdos_intel_8042_keyboard_controller_initialize(&pc->keyboardController);
+    hyperdos_universal_asynchronous_receiver_transmitter_initialize(&pc->firstSerialPort);
+    hyperdos_8087_initialize(&pc->floatingPointUnit);
+    hyperdos_intel_8284_clock_generator_initialize(&pc->clockGenerator, HYPERDOS_PC_8284_CRYSTAL_FREQUENCY_HERTZ);
+    hyperdos_pc_configure_interval_timer_input_clock_ratio(pc);
+    hyperdos_intel_8288_bus_controller_initialize(&pc->busController);
+    hyperdos_intel_8282_address_latch_initialize(&pc->addressLatch);
+    hyperdos_intel_8286_bus_transceiver_initialize(&pc->dataBusTransceiver);
+
+    if (!hyperdos_pc_wire_chipset_profile(pc))
+    {
+        return 0;
+    }
+
+    if (hyperdos_x86_initialize_processor(&pc->processor) != HYPERDOS_X86_EXECUTION_OK)
     {
         return 0;
     }
     hyperdos_x86_attach_bus(&pc->processor, &pc->bus);
     hyperdos_x86_attach_coprocessor(&pc->processor, hyperdos_x87_wait, hyperdos_x87_escape, &pc->floatingPointUnit);
+    hyperdos_pc_set_address_line_20_enabled(pc, 0u);
     return 1;
+}
+
+int hyperdos_pc_initialize(hyperdos_pc* pc)
+{
+    return hyperdos_pc_initialize_with_configuration(pc,
+                                                     HYPERDOS_PC_CHIPSET_PROFILE_AT_286,
+                                                     HYPERDOS_CONVENTIONAL_MEMORY_SIZE / 1024u,
+                                                     HYPERDOS_PC_AT_EXTENDED_MEMORY_KILOBYTES,
+                                                     HYPERDOS_PROGRAMMABLE_INTERVAL_TIMER_MODEL_8254,
+                                                     HYPERDOS_UNIVERSAL_ASYNCHRONOUS_RECEIVER_TRANSMITTER_MODEL_8250);
 }
 
 void hyperdos_pc_set_processor_frequency_hertz(hyperdos_pc* pc, uint32_t processorFrequencyHertz)

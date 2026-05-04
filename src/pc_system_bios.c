@@ -8,7 +8,6 @@
 enum
 {
     HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT                              = 8u,
-    HYPERDOS_PC_SYSTEM_BIOS_CONVENTIONAL_MEMORY_KILOBYTES                       = 640u,
     HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_SEGMENT                         = 0xF000u,
     HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_OFFSET                          = 0xE6F5u,
     HYPERDOS_PC_SYSTEM_BIOS_CONFIGURATION_TABLE_BYTE_COUNT                      = 10u,
@@ -321,11 +320,6 @@ uint16_t hyperdos_pc_system_bios_get_equipment_flags(uint8_t coprocessorEnabled,
     return equipmentFlags;
 }
 
-uint16_t hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes(void)
-{
-    return HYPERDOS_PC_SYSTEM_BIOS_CONVENTIONAL_MEMORY_KILOBYTES;
-}
-
 hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt(hyperdos_x86_processor* processor,
                                                                                  uint8_t coprocessorEnabled,
                                                                                  uint8_t floppyDriveCount,
@@ -343,15 +337,16 @@ hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_equipment_interrupt
     return HYPERDOS_X86_EXECUTION_OK;
 }
 
-hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(hyperdos_x86_processor* processor)
+hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_memory_size_interrupt(hyperdos_x86_processor* processor,
+                                                                                   const hyperdos_pc*      pc)
 {
-    if (processor == NULL)
+    if (processor == NULL || pc == NULL)
     {
         return HYPERDOS_X86_EXECUTION_INVALID_ARGUMENT;
     }
     hyperdos_x86_set_general_register_word(processor,
                                            HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
-                                           hyperdos_pc_system_bios_get_conventional_memory_size_kilobytes());
+                                           hyperdos_pc_get_conventional_memory_size_kilobytes(pc));
     return HYPERDOS_X86_EXECUTION_OK;
 }
 
@@ -643,6 +638,7 @@ hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_int
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_DISABLE_SUBSERVICE)
         {
             systemBios->a20GateEnabled = 0u;
+            hyperdos_pc_set_address_line_20_enabled(pc, 0u);
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
@@ -651,6 +647,7 @@ hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_int
         if (subservice == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_A20_ENABLE_SUBSERVICE)
         {
             systemBios->a20GateEnabled = 1u;
+            hyperdos_pc_set_address_line_20_enabled(pc, 1u);
             hyperdos_pc_system_bios_set_system_services_status(processor,
                                                                HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS,
                                                                0);
@@ -662,7 +659,7 @@ hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_int
                                                    HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
                                                    (uint16_t)((HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_SUCCESS_STATUS
                                                                << HYPERDOS_PC_SYSTEM_BIOS_SERVICE_REGISTER_SHIFT) |
-                                                              (systemBios->a20GateEnabled ? 1u : 0u)));
+                                                              (hyperdos_pc_get_address_line_20_enabled(pc) ? 1u : 0u)));
             hyperdos_pc_system_bios_set_carry_flag(processor, 0);
             return HYPERDOS_X86_EXECUTION_OK;
         }
@@ -724,7 +721,9 @@ hyperdos_x86_execution_result hyperdos_pc_system_bios_handle_system_services_int
     }
     if (serviceNumber == HYPERDOS_PC_SYSTEM_BIOS_SYSTEM_SERVICES_GET_EXTENDED_MEMORY_SIZE_SERVICE)
     {
-        hyperdos_x86_set_general_register_word(processor, HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR, 0u);
+        hyperdos_x86_set_general_register_word(processor,
+                                               HYPERDOS_X86_GENERAL_REGISTER_ACCUMULATOR,
+                                               hyperdos_pc_get_extended_memory_size_kilobytes(pc));
         hyperdos_pc_system_bios_set_carry_flag(processor, 0);
         return HYPERDOS_X86_EXECUTION_OK;
     }

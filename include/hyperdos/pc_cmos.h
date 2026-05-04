@@ -33,6 +33,10 @@ void hyperdos_pc_cmos_initialize(hyperdos_pc_cmos* cmos);
 
 void hyperdos_pc_cmos_set_equipment_flags(hyperdos_pc_cmos* cmos, uint16_t equipmentFlags);
 
+void hyperdos_pc_cmos_set_base_memory_size_kilobytes(hyperdos_pc_cmos* cmos, uint16_t memorySizeKilobytes);
+
+void hyperdos_pc_cmos_set_extended_memory_size_kilobytes(hyperdos_pc_cmos* cmos, uint16_t memorySizeKilobytes);
+
 void hyperdos_pc_cmos_set_floppy_drive_type(hyperdos_pc_cmos* cmos, uint8_t driveNumber, uint8_t driveType);
 
 void hyperdos_pc_cmos_set_fixed_disk_geometry(hyperdos_pc_cmos*                           cmos,

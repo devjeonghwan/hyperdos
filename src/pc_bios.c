@@ -32,7 +32,7 @@ enum
 
 static uint8_t hyperdos_pc_bios_read_guest_memory_byte(hyperdos_pc* pc, uint32_t physicalAddress)
 {
-    return hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus, physicalAddress & HYPERDOS_X86_ADDRESS_MASK);
+    return hyperdos_bus_read_memory_byte_or_open_bus(&pc->bus, physicalAddress);
 }
 
 static uint16_t hyperdos_pc_bios_read_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress)
@@ -45,11 +45,9 @@ static uint16_t hyperdos_pc_bios_read_guest_memory_word(hyperdos_pc* pc, uint32_
 
 static void hyperdos_pc_bios_write_guest_memory_word(hyperdos_pc* pc, uint32_t physicalAddress, uint16_t value)
 {
+    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus, physicalAddress, (uint8_t)(value & 0x00FFu));
     hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
-                                             physicalAddress & HYPERDOS_X86_ADDRESS_MASK,
-                                             (uint8_t)(value & 0x00FFu));
-    hyperdos_bus_write_memory_byte_if_mapped(&pc->bus,
-                                             (physicalAddress + 1u) & HYPERDOS_X86_ADDRESS_MASK,
+                                             physicalAddress + 1u,
                                              (uint8_t)(value >> HYPERDOS_X86_BYTE_BIT_COUNT));
 }
 
@@ -79,8 +77,7 @@ static int hyperdos_pc_bios_monitor_service_returns_to_interrupt_return_instruct
                                                         HYPERDOS_PC_BIOS_INTERRUPT_RETURN_SEGMENT_STACK_OFFSET);
     uint16_t returnOffset          = hyperdos_pc_bios_read_guest_memory_word(pc, returnOffsetPhysicalAddress);
     uint16_t returnSegment         = hyperdos_pc_bios_read_guest_memory_word(pc, returnSegmentPhysicalAddress);
-    uint32_t returnPhysicalAddress = (((uint32_t)returnSegment << HYPERDOS_X86_SEGMENT_SHIFT) + returnOffset) &
-                                     HYPERDOS_X86_ADDRESS_MASK;
+    uint32_t returnPhysicalAddress = ((uint32_t)returnSegment << HYPERDOS_X86_SEGMENT_SHIFT) + returnOffset;
 
     return returnSegment == HYPERDOS_PC_BIOS_FIRMWARE_STUB_SEGMENT &&
            hyperdos_pc_bios_read_guest_memory_byte(pc, returnPhysicalAddress) ==
